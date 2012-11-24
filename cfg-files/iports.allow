@@ -1,0 +1,8 @@
+# /etc/iports.allow: list of ip-ports that are allowed to access the kconnp.
+# Per ip-port per line.
+# Example:    *:11211
+#             192.168.1.1:*
+#             192.168.1.[1-9]:11211
+#             192.168.1.1:11211
+
+*:11211 #Memcache port

@@ -1,0 +1,70 @@
+#!/bin/sh
+
+help(){
+    cat <<EOF
+Kconnp actions:
+    ldcfg
+    start
+    stop
+    restart
+EOF
+exit;
+}
+
+kv=`uname -r`;
+kmconnp="/lib/modules/$kv/kernel/net/kconnp/kconnp.ko"
+connpd="/bin/kconnpd"
+net_iports_cfgs="iports.allow iports.deny"
+
+ldcfg(){
+    for f in $net_iports_cfgs 
+    do 
+        cat /etc/$f > /proc/kconnp/$f
+    done;
+}
+
+start(){
+    insmod $kmconnp;
+    $connpd;
+    ldcfg;
+}
+
+stop(){
+    pkill kconnpd;
+    rmmod $kmconnp; 
+}
+
+restart(){
+    stop;
+    start;
+}
+
+
+
+if test $# -eq 0
+then
+    echo "Non action is passed!\n";
+    help;
+fi
+while [ $# -gt 0 ]
+do
+    case "$1" in
+        ldcfg)
+            ldcfg;
+            ;;
+        start)
+            start;
+            ;;
+        stop)
+            stop;
+            ;;
+        restart)
+            restart;
+            ;;
+        *)
+            echo "Unrecognized param: $1\n";
+            help;
+            ;;
+    esac
+    shift;
+done

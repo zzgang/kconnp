@@ -1,0 +1,109 @@
+#! /bin/sh
+
+help(){
+    cat <<EOF
+LKM build params:
+    --with-kernel-build-dir=DIR (Kernel build dir)
+    --with-sysmap-file=SYM_FILE (Kernel system map file)
+    --clean (Clean the Makefile)
+EOF
+exit;
+}
+
+clean(){
+    rm -f Makefile;
+    rm -f sys_call_table_ea.h;
+    rm -f local_func_ea.h;
+}
+
+clean;
+
+#kernel version.
+kv=`uname -r`;
+
+#kernel system map.
+sysmap_file="";
+
+#kernel build dir.
+kmbd="/lib/modules/${kv}/build";
+
+boot_dir="/boot"
+
+#check sysmap.
+if [ -f "${boot_dir}/System.map-$kv" ]
+then
+    sysmap_file="${boot_dir}/System.map-$kv";
+elif [ -f "${boot_dir}/Systemmap-$kv" ]
+then
+    sysmap_file="${boot_dir}/Systemmap-$kv";
+fi
+
+while [ $# -gt 0 ]
+do
+    case "${1%=*}" in
+        --with-kernel-build-dir)
+            kmbd="${1#*=}";
+            ;;
+        --with-sysmap-file)
+            sysmap_file="${1#*=}";
+            ;;
+        --clean)
+            clean;
+            exit;
+            ;;
+        --help)
+            help;
+            ;;
+        *)
+            echo "Unrecognized param: ${1%=*}\n";
+            help;
+            ;;
+    esac
+    shift;
+done
+
+if test ! -d $kmbd || test ! -e $sysmap_file 
+then
+    echo "Can't build the ENV for building the LKM\n";
+    help;
+fi
+#######################
+#Generate sys calls ea.
+#######################
+
+sys_call_table_ea=`pcregrep '\bsys_call_table\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_socketcall_ea=`pcregrep '\bsys_socketcall\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_connect_ea=`pcregrep '\bsys_connect\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_close_ea=`pcregrep '\bsys_close\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_shutdown_ea=`pcregrep '\bsys_shutdown\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_exit_group_ea=`pcregrep '\bsys_exit_group\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_exit_ea=`pcregrep '\bsys_exit\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+
+cat sys_call_table_ea.h.in |
+sed -e "s/%%SYS_CALL_TABLE_EA%%/0x${sys_call_table_ea}/" |
+sed -e "s/%%SYS_SOCKETCALL_EA%%/0x${sys_socketcall_ea}/" | 
+sed -e "s/%%SYS_CONNECT_EA%%/0x${sys_connect_ea}/" |
+sed -e "s/%%SYS_CLOSE_EA%%/0x${sys_close_ea}/" | 
+sed -e "s/%%SYS_SHUTDOWN_EA%%/0x${sys_shutdown_ea}/" | 
+sed -e "s/%%SYS_EXIT_GROUP_EA%%/0x${sys_exit_group_ea}/" | 
+sed -e "s/%%SYS_EXIT_EA%%/0x${sys_exit_ea}/"  > sys_call_table_ea.h;
+
+#########################
+#Generate local funcs ea.
+#########################
+free_fdtable_rcu_ea=`pcregrep '\bfree_fdtable_rcu\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+cat local_func_ea.h.in |
+sed -e "s/%%FREE_FDTABLE_RCU_EA%%/0x${free_fdtable_rcu_ea}/" > local_func_ea.h;
+
+cat > Makefile <<MF
+obj-m += kconnp.o
+kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o hash.o cfg.o util.o
+all:
+	gcc -o kconnpd connpd.c
+	make -C $kmbd SUBDIRS=\$(PWD) modules
+clean:
+	rm -f ./kconnpd
+	make -C $kmbd SUBDIRS=\$(PWD) clean
+install:
+	./scripts/install
+MF

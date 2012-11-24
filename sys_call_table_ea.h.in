@@ -1,0 +1,13 @@
+//Get EA from symbol.map file.
+#ifndef _SYS_CALL_TABLE_EA_H
+#define _SYS_CALL_TABLE_EA_H
+
+#define SYS_CALL_TABLE_EA %%SYS_CALL_TABLE_EA%%
+#define SYS_SOCKETCALL_EA %%SYS_SOCKETCALL_EA%%
+#define SYS_CONNECT_EA %%SYS_CONNECT_EA%%
+#define SYS_CLOSE_EA %%SYS_CLOSE_EA%%
+#define SYS_SHUTDOWN_EA %%SYS_SHUTDOWN_EA%%
+#define SYS_EXIT_GROUP_EA %%SYS_EXIT_GROUP_EA%%
+#define SYS_EXIT_EA %%SYS_EXIT_EA%%
+
+#endif
