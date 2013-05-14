@@ -1,12 +1,13 @@
 /**
  *Kernel socket pool
- *Author Zhigang Zhang <zzgang_2008@gmail.com>
+ *Author Zhigang Zhang <zzgang2008@gmail.com>
  */
 #include <linux/string.h>
 #include <linux/jiffies.h>
 #include <net/sock.h>
 #include "sys_call.h"
 #include "connp.h"
+#include "sockp.h"
 #include "util.h"
 
 #if LOCK_TYPE_MUTEX 
@@ -107,9 +108,9 @@
 #define SOCKADDR_COPY(sockaddr_dest, sockaddr_src) memcpy((void *)sockaddr_dest, (void *)sockaddr_src, sizeof(struct sockaddr))
 
 #if LRU
-static struct socket_bucket * get_empty_slot(struct sockaddr *);
+static struct socket_bucket *get_empty_slot(struct sockaddr *);
 #else
-static struct socket_bucket * get_empty_slot(void);
+static struct socket_bucket *get_empty_slot(void);
 #endif
 
 static inline unsigned int _hashfn(struct sockaddr_in *);
@@ -143,7 +144,7 @@ static inline unsigned int _shashfn(struct sockaddr_in *address, struct socket *
 /**
  *Apply a existed socket from socket pool.
  */
-struct socket * apply_socket_from_sockp(struct sockaddr *address)
+struct socket *apply_socket_from_sockp(struct sockaddr *address)
 {
     struct socket_bucket *p;
 
@@ -170,31 +171,40 @@ struct socket * apply_socket_from_sockp(struct sockaddr *address)
 
 
 /**
- *shutdown: to scan all sock pool to close the expired socket.
+ *shutdown: to scan all sock pool to close the expired or all sockets.
+ *type: 0 expired;1 all;
  */
-void shutdown_timeout_sock_list(void)
+void shutdown_sock_list(int type)
 {
     struct socket_bucket *p; 
     
     SOCKP_LOCK();
-    
+   
+
     for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
         
         if (p->connpd_fd < 0)
             continue;
+
+        if (type) //shutdown all
+            goto shutdown;
+        
         if (!SOCK_ESTABLISHED(p->sock) ||
                 (!p->sock_in_use && 
                  (jiffies - p->last_used_jiffies > TIMEOUT * HZ)
-                )) {
+                )) 
+            goto shutdown;
+        else
+            continue;
 
-            orig_sys_close(p->connpd_fd);
+shutdown:
+        orig_sys_close(p->connpd_fd);
 
-            REMOVE_FROM_HLIST(HASH(&p->address), p);
-            REMOVE_FROM_TLIST(p);
-            REMOVE_FROM_SHLIST(SHASH(&p->address, p->sock), p);
+        REMOVE_FROM_HLIST(HASH(&p->address), p);
+        REMOVE_FROM_TLIST(p);
+        REMOVE_FROM_SHLIST(SHASH(&p->address, p->sock), p);
 
-            PUT_SB(p);
-        }
+        PUT_SB(p);
     }
 
     SOCKP_UNLOCK();
@@ -203,7 +213,7 @@ void shutdown_timeout_sock_list(void)
 /**
  *Free a socket which is returned by 'apply_socket_from_sockp'
  */
-struct socket_bucket * free_socket_to_sockp(struct sockaddr *address, struct socket *s)
+struct socket_bucket *free_socket_to_sockp(struct sockaddr *address, struct socket *s)
 {
     struct socket_bucket *p, *sb = NULL;
     
@@ -232,9 +242,9 @@ struct socket_bucket * free_socket_to_sockp(struct sockaddr *address, struct soc
  *Get a empty slot from sockp;
  */
 #if LRU
-static struct socket_bucket * get_empty_slot(struct sockaddr *addr)
+static struct socket_bucket *get_empty_slot(struct sockaddr *addr)
 #else
-static struct socket_bucket * get_empty_slot(void)
+static struct socket_bucket *get_empty_slot(void)
 #endif
 {
     struct socket_bucket *p; 
@@ -280,7 +290,7 @@ static struct socket_bucket * get_empty_slot(void)
 /**
  *Insert a new socket to sockp.
  */
-struct socket_bucket * insert_socket_to_sockp(struct sockaddr *address, struct socket *s)
+struct socket_bucket *insert_socket_to_sockp(struct sockaddr *address, struct socket *s)
 {
     struct socket_bucket *empty = NULL;
 

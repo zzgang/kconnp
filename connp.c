@@ -8,10 +8,9 @@
 #include "cfg.h"
 #include "sockp.h"
 #include "connp.h"
+#include "connpd.h"
 
 #define wait_on_timeout(s) schedule_timeout_interruptible(HZ)
-
-struct task_struct * volatile connp_daemon;
 
 static inline void do_close_timeout_pending_fds(void);
 static int insert_socket_to_connp(struct sockaddr *, struct socket *);
@@ -118,26 +117,35 @@ int insert_into_connp_if_permitted(int fd)
     struct socket *sock;
     struct sockaddr address;
     int err;
+    
+    connpd_rlock();
 
     if (!CONNP_DAEMON_EXISTS() || INVOKED_BY_CONNP_DAEMON())
-        return 0;
+        goto ret_fail;
 
     if (!is_sock_fd(fd))
-        return 0;
+        goto ret_fail;
 
     sock = getsock(fd);
     if (!sock || !IS_TCP_SOCK(sock) || !IS_CLIENT_SOCK(sock) || !SOCK_ESTABLISHED(sock))
-        return 0;
+        goto ret_fail;
 
     err = getsockservaddr(sock, &address);
     if (err)
-        return 0;
+        goto ret_fail;
+
     if (address.sa_family != AF_INET 
             || IN_LOOPBACK(ntohl(((struct sockaddr_in *)&address)->sin_addr.s_addr))
             || !iport_in_allowd_list(&address) 
             || iport_in_denied_list(&address))
-        return 0;
+        goto ret_fail;
+ 
+    connpd_runlock();
     return insert_into_connp(&address, sock);
+
+ret_fail:
+    connpd_runlock();
+    return 0;
 }
 
 /**
@@ -155,31 +163,45 @@ static inline int sock_remap_fd(int fd, struct socket *new_sock, struct socket *
 int fetch_conn_from_connp(int fd, struct sockaddr *address)
 {
     struct socket *sock, *sock_new;
-    
-    if (!CONNP_DAEMON_EXISTS())
-        return 0;
+    int ret = 0; 
+
+    connpd_rlock(); 
+
+    if (!CONNP_DAEMON_EXISTS()) {
+        ret = 0;
+        goto ret_unlock;
+    }
 
     if (address->sa_family != AF_INET
             || IN_LOOPBACK(ntohl(((struct sockaddr_in *)address)->sin_addr.s_addr))
             || !iport_in_allowd_list(address) 
-            || iport_in_denied_list(address))
-        return 0;
+            || iport_in_denied_list(address)) {
+        ret = 0;
+        goto ret_unlock;
+    }
 
-    if (!is_sock_fd(fd))
-        return 0;
+    if (!is_sock_fd(fd)) {
+        ret = 0;
+        goto ret_unlock;
+    }
 
     sock = getsock(fd);
-    if (!sock || !IS_TCP_SOCK(sock))
-        return 0;
-
-    if ((sock_new = apply_socket_from_sockp(address))) {
-        if (sock_remap_fd(fd, sock_new, sock))
-            return 1;
+    if (!sock || !IS_TCP_SOCK(sock)) {
+        ret = 0;
+        goto ret_unlock;
     }
+
+    if ((sock_new = apply_socket_from_sockp(address)))
+        if (sock_remap_fd(fd, sock_new, sock)) {
+            ret = 1;
+            goto ret_unlock;
+        }
 
     SET_CLIENT_FLAG(sock);
 
-    return 0;
+ret_unlock:
+    connpd_runlock();
+    return ret;
 }
 
 static inline void do_close_timeout_pending_fds()
@@ -197,56 +219,53 @@ static inline void do_close_timeout_pending_fds()
  */
 int scan_connp_shutdown_timeout()
 {
-    if (!CONNP_DAEMON_EXISTS())
-        CONNP_DAEMON_SET(current);
-
-    if (!INVOKED_BY_CONNP_DAEMON())
-        return -EINVAL;
-
     do_close_timeout_pending_fds();
     wait_on_timeout(1);
-
     return 0;
 }
 
 void connp_sys_exit_prepare()
 {
-    if (!INVOKED_BY_CONNP_DAEMON()) {
-        int i, j = 0;
-        FILE_FDT_TYPE *fdt;
-        struct files_struct *files = TASK_FILES(current);
+    int i, j = 0;
+    FILE_FDT_TYPE *fdt;
+    struct files_struct *files = TASK_FILES(current);
 
-        spin_lock(&files->file_lock);
-        fdt = TASK_FILES_FDT(current);
-        for (;;) {
-            unsigned long set;
-            i = j * __NFDBITS;
-            if (i >= fdt->max_fds)
-                break;
-            set = fdt->open_fds->fds_bits[j++];
-            while (set) {
-                if (set & 1 && is_sock_fd(i))   //insert sock fd to connp.
-                    insert_into_connp_if_permitted(i);
-                i++;
-                set >>= 1;
-            }
+    spin_lock(&files->file_lock);
+    fdt = TASK_FILES_FDT(current);
+    for (;;) {
+        unsigned long set;
+        i = j * __NFDBITS;
+        if (i >= fdt->max_fds)
+            break;
+        set = fdt->open_fds->fds_bits[j++];
+        while (set) {
+            if (set & 1 && is_sock_fd(i))   //insert sock fd to connp.
+                insert_into_connp_if_permitted(i);
+            i++;
+            set >>= 1;
         }
-        spin_unlock(&files->file_lock);
-    } else  //Is connpd
-        CONNP_DAEMON_SET(NULL);
+    }
+    spin_unlock(&files->file_lock);
 }
 
 int connp_init()
 {
+    if (!connpd_start()) {
+        printk(KERN_ERR "Error: create connp daemon thread error!\n");
+        return 0;
+    }
+
     if (!cfg_init()) {
         cfg_destroy();
+        connpd_stop();
         printk(KERN_ERR "Error: cfg_init error!\n");
         return 0;
     }
 
     if (!sockp_init()) {
         cfg_destroy();
-        printk(KERN_ERR "Error: sockp_init error!");
+        connpd_stop();
+        printk(KERN_ERR "Error: sockp_init error!\n");
         return 0;
     }
     
@@ -255,7 +274,8 @@ int connp_init()
     if (!replace_syscalls()) {
         sockp_destroy();
         cfg_destroy();
-        printk(KERN_ERR "Error: replace_syscalls error!");
+        connpd_stop();
+        printk(KERN_ERR "Error: replace_syscalls error!\n");
         return 0;
     }
 
@@ -265,6 +285,7 @@ int connp_init()
 void connp_destroy()
 {
     restore_syscalls();
+    connpd_stop();
     sockp_destroy();
     cfg_destroy();
 }

@@ -18,12 +18,12 @@ static inline int connp_move_addr_to_kernel(void __user *uaddr, int ulen, struct
     return 0;
 }
 
-#ifdef __NR_socketcall
+#ifdef __NR_socketcall /*32 bits*/
 asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
 {
     unsigned long a[6];
     int err;
-
+    
     switch(call) {
         case SYS_CONNECT:
             if (copy_from_user(a, args, 3 * sizeof(a[0])))
@@ -36,7 +36,24 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
             err = connp_sys_shutdown(a[0], a[1]); 
             break;
         default:
-            err = orig_sys_socketcall(call, args);
+            //Calculate the stack size in this function to clean it and jmp orig_sys_socketcall directly.
+            asm volatile("movl %%esp, %%eax\n\t"
+                    "movl $0x0, %%ecx\n\t"
+                    "movl %2, %%ebx\n\t"
+                    "movl %3, %%edx\n\t"
+                    "1:addl $0x4, %%ecx\n\t"
+                    "addl $0x4, %%eax\n\t"
+                    "cmpl (%%eax), %%ebx\n\t"
+                    "jne 1b\n\t"
+                    "cmpl 0x4(%%eax), %%edx\n\t"
+                    "je 2f\n\t"
+                    "jmp 1b\n\t"
+                    "2:subl $0x4, %%ecx\n\t"
+                    "addl %%ecx, %%esp\n\t" //clean the stack in this function.
+                    "pushl %1\n\t" //change eip to orig_sys_socketcall ptr after ret.
+                    "ret" //invoke orig_sys_socketcall function.
+                    :"=a"(err) //dummy for no compile warning.
+                    :"m"(orig_sys_socketcall), "m"(call), "m"(args));
             break;
     }
 

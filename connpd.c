@@ -1,45 +1,89 @@
-#include <sys/time.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <signal.h>
-//#include <sys/resource.h>
+#include <linux/kthread.h>
+#include "connpd.h"
+#include "connp.h"
 
-#define MAINTAIN_FDS -1
+#define CONNPD_NAME "kconnpd"
 
-void cleanup_connpd_ptr(int); //Exit the connpd pointer gracefully
+/**
+ *The global connp daemon ptr.
+ */
+struct task_struct * volatile connp_daemon;
 
-int main(void)
+static rwlock_t connpd_lock;
+
+#define CONNP_DAEMON_SET(v) (connp_daemon = (v))
+
+/* connpd lock funcions */
+inline void connpd_rwlock_init(void) 
 {
-    int pid;
-    int fd;
-
-    if (geteuid() != 0) {
-        printf("Must run as root!\n");
-        return 0;
-    }
-
-    pid = fork();
-    if (pid < 0) {
-        printf("No process to fork!\n");
-        return 0;
-    }
-
-    if (!pid){
-        setsid();
-        chdir("/");
-        umask(0);
-        for (fd = 0; fd < 3; fd++) //Close std io. 
-            close(fd);
-        signal(SIGTERM, cleanup_connpd_ptr);
-        //setpriority(PRIO_PROCESS, 0, PRIO_MIN); //higher priority.
-        while (!close(MAINTAIN_FDS)); //Maintain the fds of connp.
-    }
-
-    exit(0);
+    rwlock_init(&connpd_lock);
 }
 
-void cleanup_connpd_ptr(int a)
+inline void connpd_rlock(void)
 {
-    exit(0);
+    read_lock(&connpd_lock);
+}
+
+inline void connpd_runlock(void)
+{
+    read_unlock(&connpd_lock);
+}
+
+inline void connpd_wlock(void)
+{
+    write_lock(&connpd_lock);
+}
+
+inline void connpd_wunlock(void)
+{
+    write_unlock(&connpd_lock);
+}
+
+/*end*/
+static int connpd_func(void *data)
+{
+    while (1) {
+
+        if (kthread_should_stop()) {
+            
+            connpd_wlock();
+            CONNP_DAEMON_SET(NULL);
+            connpd_wunlock();
+            
+            close_all_fds();
+            
+            break;
+        } else
+            scan_connp_shutdown_timeout();
+
+    }
+
+    return 1;
+}
+
+/**
+ *Create the kconnpd and start it.
+ */
+int connpd_start(void)
+{
+    struct task_struct *ptr;
+    
+    connpd_rwlock_init();
+
+    ptr = kthread_run(connpd_func, NULL, CONNPD_NAME);
+    
+    if (!IS_ERR(ptr)) 
+        CONNP_DAEMON_SET(ptr);
+    else 
+        printk(KERN_ERR "Create connpd error!\n");
+
+    return IS_ERR(ptr) ? 0 : 1; 
+}
+
+/**
+ *Stop the kconnpd.
+ */
+void connpd_stop(void)
+{
+    kthread_stop(CONNP_DAEMON_TSKP);
 }

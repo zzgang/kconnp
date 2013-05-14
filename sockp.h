@@ -16,6 +16,8 @@
 #define LOCK_TYPE_MUTEX 0
 #define LRU 1 //LRU replace algorithm
 
+#define close_all_fds() shutdown_sock_list(1)
+#define shutdown_timeout_sock_list() shutdown_sock_list(0)
 
 struct socket_bucket {
     struct sockaddr address;
@@ -35,23 +37,22 @@ struct socket_bucket {
     int connpd_fd;
 };
 
-
 /**
  *Apply a existed socket from socket pool.
  */
-extern struct socket * apply_socket_from_sockp(struct sockaddr *);
+extern struct socket *apply_socket_from_sockp(struct sockaddr *);
 
 /**
  *Free a socket which is returned by 'apply_socket_from_sockp', return the bucket of this socket.
  */
-extern struct socket_bucket * free_socket_to_sockp(struct sockaddr *, struct socket *);
+extern struct socket_bucket *free_socket_to_sockp(struct sockaddr *, struct socket *);
 
 /**
  *Insert a new socket to sockp, return the new bucket of this socket.
  */
-extern struct socket_bucket * insert_socket_to_sockp(struct sockaddr *, struct socket *);
+extern struct socket_bucket *insert_socket_to_sockp(struct sockaddr *, struct socket *);
 
-extern void shutdown_timeout_sock_list(void);
+extern void shutdown_sock_list(int type);
 
 extern int sockp_init(void);
 extern void sockp_destroy(void);
