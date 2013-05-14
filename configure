@@ -97,12 +97,10 @@ sed -e "s/%%FREE_FDTABLE_RCU_EA%%/0x${free_fdtable_rcu_ea}/" > local_func_ea.h;
 
 cat > Makefile <<MF
 obj-m += kconnp.o
-kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o hash.o cfg.o util.o
+kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o hash.o cfg.o util.o
 all:
-	gcc -o kconnpd connpd.c
 	make -C $kmbd SUBDIRS=\$(PWD) modules
 clean:
-	rm -f ./kconnpd
 	make -C $kmbd SUBDIRS=\$(PWD) clean
 install:
 	./scripts/install

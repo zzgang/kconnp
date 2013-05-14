@@ -8,7 +8,6 @@ CFG_FILES="iports.allow iports.deny"
 PWD=`pwd`
 mkdir -p $LKM_INS_DIR
 cp -f $PWD/kconnp.ko $LKM_INS_DIR
-cp --preserve=mode -f $PWD/kconnpd $BIN_INS_DIR
 cp --preserve=mode -f $PWD/scripts/kconnp $BIN_INS_DIR
 for f in $CFG_FILES
 do

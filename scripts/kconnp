@@ -13,7 +13,6 @@ exit;
 
 kv=`uname -r`;
 kmconnp="/lib/modules/$kv/kernel/net/kconnp/kconnp.ko"
-connpd="/bin/kconnpd"
 net_iports_cfgs="iports.allow iports.deny"
 
 ldcfg(){
@@ -25,12 +24,10 @@ ldcfg(){
 
 start(){
     insmod $kmconnp;
-    $connpd;
     ldcfg;
 }
 
 stop(){
-    pkill kconnpd;
     rmmod $kmconnp; 
 }
 
