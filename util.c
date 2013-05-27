@@ -3,6 +3,23 @@
 
 #define sysctl_nr_open 1024 * 1024
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 2, 45)
+static inline void __set_close_on_exec(int fd, struct fdtable *fdt)
+{
+        __set_bit(fd, fdt->close_on_exec);
+}
+
+static inline void __clear_close_on_exec(int fd, struct fdtable *fdt)
+{
+        __clear_bit(fd, fdt->close_on_exec);
+}
+
+static inline void __set_open_fd(int fd, struct fdtable *fdt)
+{
+        __set_bit(fd, fdt->open_fds);
+}
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 32)
 static inline unsigned long task_rlimit(const struct task_struct *tsk,
         unsigned int limit)
@@ -66,7 +83,11 @@ static void lkm_copy_fdtable(FILE_FDT_TYPE *nfdt, FILE_FDT_TYPE *ofdt)
 static FILE_FDT_TYPE *lkm_alloc_fdtable(unsigned int nr)
 {
     FILE_FDT_TYPE *fdt;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
     char *data;
+#else
+    void *data;
+#endif
 
     /*
      * Figure out how many fds we actually want to support in this fdtable.
@@ -257,12 +278,13 @@ repeat:
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
     if (flags & O_CLOEXEC)
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
-        FD_SET(fd, fdt->close_on_exec);
+        FD_SET(fd, fdt->close_on_exec); 
 #else
-         __set_close_on_exec(fd, fdt);
+        __set_close_on_exec(fd, fdt);
 #endif
     else
 #endif
+
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
         FD_CLR(fd, fdt->close_on_exec);
 #else
