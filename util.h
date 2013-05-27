@@ -19,6 +19,12 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/rcupdate.h>
+#include <linux/list.h>
+
+struct fd_entry {
+    int fd;
+    struct list_head siblings;
+};
 
 #define lkmalloc(size) kzalloc(size, GFP_KERNEL)
 #define lkmfree(ptr) kfree(ptr)
@@ -46,7 +52,7 @@
 #define lkm_atomic_read(v) atomic64_read((atomic64_t *)v) 
 #define lkm_atomic_add(v, a) atomic64_add_return(a, (atomic64_t *)v)
 #define lkm_atomic_sub(v, a) atomic64_sub_return(a, (atomic64_t *)v)
-#define lkm_atomic_set(v, a) atomic64_set_return((atomic64_t *)v, a)
+#define lkm_atomic_set(v, a) atomic64_set_return((atomic64_t *)v, a) 
 
 static inline int file_count_read(struct file *filp)
 {
@@ -66,18 +72,85 @@ static inline int file_count_inc(struct file *filp, int i)
 #define TASK_FILES(tsk) (tsk)->files
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 18)
+
 #define FILE_FDT_TYPE typeof(((struct files_struct *)0)->fdtab)
-#define TASK_FILES_FDT(tsk) rcu_dereference(TASK_FILES(tsk)->fdt)
+
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 32)
+
+#define TASK_FILES_FDT(tsk) ({   \
+    FILE_FDT_TYPE * __tmp;      \
+    rcu_read_lock();            \
+    __tmp = rcu_dereference(TASK_FILES(tsk)->fdt);  \
+    rcu_read_unlock();  \
+    __tmp;})
+#else
+
+#define TASK_FILES_FDT(tsk) ({   \
+    FILE_FDT_TYPE * __tmp;      \
+    rcu_read_lock();            \
+    __tmp = rcu_dereference_check_fdtable(TASK_FILES(tsk), TASK_FILES(tsk)->fdt);  \
+    rcu_read_unlock();  \
+    __tmp;})
+
+#endif
+
 #else  //todo...
+
 #define FILE_FDT_TYPE (struct files_struct *)
 #define TASK_FILES_FDT(tsk) TASK_FILES(tsk)
+
 #endif
 
 int task_alloc_fd(struct task_struct *tsk, unsigned start, unsigned flags);
 
+
 static inline int task_get_unused_fd(struct task_struct *tsk)
 {
     return task_alloc_fd(tsk, 0, 0);
+}
+
+static inline void lkm_clear_open_fd(int fd, FILE_FDT_TYPE *fdt)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 45)
+    __FD_CLR(fd, fdt->open_fds);
+#else
+    __clear_bit(fd, fdt->open_fds);
+#endif
+}
+
+static inline void TASK_GET_FDS(struct task_struct * tsk, struct list_head * fds_list)
+{
+    int i, j = 0;
+    FILE_FDT_TYPE *fdt;
+    
+    fdt = TASK_FILES_FDT(tsk);
+    
+    for (;;) {
+        unsigned long set;
+        struct fd_entry *tmp;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
+        i = j * __NFDBITS;
+#else
+        i = j * BITS_PER_LONG;
+#endif
+        if (i >= fdt->max_fds)
+            break;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
+        set = fdt->open_fds->fds_bits[j++];
+#else
+        set = fdt->open_fds[j++];
+#endif
+        while (set) {
+            if (set & 1) {
+                /*Collect the fds list and must free mem space by caller.*/
+                tmp = (typeof(*tmp) *)lkmalloc(sizeof(typeof(*tmp)));
+                tmp->fd = i;
+                list_add_tail(&tmp->siblings, fds_list);
+            }
+            i++;
+            set >>= 1;
+        }
+    }
 }
 
 static inline void task_put_unused_fd(struct task_struct *tsk, unsigned int fd)
@@ -86,7 +159,7 @@ static inline void task_put_unused_fd(struct task_struct *tsk, unsigned int fd)
     FILE_FDT_TYPE *fdt = TASK_FILES_FDT(tsk);
 
     spin_lock(&files->file_lock);
-    __FD_CLR(fd, fdt->open_fds);
+    lkm_clear_open_fd(fd, fdt);
     if (fd < files->next_fd)
         files->next_fd = fd;
     spin_unlock(&files->file_lock);

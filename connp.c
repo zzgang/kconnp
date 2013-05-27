@@ -226,26 +226,13 @@ int scan_connp_shutdown_timeout()
 
 void connp_sys_exit_prepare()
 {
-    int i, j = 0;
-    FILE_FDT_TYPE *fdt;
-    struct files_struct *files = TASK_FILES(current);
-
-    spin_lock(&files->file_lock);
-    fdt = TASK_FILES_FDT(current);
-    for (;;) {
-        unsigned long set;
-        i = j * __NFDBITS;
-        if (i >= fdt->max_fds)
-            break;
-        set = fdt->open_fds->fds_bits[j++];
-        while (set) {
-            if (set & 1 && is_sock_fd(i))   //insert sock fd to connp.
-                insert_into_connp_if_permitted(i);
-            i++;
-            set >>= 1;
-        }
-    }
-    spin_unlock(&files->file_lock);
+    struct fd_entry *pos, *tmp;
+    LIST_HEAD(fds_list);
+    TASK_GET_FDS(current, &fds_list);
+    list_for_each_entry_safe(pos, tmp, &fds_list, siblings) {
+        insert_into_connp_if_permitted(pos->fd);
+        lkmfree(pos);
+    } 
 }
 
 int connp_init()
