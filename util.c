@@ -101,12 +101,22 @@ static FILE_FDT_TYPE *lkm_alloc_fdtable(unsigned int nr)
                 2 * nr / BITS_PER_BYTE, L1_CACHE_BYTES));
     if (!data)
         goto out_arr;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
     fdt->open_fds = (fd_set *)data;
+#else
+    fdt->open_fds = data;
+#endif
     data += nr / BITS_PER_BYTE;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
     fdt->close_on_exec = (fd_set *)data;
+#else
+    fdt->close_on_exec = data;
+#endif
+
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 36) 
     INIT_RCU_HEAD(&fdt->rcu);
 #endif
+
     fdt->next = NULL;
 
     return fdt;
@@ -211,14 +221,18 @@ int task_alloc_fd(struct task_struct *tsk, unsigned start, unsigned flags)
 
     spin_lock(&files->file_lock);
 repeat:
-    fdt = TASK_FILES_FDT(tsk);;
+    fdt = TASK_FILES_FDT(tsk);
     fd = start;
     if (fd < files->next_fd)
         fd = files->next_fd;
 
     if (fd < fdt->max_fds)
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
         fd = find_next_zero_bit(fdt->open_fds->fds_bits,
                 fdt->max_fds, fd);
+#else
+        fd = find_next_zero_bit(fdt->open_fds, fdt->max_fds, fd);
+#endif
 
     error = task_expand_files(tsk, files, fd);
     if (error < 0)
@@ -233,13 +247,28 @@ repeat:
 
     if (start <= files->next_fd)
         files->next_fd = fd + 1;
+
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
     FD_SET(fd, fdt->open_fds);
+#else
+    __set_open_fd(fd, fdt);
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
     if (flags & O_CLOEXEC)
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
         FD_SET(fd, fdt->close_on_exec);
+#else
+         __set_close_on_exec(fd, fdt);
+#endif
     else
 #endif
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
         FD_CLR(fd, fdt->close_on_exec);
+#else
+        __clear_close_on_exec(fd, fdt); 
+#endif
+
     error = fd;
 
 #if 1
