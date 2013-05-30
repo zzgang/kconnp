@@ -58,8 +58,7 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
                     "cmpl %%ecx, %%ebp\n\t" //check if using %ebp.
                     "jne 3f\n\t"
                     "mov -0x4(%%esp), %%ebp\n\t" //pop %ebp
-                    "3:pushl %1\n\t" //change eip to orig_sys_socketcall after ret.
-                    "ret" //invoke orig_sys_socketcall function.
+                    "3:jmp *%1\n\t" //change eip to orig_sys_socketcall directly.
                     :"=a"(err) //dummy for no compile warning.
                     :"m"(orig_sys_socketcall), "m"(call), "m"(args));
             break;
