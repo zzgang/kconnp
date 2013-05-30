@@ -40,7 +40,8 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
             break;
         default:
             //Calculate the stack size in this function to clean it and jmp orig_sys_socketcall directly.
-            asm volatile("movl %%esp, %%eax\n\t"
+            asm volatile(".align 4\n\t"
+                    "movl %%esp, %%eax\n\t"
                     "movl $0x0, %%ecx\n\t"
                     "movl %2, %%ebx\n\t"
                     "movl %3, %%edx\n\t"
