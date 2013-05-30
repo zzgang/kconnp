@@ -50,7 +50,8 @@ extern struct socket_bucket *free_socket_to_sockp(struct sockaddr *, struct sock
 /**
  *Insert a new socket to sockp, return the new bucket of this socket.
  */
-extern struct socket_bucket *insert_socket_to_sockp(struct sockaddr *, struct socket *);
+extern struct socket_bucket *insert_socket_to_sockp(struct sockaddr *, 
+        struct socket *, int fd);
 
 extern void shutdown_sock_list(int type);
 

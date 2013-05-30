@@ -77,23 +77,20 @@ out_unlock:
 
 static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock)
 {
-    int fd;
-    struct socket_bucket *sb;
+    int connpd_fd;
 
-    fd = task_get_unused_fd(CONNP_DAEMON_TSKP);
-    if (fd < 0)
+    connpd_fd = task_get_unused_fd(CONNP_DAEMON_TSKP);
+    if (connpd_fd < 0)
         return 0;
-    
-    if (!(sb = insert_socket_to_sockp(servaddr, sock))) {
-        task_put_unused_fd(CONNP_DAEMON_TSKP, fd);
+
+    task_fd_install(CONNP_DAEMON_TSKP, connpd_fd, sock->file);
+    file_count_inc(sock->file, 1); //add file reference count.
+
+    if (!insert_socket_to_sockp(servaddr, sock, connpd_fd)) {
+        close_pending_fds_push(connpd_fd);
         return 0;
     }
 
-    task_fd_install(CONNP_DAEMON_TSKP, fd, sb->sock->file);
-    file_count_inc(sb->sock->file, 1); //add file reference count.
-
-    sb->connpd_fd = fd;
-    
     return 1;
 }
 
@@ -141,6 +138,7 @@ int insert_into_connp_if_permitted(int fd)
         goto ret_fail;
  
     connpd_runlock();
+
     return insert_into_connp(&address, sock);
 
 ret_fail:

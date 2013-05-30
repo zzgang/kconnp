@@ -107,6 +107,16 @@
 
 #define SOCKADDR_COPY(sockaddr_dest, sockaddr_src) memcpy((void *)sockaddr_dest, (void *)sockaddr_src, sizeof(struct sockaddr))
 
+#define INIT_SB(sb, s, fd)   \
+    do {    \
+        sb->sb_in_use = 1;  \
+        sb->sock_in_use = 0;    \
+        sb->sock = s;    \
+        sb->last_used_jiffies = jiffies;    \
+        sb->connpd_fd = fd; \
+        sb->uc = 0; \
+    } while(0)
+
 #if LRU
 static struct socket_bucket *get_empty_slot(struct sockaddr *);
 #else
@@ -290,7 +300,8 @@ static struct socket_bucket *get_empty_slot(void)
 /**
  *Insert a new socket to sockp.
  */
-struct socket_bucket *insert_socket_to_sockp(struct sockaddr *address, struct socket *s)
+struct socket_bucket *insert_socket_to_sockp(struct sockaddr *address, 
+        struct socket *s, int connpd_fd)
 {
     struct socket_bucket *empty = NULL;
 
@@ -303,12 +314,7 @@ struct socket_bucket *insert_socket_to_sockp(struct sockaddr *address, struct so
 #endif
         goto unlock_ret;
 
-    empty->sb_in_use = 1; //initial.
-    empty->sock_in_use = 0;
-    empty->sock = s;
-    empty->last_used_jiffies = jiffies;
-    empty->connpd_fd = -1;
-    empty->uc = 0;
+    INIT_SB(empty, s, connpd_fd);
 
     SOCKADDR_COPY(&empty->address, address);
 

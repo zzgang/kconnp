@@ -11,10 +11,13 @@ static inline int connp_move_addr_to_kernel(void __user *uaddr, int ulen, struct
 {
     if (ulen < 0 || ulen > sizeof(struct sockaddr_storage))
         return -EINVAL;
+
     if (ulen == 0)
         return 0;
+
     if (copy_from_user(kaddr, uaddr, ulen))
         return -EFAULT;
+
     return 0;
 }
 
@@ -50,7 +53,12 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
                     "jmp 1b\n\t"
                     "2:subl $0x4, %%ecx\n\t"
                     "addl %%ecx, %%esp\n\t" //clean the stack in this function.
-                    "pushl %1\n\t" //change eip to orig_sys_socketcall ptr after ret.
+                    "movl %%esp, %%ecx\n\t"
+                    "subl $0x4, %%ecx\n\t" //%esp - $0x4
+                    "cmpl %%ecx, %%ebp\n\t" //check if using %ebp.
+                    "jne 3f\n\t"
+                    "mov -0x4(%%esp), %%ebp\n\t" //pop %ebp
+                    "3:pushl %1\n\t" //change eip to orig_sys_socketcall after ret.
                     "ret" //invoke orig_sys_socketcall function.
                     :"=a"(err) //dummy for no compile warning.
                     :"m"(orig_sys_socketcall), "m"(call), "m"(args));
