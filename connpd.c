@@ -9,37 +9,10 @@
  */
 struct task_struct * volatile connp_daemon;
 
-static rwlock_t connpd_lock;
+rwlock_t connpd_lock;
 
 #define CONNP_DAEMON_SET(v) (connp_daemon = (v))
 
-/* connpd lock funcions */
-inline void connpd_rwlock_init(void) 
-{
-    rwlock_init(&connpd_lock);
-}
-
-inline void connpd_rlock(void)
-{
-    read_lock(&connpd_lock);
-}
-
-inline void connpd_runlock(void)
-{
-    read_unlock(&connpd_lock);
-}
-
-inline void connpd_wlock(void)
-{
-    write_lock(&connpd_lock);
-}
-
-inline void connpd_wunlock(void)
-{
-    write_unlock(&connpd_lock);
-}
-
-/*end*/
 static int connpd_func(void *data)
 {
     while (1) {
