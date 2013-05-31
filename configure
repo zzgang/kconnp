@@ -95,9 +95,21 @@ free_fdtable_rcu_ea=`pcregrep '\bfree_fdtable_rcu\b' $sysmap_file | awk '{print 
 cat local_func_ea.h.in |
 sed -e "s/%%FREE_FDTABLE_RCU_EA%%/0x${free_fdtable_rcu_ea}/" > local_func_ea.h;
 
+CCFLAGS_APPEND="ccflags-y +="
+
+machine_bits=`getconf LONG_BIT`
+
+if [ $machine_bits -eq 32 ] #32 bits machine#
+then
+    CCFLAGS_APPEND="${CCFLAGS_APPEND} -fno-omit-frame-pointer"
+fi
+
 cat > Makefile <<MF
 obj-m += kconnp.o
 kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o hash.o cfg.o util.o
+
+$CCFLAGS_APPEND
+
 all:
 	make -C $kmbd SUBDIRS=\$(PWD) modules
 clean:

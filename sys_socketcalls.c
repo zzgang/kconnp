@@ -26,42 +26,27 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
 {
     unsigned long a[6];
     int err;
-    
+
     switch(call) {
         case SYS_CONNECT:
             if (copy_from_user(a, args, 3 * sizeof(a[0])))
                 return -EFAULT;
             err = connp_sys_connect(a[0], (struct sockaddr __user *)a[1], a[2]);
             break;
+
         case SYS_SHUTDOWN:
             if (copy_from_user(a, args, 2 * sizeof(a[0])))
                 return -EFAULT;
             err = connp_sys_shutdown(a[0], a[1]); 
             break;
+
         default:
-            //Calculate the stack size in this function to clean it and jmp orig_sys_socketcall directly.
+            //Clean the stack in this function and jmp orig_sys_socketcall directly.
             asm volatile(".align 4\n\t"
-                    "movl %%esp, %%eax\n\t"
-                    "movl $0x0, %%ecx\n\t"
-                    "movl %2, %%ebx\n\t"
-                    "movl %3, %%edx\n\t"
-                    "1:addl $0x4, %%ecx\n\t"
-                    "addl $0x4, %%eax\n\t"
-                    "cmpl (%%eax), %%ebx\n\t"
-                    "jne 1b\n\t"
-                    "cmpl 0x4(%%eax), %%edx\n\t"
-                    "je 2f\n\t"
-                    "jmp 1b\n\t"
-                    "2:subl $0x4, %%ecx\n\t"
-                    "addl %%ecx, %%esp\n\t" //clean the stack in this function.
-                    "movl %%esp, %%ecx\n\t"
-                    "subl $0x4, %%ecx\n\t" //%esp - $0x4
-                    "cmpl %%ecx, %%ebp\n\t" //check if using %ebp.
-                    "jne 3f\n\t"
-                    "mov -0x4(%%esp), %%ebp\n\t" //pop %ebp
-                    "3:jmp *%1\n\t" //change eip to orig_sys_socketcall directly.
+                    "leave\n\t"
+                    "jmp *%1\n\t" //change eip to orig_sys_socketcall directly.
                     :"=a"(err) //dummy for no compile warning.
-                    :"m"(orig_sys_socketcall), "m"(call), "m"(args));
+                    :"m"(orig_sys_socketcall));
             break;
     }
 
