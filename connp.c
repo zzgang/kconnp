@@ -100,7 +100,6 @@ static int insert_into_connp(struct sockaddr *servaddr, struct socket *sock)
 
     fc = file_count_read(sock->file);
 
-    printk(KERN_ERR "file-count-close: %d\n", fc);
     if (fc == 1 && insert_socket_to_connp(servaddr, sock))
         return 1;
 
@@ -272,11 +271,11 @@ static int connp_fds_events_or_timout(void)
  */
 int scan_connp_shutdown_timeout()
 {
-    BUG_ON(current != CONNP_DAEMON_TSKP);
+    BUG_ON(!INVOKED_BY_CONNP_DAEMON());
 
     if (connp_fds_events_or_timout())
         do_close_timeout_pending_fds();
-    //wait_on_timeout(1);
+
     return 0;
 }
 
