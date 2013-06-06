@@ -6,17 +6,17 @@
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 2, 45)
 static inline void __set_close_on_exec(int fd, struct fdtable *fdt)
 {
-        __set_bit(fd, fdt->close_on_exec);
+    __set_bit(fd, fdt->close_on_exec);
 }
 
 static inline void __clear_close_on_exec(int fd, struct fdtable *fdt)
 {
-        __clear_bit(fd, fdt->close_on_exec);
+    __clear_bit(fd, fdt->close_on_exec);
 }
 
 static inline void __set_open_fd(int fd, struct fdtable *fdt)
 {
-        __set_bit(fd, fdt->open_fds);
+    __set_bit(fd, fdt->open_fds);
 }
 #endif
 
@@ -252,7 +252,7 @@ repeat:
         fd = find_next_zero_bit(fdt->open_fds->fds_bits,
                 fdt->max_fds, fd);
 #else
-        fd = find_next_zero_bit(fdt->open_fds, fdt->max_fds, fd);
+    fd = find_next_zero_bit(fdt->open_fds, fdt->max_fds, fd);
 #endif
 
     error = task_expand_files(tsk, files, fd);
@@ -280,7 +280,7 @@ repeat:
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
         FD_SET(fd, fdt->close_on_exec); 
 #else
-        __set_close_on_exec(fd, fdt);
+    __set_close_on_exec(fd, fdt);
 #endif
     else
 #endif
@@ -288,7 +288,7 @@ repeat:
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
         FD_CLR(fd, fdt->close_on_exec);
 #else
-        __clear_close_on_exec(fd, fdt); 
+    __clear_close_on_exec(fd, fdt); 
 #endif
 
     error = fd;
@@ -305,3 +305,122 @@ out:
     spin_unlock(&files->file_lock);
     return error;
 }
+
+/**poll functions**/
+struct poll_table_page {
+    struct poll_table_page * next;
+    struct poll_table_entry * entry;
+    struct poll_table_entry entries[0];
+};
+
+#define POLL_TABLE_FULL(table) \
+    ((unsigned long)((table)->entry+1) > PAGE_SIZE + (unsigned long)(table))
+
+static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
+        poll_table *p);
+
+void lkm_poll_initwait(struct poll_wqueues *pwq)
+{
+    init_poll_funcptr(&pwq->pt, __pollwait);
+    pwq->polling_task = current;
+    pwq->triggered = 0;
+    pwq->error = 0;
+    pwq->table = NULL;
+    pwq->inline_index = 0;
+}
+
+static void free_poll_entry(struct poll_table_entry *entry)
+{
+    remove_wait_queue(entry->wait_address, &entry->wait);
+    /*Not needed by f_count*/
+    //fput(entry->filp);
+}
+
+void lkm_poll_freewait(struct poll_wqueues *pwq)
+{
+    struct poll_table_page * p = pwq->table;
+    int i;
+    for (i = 0; i < pwq->inline_index; i++)
+        free_poll_entry(pwq->inline_entries + i);
+    while (p) {
+        struct poll_table_entry * entry;
+        struct poll_table_page *old;
+
+        entry = p->entry;
+        do {
+            entry--;
+            free_poll_entry(entry);
+        } while (entry > p->entries);
+        old = p;
+        p = p->next;
+        free_page((unsigned long) old);
+    }
+}
+
+static struct poll_table_entry *poll_get_entry(struct poll_wqueues *p)
+{
+    struct poll_table_page *table = p->table;
+
+    if (p->inline_index < N_INLINE_POLL_ENTRIES)
+        return p->inline_entries + p->inline_index++;
+
+    if (!table || POLL_TABLE_FULL(table)) {
+        struct poll_table_page *new_table;
+
+        new_table = (struct poll_table_page *) __get_free_page(GFP_KERNEL);
+        if (!new_table) {
+            p->error = -ENOMEM;
+            return NULL;
+        }
+        new_table->entry = new_table->entries;
+        new_table->next = table;
+        p->table = new_table;
+        table = new_table;
+    }
+
+    return table->entry++;
+}
+
+static int __pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
+{
+    struct poll_wqueues *pwq = wait->private;
+    DECLARE_WAITQUEUE(dummy_wait, pwq->polling_task);
+
+    smp_wmb();
+    pwq->triggered = 1;
+
+    return default_wake_function(&dummy_wait, mode, sync, key);
+}
+
+static int pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
+{
+    struct poll_table_entry *entry;
+
+    entry = container_of(wait, struct poll_table_entry, wait);
+    if (key && !((unsigned long)key & entry->key))
+        return 0;
+    return __pollwake(wait, mode, sync, key);
+}
+
+/* Add a new entry */
+static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
+        poll_table *p)
+{
+    struct poll_wqueues *pwq = container_of(p, struct poll_wqueues, pt);
+    struct poll_table_entry *entry = poll_get_entry(pwq);
+    if (!entry)
+        return;
+    /*Don't add f_count*/
+    //get_file(filp);
+    entry->filp = filp;
+    entry->wait_address = wait_address;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
+    entry->key = p->key;
+#else
+    entry->key = p->_key;
+#endif
+    init_waitqueue_func_entry(&entry->wait, pollwake);
+    entry->wait.private = pwq;
+    add_wait_queue(wait_address, &entry->wait);
+}
+/**end poll functions**/

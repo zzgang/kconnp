@@ -10,7 +10,7 @@
 #include "connp.h"
 #include "connpd.h"
 
-#define wait_on_timeout(s) schedule_timeout_interruptible(HZ)
+#define wait_on_timeout(s) schedule_timeout_interruptible((s)*HZ)
 
 static inline void do_close_timeout_pending_fds(void);
 static int insert_socket_to_connp(struct sockaddr *, struct socket *);
@@ -69,7 +69,7 @@ int close_pending_fds_pop(void)
         goto out_unlock;
 
     fd = close_pending_fds.fds[--close_pending_fds.current_idx];
-    
+
 out_unlock:
     spin_unlock(&close_pending_fds.fds_lock);
     return fd;
@@ -97,15 +97,16 @@ static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock
 static int insert_into_connp(struct sockaddr *servaddr, struct socket *sock)
 {
     int fc;
-    
+
     fc = file_count_read(sock->file);
 
-    if (fc == 1 && insert_socket_to_connp(servaddr, sock)) 
+    printk(KERN_ERR "file-count-close: %d\n", fc);
+    if (fc == 1 && insert_socket_to_connp(servaddr, sock))
         return 1;
 
     if (fc == 2 && free_socket_to_sockp(servaddr, sock)) 
         return 1;
-    
+
     return 0;
 }
 
@@ -114,7 +115,7 @@ int insert_into_connp_if_permitted(int fd)
     struct socket *sock;
     struct sockaddr address;
     int err;
-    
+
     connpd_rlock();
 
     if (!CONNP_DAEMON_EXISTS() || INVOKED_BY_CONNP_DAEMON())
@@ -136,7 +137,7 @@ int insert_into_connp_if_permitted(int fd)
             || !iport_in_allowd_list(&address) 
             || iport_in_denied_list(&address))
         goto ret_fail;
- 
+
     connpd_runlock();
 
     return insert_into_connp(&address, sock);
@@ -206,25 +207,83 @@ static inline void do_close_timeout_pending_fds()
 {
     int fd;
 
+    shutdown_timeout_sock_list();
+
     while ((fd = close_pending_fds_pop()) >= 0)
         orig_sys_close(fd);
 
-    shutdown_timeout_sock_list();
+}
+/**
+ *Wait events of connpd fds or timeout.
+ */
+static int connp_fds_events_or_timout(void)
+{
+    struct poll_wqueues table;
+    int events = 0;
+    int timed_out = 0;
+    struct timespec end_time, time_out = {.tv_sec = 1, .tv_nsec = 0};
+    ktime_t expire;
+    poll_table *pt;
+
+    ktime_get_ts(&end_time);
+    end_time = lkm_timespec_add_safe(end_time, time_out);
+    expire = timespec_to_ktime(end_time);
+
+
+    lkm_poll_initwait(&table);
+    pt = &(&table)->pt;
+
+    for (;;) {
+        struct fd_entry *pos, *tmp;
+
+        LIST_HEAD(fds_list);
+        sockp_get_fds(&fds_list);
+        list_for_each_entry_safe(pos, tmp, &fds_list, siblings) {
+            /*Induce the file_count to be added by 1*/
+            if (!events) 
+                events = fd_poll(pos->fd, POLLRDHUP|POLLERR|POLLHUP, pt);
+
+            if (events)
+                set_pt_qproc(pt, NULL);
+
+            lkmfree(pos);
+        }
+
+        set_pt_qproc(pt, NULL); 
+
+        if (events)
+            break;
+
+        if (!poll_schedule_timeout(&table, TASK_UNINTERRUPTIBLE/*ignore signal*/, 
+                    &expire, 0)) {
+            timed_out = 1;
+            break;
+        }
+    }
+
+    lkm_poll_freewait(&table);   
+
+    return events || timed_out;
 }
 
 /**
- * Shutdown unused conn list and sleep.
+ * Shutdown sockets which are passive closed or expired or LRU replaced.
+ * must be executed by connpd.
  */
 int scan_connp_shutdown_timeout()
 {
-    do_close_timeout_pending_fds();
-    wait_on_timeout(1);
+    BUG_ON(current != CONNP_DAEMON_TSKP);
+
+    if (connp_fds_events_or_timout())
+        do_close_timeout_pending_fds();
+    //wait_on_timeout(1);
     return 0;
 }
 
 void connp_sys_exit_prepare()
 {
     struct fd_entry *pos, *tmp;
+
     LIST_HEAD(fds_list);
     TASK_GET_FDS(current, &fds_list);
     list_for_each_entry_safe(pos, tmp, &fds_list, siblings) {
@@ -253,7 +312,7 @@ int connp_init()
         printk(KERN_ERR "Error: sockp_init error!\n");
         return 0;
     }
-    
+
     close_pending_fds_init();
 
     if (!replace_syscalls()) {

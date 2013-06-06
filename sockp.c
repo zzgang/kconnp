@@ -128,7 +128,7 @@ static inline unsigned int _shashfn(struct sockaddr_in *, struct socket *);
 
 static struct {
     struct socket_bucket *hash_table[NR_HASH];
-    struct socket_bucket *shash_table[NR_HASH]; //for sock addr hash table.
+    struct socket_bucket *shash_table[NR_SHASH]; //for sock addr hash table.
     struct socket_bucket *sb_free_p;
     struct socket_bucket *sb_trav_head;
     struct socket_bucket *sb_trav_tail;
@@ -180,8 +180,26 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
 }
 
 
+void sockp_get_fds(struct list_head *fds_list)
+{
+    struct socket_bucket *p; 
+    struct fd_entry *tmp;
+
+    SOCKP_LOCK();
+
+    for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
+        if (p->connpd_fd < 0)
+            continue;
+       tmp = (typeof(*tmp) *)lkmalloc(sizeof(typeof(*tmp)));
+       tmp->fd = p->connpd_fd;
+       list_add_tail(&tmp->siblings, fds_list);  
+    }
+    
+    SOCKP_UNLOCK();
+}
+
 /**
- *shutdown: to scan all sock pool to close the expired or all sockets.
+ *To scan all sock pool to close the expired or all sockets. The caller is kconnpd.
  *type: 0 expired;1 all;
  */
 void shutdown_sock_list(int type)
@@ -208,13 +226,14 @@ void shutdown_sock_list(int type)
             continue;
 
 shutdown:
-        orig_sys_close(p->connpd_fd);
-
         REMOVE_FROM_HLIST(HASH(&p->address), p);
         REMOVE_FROM_TLIST(p);
         REMOVE_FROM_SHLIST(SHASH(&p->address, p->sock), p);
 
         PUT_SB(p);
+
+        orig_sys_close(p->connpd_fd);
+
     }
 
     SOCKP_UNLOCK();

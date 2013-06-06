@@ -12,6 +12,7 @@
 
 #define NR_SOCKET_BUCKET 200
 #define NR_HASH (NR_SOCKET_BUCKET/2 + 1)
+#define NR_SHASH (NR_SOCKET_BUCKET)
 #define TIMEOUT 30 //seconds
 #define LOCK_TYPE_MUTEX 0
 #define LRU 1 //LRU replace algorithm
@@ -54,6 +55,8 @@ extern struct socket_bucket *insert_socket_to_sockp(struct sockaddr *,
         struct socket *, int fd);
 
 extern void shutdown_sock_list(int type);
+
+extern void sockp_get_fds(struct list_head *);
 
 extern int sockp_init(void);
 extern void sockp_destroy(void);

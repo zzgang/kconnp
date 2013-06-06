@@ -20,6 +20,9 @@
 #include <linux/vmalloc.h>
 #include <linux/rcupdate.h>
 #include <linux/list.h>
+#include <linux/poll.h>
+
+#define INVOKED_BY_TGROUP_LEADER() (current == current->group_leader)
 
 struct fd_entry {
     int fd;
@@ -109,6 +112,81 @@ static inline int task_get_unused_fd(struct task_struct *tsk)
     return task_alloc_fd(tsk, 0, 0);
 }
 
+/*
+ * Add two timespec values and do a safety check for overflow.
+ * It's assumed that both values are valid (>= 0)
+ */
+
+static inline struct timespec lkm_timespec_add_safe(const struct timespec lhs,
+        const struct timespec rhs)
+{
+    struct timespec res;
+
+    set_normalized_timespec(&res, lhs.tv_sec + rhs.tv_sec,
+            lhs.tv_nsec + rhs.tv_nsec);
+
+    if (res.tv_sec < lhs.tv_sec || res.tv_sec < rhs.tv_sec)
+        res.tv_sec = TIME_T_MAX;
+
+    return res;
+}
+
+static inline void set_pt_qproc(poll_table *pt, void *v)
+{
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
+    pt->qproc = v;
+#else
+    pt->_qproc = v;
+#endif
+}
+
+static inline void set_pt_key(poll_table *pt, int events)
+{
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
+                    pt->key = events;
+#else
+                    pt->_key = events;
+#endif
+}
+
+void lkm_poll_initwait(struct poll_wqueues *pwq);
+void lkm_poll_freewait(struct poll_wqueues *pwq);
+
+#define get_file(fd)            \
+({ struct file * __file;    \
+ rcu_read_lock();       \
+ __file = rcu_dereference_check_fdtable(TASK_FILES(current), TASK_FILES_FDT(current)->fd[fd]); \
+ rcu_read_unlock(); \
+ __file;})
+
+static inline int fd_poll(int fd, int events, poll_table *pwait)
+{
+    unsigned int mask;
+
+    mask = 0;
+    if (fd >= 0) {
+        struct file * file;
+        //int fput_needed;
+
+        //file = fget_light(fd, &fput_needed);
+        file = get_file(fd); /*Needn't add f_count*/
+        mask = POLLNVAL;
+        if (file != NULL) {
+            mask = DEFAULT_POLLMASK;
+            if (file->f_op && file->f_op->poll) {
+                if (pwait)
+                    set_pt_key(pwait, events);
+                mask = file->f_op->poll(file, pwait);
+            }
+            /* Mask out unneeded events. */
+            mask &= events;
+            //fput_light(file, fput_needed);
+        }
+    }
+
+    return mask;
+}
+
 static inline void lkm_clear_open_fd(int fd, FILE_FDT_TYPE *fdt)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 45)
@@ -118,7 +196,7 @@ static inline void lkm_clear_open_fd(int fd, FILE_FDT_TYPE *fdt)
 #endif
 }
 
-static inline void TASK_GET_FDS(struct task_struct * tsk, struct list_head * fds_list)
+static inline void TASK_GET_FDS(struct task_struct *tsk, struct list_head *fds_list)
 {
     int i, j = 0;
     FILE_FDT_TYPE *fdt;

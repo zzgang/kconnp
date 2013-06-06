@@ -15,7 +15,7 @@ rwlock_t connpd_lock;
 
 static int connpd_func(void *data)
 {
-    while (1) {
+    for(;;) {
 
         if (kthread_should_stop()) {
             
