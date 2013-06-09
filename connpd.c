@@ -1,6 +1,7 @@
 #include <linux/kthread.h>
 #include "connpd.h"
 #include "connp.h"
+#include "util.h"
 
 #define CONNPD_NAME "kconnpd"
 
@@ -15,6 +16,10 @@ rwlock_t connpd_lock;
 
 static int connpd_func(void *data)
 {
+    /*Unblock the NOTIFY_SIG for kernel thread 
+      that has invoked the daemonize function*/
+    allow_signal(NOTIFY_SIG);
+    
     for(;;) {
 
         if (kthread_should_stop()) {

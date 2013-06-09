@@ -91,6 +91,9 @@ static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock
         return 0;
     }
 
+    /*Notify connpd to poll in time.*/
+    notify(CONNP_DAEMON_TSKP);
+
     return 1;
 }
 
@@ -228,17 +231,18 @@ static int connp_fds_events_or_timout(void)
     end_time = lkm_timespec_add_safe(end_time, time_out);
     expire = timespec_to_ktime(end_time);
 
-
     lkm_poll_initwait(&table);
     pt = &(&table)->pt;
 
     for (;;) {
         struct fd_entry *pos, *tmp;
-
         LIST_HEAD(fds_list);
+
+        if (signal_pending(current))
+            flush_signals(current);
+
         sockp_get_fds(&fds_list);
         list_for_each_entry_safe(pos, tmp, &fds_list, siblings) {
-            /*Induce the file_count to be added by 1*/
             if (!events) 
                 events = fd_poll(pos->fd, POLLRDHUP|POLLERR|POLLHUP, pt);
 
@@ -253,7 +257,7 @@ static int connp_fds_events_or_timout(void)
         if (events)
             break;
 
-        if (!poll_schedule_timeout(&table, TASK_UNINTERRUPTIBLE/*ignore signal*/, 
+        if (!poll_schedule_timeout(&table, TASK_INTERRUPTIBLE/*Receive signals*/, 
                     &expire, 0)) {
             timed_out = 1;
             break;
