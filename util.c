@@ -322,11 +322,13 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
 void lkm_poll_initwait(struct poll_wqueues *pwq)
 {
     init_poll_funcptr(&pwq->pt, __pollwait);
-    pwq->polling_task = current;
-    pwq->triggered = 0;
     pwq->error = 0;
     pwq->table = NULL;
     pwq->inline_index = 0;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 28)
+    pwq->polling_task = current;
+    pwq->triggered = 0;
+#endif
 }
 
 static void free_poll_entry(struct poll_table_entry *entry)
@@ -370,6 +372,9 @@ static struct poll_table_entry *poll_get_entry(struct poll_wqueues *p)
         new_table = (struct poll_table_page *) __get_free_page(GFP_KERNEL);
         if (!new_table) {
             p->error = -ENOMEM;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 28)
+            __set_current_state(TASK_RUNNING);
+#endif
             return NULL;
         }
         new_table->entry = new_table->entries;
@@ -381,6 +386,7 @@ static struct poll_table_entry *poll_get_entry(struct poll_wqueues *p)
     return table->entry++;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)
 static int __pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 {
     struct poll_wqueues *pwq = wait->private;
@@ -394,14 +400,16 @@ static int __pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 
 static int pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
     struct poll_table_entry *entry;
 
     entry = container_of(wait, struct poll_table_entry, wait);
     if (key && !((unsigned long)key & entry->key))
         return 0;
+#endif
     return __pollwake(wait, mode, sync, key);
 }
-
+#endif
 /* Add a new entry */
 static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
         poll_table *p)
@@ -410,17 +418,25 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
     struct poll_table_entry *entry = poll_get_entry(pwq);
     if (!entry)
         return;
-    /*Don't add f_count*/
+    /*Needn't add f_count*/
     //get_file(filp);
     entry->filp = filp;
     entry->wait_address = wait_address;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
     entry->key = p->key;
 #else
     entry->key = p->_key;
 #endif
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)
     init_waitqueue_func_entry(&entry->wait, pollwake);
     entry->wait.private = pwq;
+#else 
+    init_waitqueue_entry(&entry->wait, current);
+#endif
+
     add_wait_queue(wait_address, &entry->wait);
 }
-/**end poll functions**/
+/**End poll functions**/

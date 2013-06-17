@@ -121,6 +121,8 @@ static inline int task_get_unused_fd(struct task_struct *tsk)
  * It's assumed that both values are valid (>= 0)
  */
 
+#undef TIME_T_MAX
+#define TIME_T_MAX (time_t)((1UL << ((sizeof(time_t) << 3) - 1)) - 1)
 static inline struct timespec lkm_timespec_add_safe(const struct timespec lhs,
         const struct timespec rhs)
 {
@@ -138,11 +140,13 @@ static inline struct timespec lkm_timespec_add_safe(const struct timespec lhs,
 static inline void set_pt_qproc(poll_table *pt, void *v)
 {
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
-    pt->qproc = v;
+    pt = NULL;
 #else
     pt->_qproc = v;
 #endif
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
 
 static inline void set_pt_key(poll_table *pt, int events)
 {
@@ -153,15 +157,20 @@ static inline void set_pt_key(poll_table *pt, int events)
 #endif
 }
 
+#endif
+
 void lkm_poll_initwait(struct poll_wqueues *pwq);
 void lkm_poll_freewait(struct poll_wqueues *pwq);
 
-#define get_file(fd)            \
+#define lkm_get_file(fd)            \
 ({ struct file * __file;    \
  rcu_read_lock();       \
- __file = rcu_dereference_check_fdtable(TASK_FILES(current), TASK_FILES_FDT(current)->fd[fd]); \
+ __file = fcheck_files(TASK_FILES(current), fd); \
  rcu_read_unlock(); \
  __file;})
+
+#undef DEFAULT_POLLMASK
+#define DEFAULT_POLLMASK (POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM)
 
 static inline int fd_poll(int fd, int events, poll_table *pwait)
 {
@@ -173,13 +182,15 @@ static inline int fd_poll(int fd, int events, poll_table *pwait)
         //int fput_needed;
 
         //file = fget_light(fd, &fput_needed);
-        file = get_file(fd); /*Needn't add f_count*/
+        file = lkm_get_file(fd); /*Needn't add f_count*/
         mask = POLLNVAL;
         if (file != NULL) {
             mask = DEFAULT_POLLMASK;
             if (file->f_op && file->f_op->poll) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
                 if (pwait)
                     set_pt_key(pwait, events);
+#endif
                 mask = file->f_op->poll(file, pwait);
             }
             /* Mask out unneeded events. */

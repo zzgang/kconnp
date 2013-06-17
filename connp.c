@@ -10,8 +10,6 @@
 #include "connp.h"
 #include "connpd.h"
 
-#define wait_on_timeout(s) schedule_timeout_interruptible((s)*HZ)
-
 static inline void do_close_timeout_pending_fds(void);
 static int insert_socket_to_connp(struct sockaddr *, struct socket *);
 static int insert_into_connp(struct sockaddr *, struct socket *);
@@ -215,21 +213,27 @@ static inline void do_close_timeout_pending_fds()
         orig_sys_close(fd);
 
 }
+
 /**
  *Wait events of connpd fds or timeout.
  */
 static int connp_fds_events_or_timout(void)
 {
     struct poll_wqueues table;
+    poll_table *pt;
     int events = 0;
     int timed_out = 0;
-    struct timespec end_time, time_out = {.tv_sec = 1, .tv_nsec = 0};
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 28)
     ktime_t expire;
-    poll_table *pt;
+    struct timespec end_time, time_out = {.tv_sec = 1/*second*/, .tv_nsec = 0};
 
     ktime_get_ts(&end_time);
     end_time = lkm_timespec_add_safe(end_time, time_out);
     expire = timespec_to_ktime(end_time);
+#else
+    long __timeout = 1000/*miliseconds*/;
+#endif
 
     lkm_poll_initwait(&table);
     pt = &(&table)->pt;
@@ -240,7 +244,7 @@ static int connp_fds_events_or_timout(void)
 
         if (signal_pending(current))
             flush_signals(current);
-
+        
         sockp_get_fds(&fds_list);
         list_for_each_entry_safe(pos, tmp, &fds_list, siblings) {
             if (!events) 
@@ -257,14 +261,21 @@ static int connp_fds_events_or_timout(void)
         if (events)
             break;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 28)
         if (!poll_schedule_timeout(&table, TASK_INTERRUPTIBLE/*Receive signals*/, 
-                    &expire, 0)) {
-            timed_out = 1;
-            break;
-        }
+                    &expire, 0))
+            goto break_timeout;
+#else
+        __timeout = schedule_timeout_interruptible(__timeout);
+        if (!__timeout)
+            goto break_timeout;
+#endif
+break_timeout:
+        timed_out = 1;
+        break;
     }
 
-    lkm_poll_freewait(&table);   
+    lkm_poll_freewait(&table); 
 
     return events || timed_out;
 }
