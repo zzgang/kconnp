@@ -88,6 +88,7 @@ static inline int hash_exists(struct hash_table_t *ht, const char *key,
 
     if (hash_find(ht, key, klen, &val) && val)
         return 1;
+
     return 0;
 }
 extern int hash_destroy(struct hash_table_t **);

@@ -9,6 +9,7 @@
 #include "connp.h"
 #include "sockp.h"
 #include "util.h"
+#include "cfg.h"
 
 #if LOCK_TYPE_MUTEX 
 #include <linux/mutex.h>
@@ -217,10 +218,14 @@ void shutdown_sock_list(int type)
         if (type) //shutdown all
             goto shutdown;
         
-        if (!SOCK_ESTABLISHED(p->sock) ||
+        if (!SOCK_ESTABLISHED(p->sock)) {
+            cfg_conn_set_passive(&p->address);
+            goto shutdown;
+        }
+
+        if (!cfg_conn_is_positive(&p->address) || 
                 (!p->sock_in_use && 
-                 (jiffies - p->last_used_jiffies > TIMEOUT * HZ)
-                )) 
+                 (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;
         else
             continue;

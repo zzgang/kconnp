@@ -108,7 +108,7 @@ static int cfg_iports_list_init(struct cfg_entry *);
 static void cfg_iports_list_destroy(struct cfg_entry *);
 static int cfg_iports_list_reload(struct cfg_entry *);
 
-static inline int iport_in_list(struct sockaddr_in *, struct cfg_entry *);
+static inline struct conn_node_t *iport_in_list(struct sockaddr_in *, struct cfg_entry *);
 
 struct cfg_dir {
     struct cfg_entry allowed_list;
@@ -668,7 +668,7 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
 { 
     struct iports_str_list_t *iports_str_scanning_list;
     struct iports_str_list_t *iports_str_parsing_list;
-    struct iport_t iport_node;
+    struct conn_node_t conn_node;
     struct iport_str_t *p;
     int res, ret = 1;
 
@@ -703,10 +703,10 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
     for (p = iports_str_parsing_list->list; p; p = p->next) {
         struct in_addr iaddr;
         
-        memset(&iport_node, 0, sizeof(struct iport_t)); 
+        memset(&conn_node, 0, sizeof(struct conn_node_t)); 
 
         if (strcmp(p->ip_str, "*") == 0) //Wildcard
-            iport_node.ip = 0;
+            conn_node.conn_ip = 0;
         else {
             if (!ip_aton(p->ip_str, &iaddr)) {
                 printk(KERN_ERR 
@@ -716,17 +716,17 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
                 ret = 0;
                 goto out_free;
             }
-            iport_node.ip = (unsigned int)iaddr.s_addr;
+            conn_node.conn_ip = (unsigned int)iaddr.s_addr;
         }
 
         if (strcmp(p->port_str, "*") == 0) //Wildcard
-            iport_node.port = 0;
+            conn_node.conn_port = 0;
         else
-            iport_node.port = htons(simple_strtol(p->port_str, NULL, 10));
+            conn_node.conn_port = htons(simple_strtol(p->port_str, NULL, 10));
 
         if (!hash_set((struct hash_table_t *)ce->cfg_ptr, 
-                    (const char *)&iport_node, sizeof(struct iport_t), 
-                    &iport_node, sizeof(struct iport_t))){
+                    (const char *)&conn_node.iport_node, sizeof(struct iport_t), 
+                    &conn_node, sizeof(struct conn_node_t))){
             hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
             ret = 0;
             goto out_free;
@@ -758,14 +758,14 @@ static int cfg_iports_list_reload(struct cfg_entry *ce)
     return cfg_iports_entity_init(ce);
 }
 
-static inline int iport_in_list(struct sockaddr_in *addr, struct cfg_entry *ce)
+static inline struct conn_node_t *iport_in_list(struct sockaddr_in *addr, struct cfg_entry *ce)
 {
-    struct iport_t zip_port, ip_zport, ip_port;
+    struct iport_t zip_port, ip_zport, ip_port, **p;
+    struct iport_t *iport_list[] = {&ip_port, &ip_zport, &zip_port, NULL}; 
     struct hash_table_t *ht_ptr = (struct hash_table_t *)ce->cfg_ptr;
    
-    memset(&zip_port, 0, sizeof(struct iport_t));
-    memset(&ip_zport, 0, sizeof(struct iport_t));
-    memset(&ip_port,  0, sizeof(struct iport_t));
+    for (p = &iport_list[0]; *p; p++) 
+        memset(*p, 0, sizeof(struct iport_t));
 
     zip_port.ip = 0;
     zip_port.port = addr->sin_port;
@@ -776,23 +776,29 @@ static inline int iport_in_list(struct sockaddr_in *addr, struct cfg_entry *ce)
     ip_port.ip = addr->sin_addr.s_addr;
     ip_port.port = addr->sin_port;
 
-    return hash_exists(ht_ptr, (const char *)&zip_port, sizeof(struct iport_t))
-        || hash_exists(ht_ptr, (const char *)&ip_zport, sizeof(struct iport_t))
-        || hash_exists(ht_ptr, (const char *)&ip_port, sizeof(struct iport_t));
+    for (p = &iport_list[0]; *p; p++) {
+        struct conn_node_t *tmp;
+
+        if (hash_find(ht_ptr, 
+                    (const char *)*p, sizeof(struct iport_t), (void **)&tmp))
+            return tmp;
+    }
+    
+    return NULL;
 }
 
-int iport_in_allowd_list(struct sockaddr *address)
+struct conn_node_t *iport_in_allowd_list(struct sockaddr *address)
 {
     if (!cfg->al.cfg_ptr) //if allowed list is null, none allowed.
-        return 0;
+        return NULL;
 
     return iport_in_list((struct sockaddr_in *)address, &cfg->al);
 }
 
-int iport_in_denied_list(struct sockaddr *address)
+struct conn_node_t *iport_in_denied_list(struct sockaddr *address)
 {
     if (!cfg->dl.cfg_ptr)
-        return 0;
+        return NULL;
 
     return iport_in_list((struct sockaddr_in *)address, &cfg->dl);
 }

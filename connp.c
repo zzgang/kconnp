@@ -134,8 +134,7 @@ int insert_into_connp_if_permitted(int fd)
 
     if (address.sa_family != AF_INET 
             || IN_LOOPBACK(ntohl(((struct sockaddr_in *)&address)->sin_addr.s_addr))
-            || !iport_in_allowd_list(&address) 
-            || iport_in_denied_list(&address))
+            || !cfg_conn_is_positive(&address)) 
         goto ret_fail;
 
     connpd_runlock();
@@ -173,8 +172,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
 
     if (address->sa_family != AF_INET
             || IN_LOOPBACK(ntohl(((struct sockaddr_in *)address)->sin_addr.s_addr))
-            || !iport_in_allowd_list(address) 
-            || iport_in_denied_list(address)) {
+            || !cfg_conn_is_positive(address)) {
         ret = 0;
         goto ret_unlock;
     }

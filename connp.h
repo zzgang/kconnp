@@ -8,6 +8,15 @@
 #define NR_MAX_BINDING_FDS 1024
 #define NR_SOCKET_CLOSE_PENDING NR_MAX_BINDING_FDS
 
+typedef enum {
+    CLOSE_POSITIVE = 0,
+    CLOSE_PASSIVE
+} conn_close_way_t;
+
+struct conn_attr_t {
+    conn_close_way_t close_way;
+};
+
 extern struct socket_bucket *attach_pending_sbs_push(struct socket_bucket *);
 extern struct socket_bucket *attach_pending_sbs_pop(void);
 
