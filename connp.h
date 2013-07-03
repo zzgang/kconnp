@@ -15,6 +15,10 @@ typedef enum {
 
 struct conn_attr_t {
     conn_close_way_t close_way;
+    struct {
+        unsigned int all_count;
+        unsigned int idle_count;
+    } stats;
 };
 
 extern struct socket_bucket *attach_pending_sbs_push(struct socket_bucket *);

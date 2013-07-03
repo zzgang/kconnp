@@ -17,6 +17,12 @@ typedef enum {
 #define hash_set(ht, key, klen, val, vlen) \
     hash_add_or_set((ht), (key), (klen), (val), (vlen), HASH_SET)
 
+#define hash_for_each(ht, pos) \
+for (pos = ((struct hash_table_t *)ht)->trav_head; pos; pos = pos->tnext)
+
+#define hash_for_each_entry(ht, pos, node) \
+for (pos = ((struct hash_table_t *)ht)->trav_head, node = (typeof(node))pos->hval.val; pos; pos = pos->tnext, node = (typeof(node))pos->hval.val)
+
 typedef unsigned long (*hash_func_t)(const char *, unsigned int);
 typedef void (*dtor_func_t)(void *data);
 

@@ -11,8 +11,8 @@
 #include "connpd.h"
 
 static inline void do_close_timeout_pending_fds(void);
-static int insert_socket_to_connp(struct sockaddr *, struct socket *);
-static int insert_into_connp(struct sockaddr *, struct socket *);
+static int insert_socket_to_connp(struct sockaddr *, struct socket *, sock_create_way_t create_way);
+static int insert_into_connp(struct sockaddr *, struct socket *, sock_create_way_t sock_create_way);
 static inline int sock_remap_fd(int fd, struct socket *, struct socket *);
 
 static int close_pending_fds_init(void);
@@ -73,7 +73,7 @@ out_unlock:
     return fd;
 }
 
-static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock)
+static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock, sock_create_way_t create_way)
 {
     int connpd_fd;
 
@@ -84,7 +84,7 @@ static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock
     task_fd_install(CONNP_DAEMON_TSKP, connpd_fd, sock->file);
     file_count_inc(sock->file, 1); //add file reference count.
 
-    if (!insert_socket_to_sockp(servaddr, sock, connpd_fd)) {
+    if (!insert_socket_to_sockp(servaddr, sock, connpd_fd, create_way)) {
         close_pending_fds_push(connpd_fd);
         return 0;
     }
@@ -95,13 +95,13 @@ static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock
     return 1;
 }
 
-static int insert_into_connp(struct sockaddr *servaddr, struct socket *sock)
+static int insert_into_connp(struct sockaddr *servaddr, struct socket *sock, sock_create_way_t sock_create_way)
 {
     int fc;
 
     fc = file_count_read(sock->file);
 
-    if (fc == 1 && insert_socket_to_connp(servaddr, sock))
+    if (fc == 1 && insert_socket_to_connp(servaddr, sock, sock_create_way))
         return 1;
 
     if (fc == 2 && free_socket_to_sockp(servaddr, sock)) 
@@ -139,7 +139,7 @@ int insert_into_connp_if_permitted(int fd)
 
     connpd_runlock();
 
-    return insert_into_connp(&address, sock);
+    return insert_into_connp(&address, sock, SOCK_RECLAIM);
 
 ret_fail:
     connpd_runlock();
@@ -172,7 +172,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
 
     if (address->sa_family != AF_INET
             || IN_LOOPBACK(ntohl(((struct sockaddr_in *)address)->sin_addr.s_addr))
-            || !cfg_conn_is_positive(address)) {
+            || !cfg_conn_acl_allowd(address)) {
         ret = 0;
         goto ret_unlock;
     }

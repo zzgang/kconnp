@@ -108,15 +108,22 @@
 
 #define SOCKADDR_COPY(sockaddr_dest, sockaddr_src) memcpy((void *)sockaddr_dest, (void *)sockaddr_src, sizeof(struct sockaddr))
 
-#define INIT_SB(sb, s, fd)   \
+#define INIT_SB(sb, s, fd, way)   \
     do {    \
         sb->sb_in_use = 1;  \
         sb->sock_in_use = 0;    \
         sb->sock = s;    \
+        sb->sock_create_way = way; \
         sb->last_used_jiffies = jiffies;    \
         sb->connpd_fd = fd; \
         sb->uc = 0; \
     } while(0)
+
+#define SOCK_IS_RECLAIM(sb) ((sb)->sock_create_way == SOCK_RECLAIM)
+#define SOCK_IS_RECLAIM_PASSIVE(sb) (SOCK_IS_RECLAIM(sb) && !cfg_conn_is_positive(&(sb)->address))
+
+#define SOCK_IS_PRECONNECT(sb) ((sb)->sock_create_way == SOCK_PRECONNECT)
+#define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowd(&(sb)->address) && SOCK_IS_PRECONNECT(sb))
 
 #if LRU
 static struct socket_bucket *get_empty_slot(struct sockaddr *);
@@ -163,7 +170,8 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
 
     for (p = HASH(address); p; p = p->sb_next) {
         if (KEY_MATCH(address, &p->address)) {
-            if (p->sock_in_use || !SOCK_ESTABLISHED(p->sock))
+            if (p->sock_in_use || !SOCK_ESTABLISHED(p->sock) 
+                    || SOCK_IS_RECLAIM_PASSIVE(p))
                 continue;
 
             REMOVE_FROM_HLIST(HASH(address), p);
@@ -223,8 +231,9 @@ void shutdown_sock_list(int type)
             goto shutdown;
         }
 
-        if (!cfg_conn_is_positive(&p->address) || 
-                (!p->sock_in_use && 
+        if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p) ||
+                SOCK_IS_RECLAIM_PASSIVE(p) || 
+                (SOCK_IS_RECLAIM(p) && !p->sock_in_use && 
                  (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;
         else
@@ -325,7 +334,7 @@ static struct socket_bucket *get_empty_slot(void)
  *Insert a new socket to sockp.
  */
 struct socket_bucket *insert_socket_to_sockp(struct sockaddr *address, 
-        struct socket *s, int connpd_fd)
+        struct socket *s, int connpd_fd, sock_create_way_t create_way)
 {
     struct socket_bucket *empty = NULL;
 
@@ -338,7 +347,7 @@ struct socket_bucket *insert_socket_to_sockp(struct sockaddr *address,
 #endif
         goto unlock_ret;
 
-    INIT_SB(empty, s, connpd_fd);
+    INIT_SB(empty, s, connpd_fd, create_way);
 
     SOCKADDR_COPY(&empty->address, address);
 

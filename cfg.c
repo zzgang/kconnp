@@ -824,3 +824,22 @@ void cfg_destroy()
     //Destroy cfg base dir.
     remove_proc_entry(CFG_BASE_DIR_NAME, NULL);
 }
+
+void cfg_allowed_entries_for_each_call(int (*call_func)(void *data))
+{
+    struct conn_node_t *conn_node; 
+    struct hash_bucket_t *pos;
+    struct sockaddr_in address;
+
+    hash_for_each_entry(cfg->al_ptr, pos, conn_node) {
+        if (conn_node->conn_ip == 0 || conn_node->conn_port == 0)
+            continue;
+
+        address.sin_addr.s_addr = conn_node->conn_ip;
+        address.sin_port = conn_node->conn_port;
+
+        if (!iport_in_denied_list((struct sockaddr *)&address))
+            if (!call_func((void *)conn_node))
+                continue;
+    }
+}

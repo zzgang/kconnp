@@ -32,6 +32,8 @@ struct conn_node_t {
 #define conn_port iport_node.port
     struct conn_attr_t conn_attrs;
 #define conn_close_way conn_attrs.close_way
+#define conn_all_count conn_attrs.stats.all_count
+#define conn_idle_count conn_attrs.stats.idle_count
 };
 
 struct iport_str_t {
@@ -57,10 +59,12 @@ extern struct conn_node_t *iport_in_allowd_list(struct sockaddr *);
 extern struct conn_node_t *iport_in_denied_list(struct sockaddr *);
 
 #define ACL_CHECK 0x0
-#define POSITIVE_CHECK 0x1
-#define PASSIVE_SET 0x2
+#define ACL_SPEC_CHECK 0x1
+#define POSITIVE_CHECK 0x2
+#define PASSIVE_SET 0x3
 
 #define cfg_conn_acl_allowd(addr) cfg_conn_op(addr, ACL_CHECK)
+#define cfg_conn_acl_spec_allowd(addr) cfg_conn_op(addr, ACL_SPEC_CHECK)
 #define cfg_conn_is_positive(addr) cfg_conn_op(addr, POSITIVE_CHECK)
 #define cfg_conn_set_passive(addr) cfg_conn_op(addr, PASSIVE_SET)
 
@@ -78,6 +82,8 @@ static inline int cfg_conn_op(struct sockaddr *address, int op_type)
     switch (op_type) {
         case ACL_CHECK:
             return (conn_node ? 1 : 0);
+        case ACL_SPEC_CHECK:
+            return (conn_node->conn_ip != 0 && conn_node->conn_port != 0);
         case POSITIVE_CHECK:
             return (conn_node->conn_close_way == CLOSE_POSITIVE);
         case PASSIVE_SET:
@@ -91,5 +97,6 @@ static inline int cfg_conn_op(struct sockaddr *address, int op_type)
 
 extern int cfg_init(void);
 extern void cfg_destroy(void);
+extern void cfg_allowed_entries_for_each_call(int (*call_func)(void *data));
 
 #endif

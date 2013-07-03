@@ -20,9 +20,15 @@
 #define close_all_fds() shutdown_sock_list(1)
 #define shutdown_timeout_sock_list() shutdown_sock_list(0)
 
+typedef enum {
+    SOCK_RECLAIM = 0,
+    SOCK_PRECONNECT
+} sock_create_way_t;
+
 struct socket_bucket {
     struct sockaddr address;
     struct socket *sock;
+    sock_create_way_t sock_create_way;
     unsigned char sb_in_use;
     unsigned char sock_in_use; /*tag: if it is in use*/
     unsigned long last_used_jiffies; /*the last used jiffies*/
@@ -52,7 +58,7 @@ extern struct socket_bucket *free_socket_to_sockp(struct sockaddr *, struct sock
  *Insert a new socket to sockp, return the new bucket of this socket.
  */
 extern struct socket_bucket *insert_socket_to_sockp(struct sockaddr *, 
-        struct socket *, int fd);
+        struct socket *, int fd, sock_create_way_t create_way);
 
 extern void shutdown_sock_list(int type);
 
