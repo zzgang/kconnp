@@ -97,6 +97,13 @@ static inline int cfg_conn_op(struct sockaddr *address, int op_type)
 
 extern int cfg_init(void);
 extern void cfg_destroy(void);
-extern void cfg_allowed_entries_for_each_call(int (*call_func)(void *data));
+
+#define CALL_CHECK 0
+#define CALL_DIRECTLY 1
+#define cfg_allowed_entries_for_each_call(call_func) do_cfg_allowed_entries_for_each_call(call_func, CALL_CHECK)
+#define cfg_allowed_entries_for_each_call_directly(call_func) do_cfg_allowed_entries_for_each_call(call_func, CALL_DIRECTLY)
+extern void do_cfg_allowed_entries_for_each_call(int (*call_func)(void *data), int type);
+
+extern void cfg_allowd_iport_node_for_each_call(struct sockaddr *,int (*call_func)(void *data));
 
 #endif

@@ -32,7 +32,7 @@ static int connpd_func(void *data)
             
             break;
         } else
-            scan_connp_shutdown_timeout();
+            scan_connp_shutdown_timeout_or_preconnect();
 
     }
 

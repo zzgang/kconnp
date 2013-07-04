@@ -27,7 +27,7 @@ extern struct socket_bucket *attach_pending_sbs_pop(void);
 extern int close_pending_fds_push(int fd);
 extern int close_pending_fds_pop(void);
 
-extern int scan_connp_shutdown_timeout(void);
+extern int scan_connp_shutdown_timeout_or_preconnect(void);
 extern int insert_into_connp_if_permitted(int fd);
 extern int fetch_conn_from_connp(int fd, struct sockaddr *);
 

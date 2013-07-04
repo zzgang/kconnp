@@ -10,6 +10,7 @@
 #include "sockp.h"
 #include "util.h"
 #include "cfg.h"
+#include "preconnect.h"
 
 #if LOCK_TYPE_MUTEX 
 #include <linux/mutex.h>
@@ -236,9 +237,16 @@ void shutdown_sock_list(int type)
                 (SOCK_IS_RECLAIM(p) && !p->sock_in_use && 
                  (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;
-        else
-            continue;
 
+        if (!p->sock_in_use && 
+                add_conn_idle_count(&p->address, 1) > MAX_SPARE_CONNECTIONS) {
+            add_conn_idle_count(&p->address, -1);
+            goto shutdown;
+        }
+
+        add_conn_all_count(&p->address, 1);
+        continue;
+        
 shutdown:
         REMOVE_FROM_HLIST(HASH(&p->address), p);
         REMOVE_FROM_TLIST(p);
@@ -247,7 +255,6 @@ shutdown:
         PUT_SB(p);
 
         orig_sys_close(p->connpd_fd);
-
     }
 
     SOCKP_UNLOCK();

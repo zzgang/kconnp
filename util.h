@@ -116,6 +116,12 @@ static inline int task_get_unused_fd(struct task_struct *tsk)
     return task_alloc_fd(tsk, 0, 0);
 }
 
+struct sockaddr_in;
+extern int lkm_create_tcp_connect(struct sockaddr_in *);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 10)
+extern int lkm_sock_map_fd(struct socket *sock, int flags);
+#endif
+
 /*
  * Add two timespec values and do a safety check for overflow.
  * It's assumed that both values are valid (>= 0)

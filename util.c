@@ -1,5 +1,8 @@
 #include "local_func.h"
 #include "util.h"
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 7, 10)
+#include <linux/net.h>
+#endif
 
 #define sysctl_nr_open 1024 * 1024
 
@@ -440,3 +443,50 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
     add_wait_queue(wait_address, &entry->wait);
 }
 /**End poll functions**/
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 10)
+static int sock_map_fd(struct socket *sock, int flags)
+{
+    struct file *newfile;
+    int fd = get_unused_fd_flags(flags);
+    if (unlikely(fd < 0))
+        return fd;
+
+    newfile = sock_alloc_file(sock, flags, NULL);
+    if (likely(!IS_ERR(newfile))) {
+        fd_install(fd, newfile);
+        return fd;
+    }
+
+    put_unused_fd(fd);
+    return PTR_ERR(newfile);
+}
+#endif
+
+int lkm_create_tcp_connect(struct sockaddr_in *address)
+{
+    int fd;
+    struct socket *sock;
+    int err;
+
+    fd = sock_create(AF_INET, SOCK_STREAM, 0, &sock);
+    if (fd < 0)
+        return fd;
+
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 26)
+    fd = sock_map_fd(sock);
+#else
+    fd = sock_map_fd(sock, 0);
+#endif
+    if (fd < 0) {
+        sock_release(sock);
+        return fd;
+    }
+
+    err = sock->ops->connect(sock, (struct sockaddr *)&address,
+            sizeof(struct sockaddr), sock->file->f_flags);
+    if (err)
+        return -1;
+
+    return fd;
+}

@@ -108,7 +108,7 @@ static int cfg_iports_list_init(struct cfg_entry *);
 static void cfg_iports_list_destroy(struct cfg_entry *);
 static int cfg_iports_list_reload(struct cfg_entry *);
 
-static inline struct conn_node_t *iport_in_list(struct sockaddr_in *, struct cfg_entry *);
+static inline struct conn_node_t *iport_in_list_check_or_call(struct sockaddr_in *, struct cfg_entry *, int (*call_func)(void *data));
 
 struct cfg_dir {
     struct cfg_entry allowed_list;
@@ -758,7 +758,9 @@ static int cfg_iports_list_reload(struct cfg_entry *ce)
     return cfg_iports_entity_init(ce);
 }
 
-static inline struct conn_node_t *iport_in_list(struct sockaddr_in *addr, struct cfg_entry *ce)
+#define iport_in_list(addr, ce) iport_in_list_check_or_call(addr, ce, NULL)
+#define iport_in_list_for_each_call(addr, ce, call_func) iport_in_list_check_or_call(addr, ce, call_func)
+static inline struct conn_node_t *iport_in_list_check_or_call(struct sockaddr_in *addr, struct cfg_entry *ce, int (*call_func)(void *data))
 {
     struct iport_t zip_port, ip_zport, ip_port, **p;
     struct iport_t *iport_list[] = {&ip_port, &ip_zport, &zip_port, NULL}; 
@@ -780,8 +782,12 @@ static inline struct conn_node_t *iport_in_list(struct sockaddr_in *addr, struct
         struct conn_node_t *tmp;
 
         if (hash_find(ht_ptr, 
-                    (const char *)*p, sizeof(struct iport_t), (void **)&tmp))
-            return tmp;
+                    (const char *)*p, sizeof(struct iport_t), (void **)&tmp)) {
+            if (call_func)
+                call_func(tmp);
+            else
+                return tmp;
+        }
     }
     
     return NULL;
@@ -825,21 +831,32 @@ void cfg_destroy()
     remove_proc_entry(CFG_BASE_DIR_NAME, NULL);
 }
 
-void cfg_allowed_entries_for_each_call(int (*call_func)(void *data))
+void do_cfg_allowed_entries_for_each_call(int (*call_func)(void *data), int type)
 {
     struct conn_node_t *conn_node; 
     struct hash_bucket_t *pos;
     struct sockaddr_in address;
 
     hash_for_each_entry(cfg->al_ptr, pos, conn_node) {
-        if (conn_node->conn_ip == 0 || conn_node->conn_port == 0)
-            continue;
-
-        address.sin_addr.s_addr = conn_node->conn_ip;
-        address.sin_port = conn_node->conn_port;
-
-        if (!iport_in_denied_list((struct sockaddr *)&address))
+        if (type == CALL_DIRECTLY) {
             if (!call_func((void *)conn_node))
                 continue;
+        } else if (type == CALL_CHECK) {
+            if (conn_node->conn_ip == 0 || conn_node->conn_port == 0)
+                continue;
+
+            address.sin_addr.s_addr = conn_node->conn_ip;
+            address.sin_port = conn_node->conn_port;
+
+            if (!iport_in_denied_list((struct sockaddr *)&address))
+                if (!call_func((void *)conn_node))
+                    continue;
+        }
     }
+}
+
+void cfg_allowd_iport_node_for_each_call(struct sockaddr *addr, 
+        int (*call_func)(void *data)) 
+{
+    iport_in_list_for_each_call((struct sockaddr_in *)addr, cfg->al_ptr, call_func);
 }

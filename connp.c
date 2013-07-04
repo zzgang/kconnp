@@ -9,10 +9,11 @@
 #include "sockp.h"
 #include "connp.h"
 #include "connpd.h"
+#include "preconnect.h"
 
 static inline void do_close_timeout_pending_fds(void);
-static int insert_socket_to_connp(struct sockaddr *, struct socket *, sock_create_way_t create_way);
-static int insert_into_connp(struct sockaddr *, struct socket *, sock_create_way_t sock_create_way);
+static int insert_socket_to_connp(struct sockaddr *, struct socket *);
+static int insert_into_connp(struct sockaddr *, struct socket *);
 static inline int sock_remap_fd(int fd, struct socket *, struct socket *);
 
 static int close_pending_fds_init(void);
@@ -73,7 +74,7 @@ out_unlock:
     return fd;
 }
 
-static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock, sock_create_way_t create_way)
+static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock)
 {
     int connpd_fd;
 
@@ -84,7 +85,7 @@ static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock
     task_fd_install(CONNP_DAEMON_TSKP, connpd_fd, sock->file);
     file_count_inc(sock->file, 1); //add file reference count.
 
-    if (!insert_socket_to_sockp(servaddr, sock, connpd_fd, create_way)) {
+    if (!insert_socket_to_sockp(servaddr, sock, connpd_fd, SOCK_RECLAIM)) {
         close_pending_fds_push(connpd_fd);
         return 0;
     }
@@ -95,13 +96,13 @@ static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock
     return 1;
 }
 
-static int insert_into_connp(struct sockaddr *servaddr, struct socket *sock, sock_create_way_t sock_create_way)
+static int insert_into_connp(struct sockaddr *servaddr, struct socket *sock)
 {
     int fc;
 
     fc = file_count_read(sock->file);
 
-    if (fc == 1 && insert_socket_to_connp(servaddr, sock, sock_create_way))
+    if (fc == 1 && insert_socket_to_connp(servaddr, sock))
         return 1;
 
     if (fc == 2 && free_socket_to_sockp(servaddr, sock)) 
@@ -139,7 +140,7 @@ int insert_into_connp_if_permitted(int fd)
 
     connpd_runlock();
 
-    return insert_into_connp(&address, sock, SOCK_RECLAIM);
+    return insert_into_connp(&address, sock);
 
 ret_fail:
     connpd_runlock();
@@ -282,12 +283,14 @@ break_timeout:
  * Shutdown sockets which are passive closed or expired or LRU replaced.
  * must be executed by connpd.
  */
-int scan_connp_shutdown_timeout()
+int scan_connp_shutdown_timeout_or_preconnect()
 {
     BUG_ON(!INVOKED_BY_CONNP_DAEMON());
 
-    if (connp_fds_events_or_timout())
+    if (connp_fds_events_or_timout()) {
         do_close_timeout_pending_fds();
+        //scan_spare_conns_preconnect(); 
+    }
 
     return 0;
 }
