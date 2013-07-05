@@ -18,19 +18,19 @@
         (p)->tnext = NULL;                  \
         (p)->tprev = ht->trav_tail;         \
         if ((ht)->trav_tail)                \
-            (ht)->trav_tail->next = p;      \
+            (ht)->trav_tail->tnext = p;      \
         (ht)->trav_tail = p;                \
     } while (0)
 
 
-#define INIT_KV(p, key, klen, val, vlen)    \
+#define INIT_KV(p, k, klen, v, vlen)      \
     do {                                    \
         (p)->hkey.key = lkmalloc(klen);     \
         if (!(p)->hkey.key) {               \
             lkmfree(p);                     \
             return 0;                       \
         }                                   \
-        memcpy((p)->hkey.key, (key), klen); \
+        memcpy((p)->hkey.key, (k), klen);   \
         (p)->hkey.klen = klen;              \
         if (vlen) {                         \
             (p)->hval.val = lkmalloc(vlen); \
@@ -39,22 +39,23 @@
                 lkmfree(p);                 \
                 return 0;                   \
             }                               \
+            memcpy((p)->hval.val, (v), vlen); \
         } else                              \
-            (p)->hval.val = val;            \
+            (p)->hval.val = v;            \
         (p)->hval.vlen = vlen;              \
     } while (0)
 
-#define UPDATE_VAL(ht, p, val, vlen)            \
+#define UPDATE_VAL(ht, p, v, vlen)            \
     do {                                        \
         if ((p)->hval.vlen)                     \
         (ht)->dtor_func((p)->hval.val);         \
         if (vlen) {                             \
             (p)->hval.val = lkmalloc(vlen);     \
             if (!(p)->hval.val)                 \
-            return 0;                           \
-            memcpy((p)->hval.val, val, vlen);   \
+                return 0;                       \
+            memcpy((p)->hval.val, v, vlen);   \
         } else                                  \
-            (p)->hval.val = val;                \
+            (p)->hval.val = v;                \
         (p)->hval.vlen = vlen;                  \
     } while (0)
 

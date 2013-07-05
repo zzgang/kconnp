@@ -835,20 +835,21 @@ void do_cfg_allowed_entries_for_each_call(int (*call_func)(void *data), int type
 {
     struct conn_node_t *conn_node; 
     struct hash_bucket_t *pos;
-    struct sockaddr_in address;
 
-    hash_for_each_entry(cfg->al_ptr, pos, conn_node) {
+    hash_for_each(cfg->al_ptr, pos) {
+        conn_node = hash_value(pos);
         if (type == CALL_DIRECTLY) {
             if (!call_func((void *)conn_node))
                 continue;
         } else if (type == CALL_CHECK) {
+            struct sockaddr_in address;
             if (conn_node->conn_ip == 0 || conn_node->conn_port == 0)
                 continue;
 
             address.sin_addr.s_addr = conn_node->conn_ip;
             address.sin_port = conn_node->conn_port;
 
-            if (!iport_in_denied_list((struct sockaddr *)&address))
+            if (!iport_in_denied_list((struct sockaddr *)&address));
                 if (!call_func((void *)conn_node))
                     continue;
         }
@@ -858,5 +859,5 @@ void do_cfg_allowed_entries_for_each_call(int (*call_func)(void *data), int type
 void cfg_allowd_iport_node_for_each_call(struct sockaddr *addr, 
         int (*call_func)(void *data)) 
 {
-    iport_in_list_for_each_call((struct sockaddr_in *)addr, cfg->al_ptr, call_func);
+    iport_in_list_for_each_call((struct sockaddr_in *)addr, &cfg->al, call_func);
 }

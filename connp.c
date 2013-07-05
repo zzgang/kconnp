@@ -102,6 +102,7 @@ static int insert_into_connp(struct sockaddr *servaddr, struct socket *sock)
 
     fc = file_count_read(sock->file);
 
+    printk(KERN_ERR "insert connp f_count: %d\n", fc);
     if (fc == 1 && insert_socket_to_connp(servaddr, sock))
         return 1;
 
@@ -289,7 +290,7 @@ int scan_connp_shutdown_timeout_or_preconnect()
 
     if (connp_fds_events_or_timout()) {
         do_close_timeout_pending_fds();
-        //scan_spare_conns_preconnect(); 
+        scan_spare_conns_preconnect(); 
     }
 
     return 0;

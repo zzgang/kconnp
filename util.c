@@ -1,8 +1,9 @@
+#include <linux/net.h>
+#include <linux/socket.h>
+#include <linux/in.h>
+#include "sys_call.h"
 #include "local_func.h"
 #include "util.h"
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 7, 10)
-#include <linux/net.h>
-#endif
 
 #define sysctl_nr_open 1024 * 1024
 
@@ -469,7 +470,7 @@ int lkm_create_tcp_connect(struct sockaddr_in *address)
     struct socket *sock;
     int err;
 
-    fd = sock_create(AF_INET, SOCK_STREAM, 0, &sock);
+    fd = sock_create(address->sin_family, SOCK_STREAM, 0, &sock);
     if (fd < 0)
         return fd;
 
@@ -483,10 +484,14 @@ int lkm_create_tcp_connect(struct sockaddr_in *address)
         return fd;
     }
 
-    err = sock->ops->connect(sock, (struct sockaddr *)&address,
+    err = sock->ops->connect(sock, (struct sockaddr *)address,
             sizeof(struct sockaddr), sock->file->f_flags);
-    if (err)
-        return -1;
+    if (err < 0) {
+        orig_sys_close(fd);
+        return err;
+    }
+
+    SET_CLIENT_FLAG(sock);
 
     return fd;
 }

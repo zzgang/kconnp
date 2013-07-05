@@ -220,7 +220,6 @@ void shutdown_sock_list(int type)
    
 
     for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
-        
         if (p->connpd_fd < 0)
             continue;
 

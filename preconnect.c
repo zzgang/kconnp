@@ -1,4 +1,5 @@
 #include <linux/net.h>
+#include <linux/socket.h>
 #include "cfg.h"
 #include "preconnect.h"
 #include "util.h"
@@ -34,9 +35,11 @@ static int do_preconnect(void *data)
     int i;
 
     conn_node = (typeof(conn_node))data;
+    idle_count = conn_node->conn_idle_count;    
+ 
+    address.sin_family = AF_INET;
     address.sin_addr.s_addr = conn_node->conn_ip;
     address.sin_port = conn_node->conn_port;
-    idle_count = conn_node->conn_idle_count;    
     
     //do preconnect
     for (i = MIN_SPARE_CONNECTIONS - idle_count; i > 0; i--)
