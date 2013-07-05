@@ -8,6 +8,9 @@ typedef enum {
     HASH_SET
 } hash_ops;
 
+#define hash_key(p) (p)->hkey.key
+#define hash_value(p) (p)->hval.val
+
 #define hash_init(ht, dtor_func) \
     _hash_init(ht, 0, hash_func_times33, dtor_func)
 
@@ -20,8 +23,6 @@ typedef enum {
 #define hash_for_each(ht, pos) \
 for (pos = ((struct hash_table_t *)ht)->trav_head; pos; pos = pos->tnext)
 
-#define hash_for_each_entry(ht, pos, node) \
-for (pos = ((struct hash_table_t *)ht)->trav_head, node = (typeof(node))pos->hval.val; pos; pos = pos->tnext, node = (typeof(node))pos->hval.val)
 
 typedef unsigned long (*hash_func_t)(const char *, unsigned int);
 typedef void (*dtor_func_t)(void *data);

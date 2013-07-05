@@ -102,7 +102,6 @@ static int insert_into_connp(struct sockaddr *servaddr, struct socket *sock)
 
     fc = file_count_read(sock->file);
 
-    printk(KERN_ERR "insert connp f_count: %d\n", fc);
     if (fc == 1 && insert_socket_to_connp(servaddr, sock))
         return 1;
 
