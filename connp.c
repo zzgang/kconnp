@@ -90,9 +90,6 @@ static int insert_socket_to_connp(struct sockaddr *servaddr, struct socket *sock
         return 0;
     }
 
-    /*Notify connpd to poll in time.*/
-    notify(CONNP_DAEMON_TSKP);
-
     return 1;
 }
 
@@ -140,8 +137,12 @@ int insert_into_connp_if_permitted(int fd)
 
     connpd_runlock();
 
-    return insert_into_connp(&address, sock);
+    err = insert_into_connp(&address, sock);
 
+    /*Notify connpd to poll or preconnect in time.*/
+    notify(CONNP_DAEMON_TSKP);
+
+    return err;
 ret_fail:
     connpd_runlock();
     return 0;

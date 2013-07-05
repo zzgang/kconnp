@@ -237,8 +237,8 @@ void shutdown_sock_list(int type)
                  (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;
 
-        if (!p->sock_in_use && 
-                add_conn_idle_count(&p->address, 1) > MAX_SPARE_CONNECTIONS) {
+        if (!p->sock_in_use && SOCK_IS_PRECONNECT(p) 
+                && add_conn_idle_count(&p->address, 1) > MAX_SPARE_CONNECTIONS) {
             add_conn_idle_count(&p->address, -1);
             goto shutdown;
         }
