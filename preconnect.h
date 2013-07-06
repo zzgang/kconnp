@@ -6,10 +6,12 @@
 
 #define ALL_COUNT 0
 #define IDLE_COUNT 1
-#define add_conn_all_count(addr, count) add_conn_count(addr, count, ALL_COUNT)
-#define add_conn_idle_count(addr, count) add_conn_count(addr, count, IDLE_COUNT)
-extern int add_conn_count(struct sockaddr *, int count, int count_type);
+#define conn_add_all_count(addr, count) conn_add_count(addr, count, ALL_COUNT)
+#define conn_add_idle_count(addr, count) conn_add_count(addr, count, IDLE_COUNT)
+extern int conn_add_count(struct sockaddr *, int count, int count_type);
 
-void scan_spare_conns_preconnect(void);
+extern int conn_spec_check_close_flag(struct sockaddr *);
+
+extern void scan_spare_conns_preconnect(void);
 
 #endif

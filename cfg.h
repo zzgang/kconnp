@@ -32,6 +32,7 @@ struct conn_node_t {
 #define conn_port iport_node.port
     struct conn_attr_t conn_attrs;
 #define conn_close_way conn_attrs.close_way
+#define conn_close_now conn_attrs.close_now
 #define conn_all_count conn_attrs.stats.all_count
 #define conn_idle_count conn_attrs.stats.idle_count
 };

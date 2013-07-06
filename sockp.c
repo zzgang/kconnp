@@ -217,7 +217,6 @@ void shutdown_sock_list(int type)
     struct socket_bucket *p; 
     
     SOCKP_LOCK();
-   
 
     for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
         if (p->connpd_fd < 0)
@@ -237,13 +236,13 @@ void shutdown_sock_list(int type)
                  (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;
 
-        if (!p->sock_in_use && SOCK_IS_PRECONNECT(p) 
-                && add_conn_idle_count(&p->address, 1) > MAX_SPARE_CONNECTIONS) {
-            add_conn_idle_count(&p->address, -1);
-            goto shutdown;
+        if (!p->sock_in_use) {
+            if (conn_spec_check_close_flag(&p->address))
+                goto shutdown;
+            conn_add_idle_count(&p->address, 1);
         }
-
-        add_conn_all_count(&p->address, 1);
+        
+        conn_add_all_count(&p->address, 1);
         continue;
         
 shutdown:
