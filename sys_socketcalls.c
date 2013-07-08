@@ -63,7 +63,7 @@ asmlinkage long connp_sys_connect(int fd, struct sockaddr __user * uservaddr,
     err = connp_move_addr_to_kernel(uservaddr, addrlen, (struct sockaddr *)&address);
     if (err < 0)
         return -EFAULT;
-
+    
     if (fetch_conn_from_connp(fd, (struct sockaddr *)&address))
         return 0;
 

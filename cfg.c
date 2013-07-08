@@ -838,6 +838,7 @@ void do_cfg_allowed_entries_for_each_call(int (*call_func)(void *data), int type
 
     hash_for_each(cfg->al_ptr, pos) {
         conn_node = hash_value(pos);
+        //printk(KERN_ERR "conn close way: %d\n", conn_node->conn_close_way);
         if (type == CALL_DIRECTLY) {
             if (!call_func((void *)conn_node))
                 continue;

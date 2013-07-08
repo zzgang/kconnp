@@ -33,7 +33,7 @@ struct fd_entry {
     struct list_head siblings;
 };
 
-#define lkmalloc(size) kzalloc(size, GFP_KERNEL)
+#define lkmalloc(size) kzalloc(size, GFP_ATOMIC)
 #define lkmfree(ptr) kfree(ptr)
 
 //#define SOCK_CLIENT_TAG 1 << (sizeof(unsigned long)*8 - 1)
@@ -78,35 +78,34 @@ static inline int file_count_inc(struct file *filp, int i)
 
 #define TASK_FILES(tsk) (tsk)->files
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 18)
-
 #define FILE_FDT_TYPE typeof(((struct files_struct *)0)->fdtab)
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 32)
 
 #define TASK_FILES_FDT(tsk) ({   \
-    FILE_FDT_TYPE * __tmp;      \
-    rcu_read_lock();            \
-    __tmp = rcu_dereference(TASK_FILES(tsk)->fdt);  \
-    rcu_read_unlock();  \
-    __tmp;})
+        FILE_FDT_TYPE * __tmp;      \
+        rcu_read_lock();            \
+        __tmp = rcu_dereference(TASK_FILES(tsk)->fdt);  \
+        rcu_read_unlock();  \
+        __tmp;})
 #else
 
 #define TASK_FILES_FDT(tsk) ({   \
-    FILE_FDT_TYPE * __tmp;      \
-    rcu_read_lock();            \
-    __tmp = rcu_dereference_check_fdtable(TASK_FILES(tsk), TASK_FILES(tsk)->fdt);  \
-    rcu_read_unlock();  \
-    __tmp;})
+        FILE_FDT_TYPE * __tmp;      \
+        rcu_read_lock();            \
+        __tmp = rcu_dereference_check_fdtable(TASK_FILES(tsk), TASK_FILES(tsk)->fdt);  \
+        rcu_read_unlock();  \
+        __tmp;})
 
 #endif
 
-#else  //todo...
+#define FDT_GET_FILE(fdt) ({    \
+        struct file *__tmp;     \
+        rcu_read_lock();        \
+        __tmp = rcu_dereference(fdt->fd[fd]);   \
+        rcu_read_unlock();  \
+        __tmp;})
 
-#define FILE_FDT_TYPE (struct files_struct *)
-#define TASK_FILES_FDT(tsk) TASK_FILES(tsk)
-
-#endif
 
 int task_alloc_fd(struct task_struct *tsk, unsigned start, unsigned flags);
 
@@ -281,7 +280,7 @@ static inline struct socket *getsock(int fd)
     struct file *filp;
     FILE_FDT_TYPE *fdt = TASK_FILES_FDT(current);
 
-    filp = rcu_dereference(fdt->fd[fd]);
+    filp = FDT_GET_FILE(fdt);
     if (filp)
         return (struct socket *)filp->private_data;
 

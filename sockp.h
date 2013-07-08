@@ -14,8 +14,7 @@
 #define NR_HASH (NR_SOCKET_BUCKET/2 + 1)
 #define NR_SHASH (NR_SOCKET_BUCKET)
 #define TIMEOUT 30 //seconds
-#define LOCK_TYPE_MUTEX 0
-#define LRU 1 //LRU replace algorithm
+#define LRU 0 //LRU replace algorithm
 
 #define close_all_fds() shutdown_sock_list(1)
 #define shutdown_timeout_sock_list() shutdown_sock_list(0)

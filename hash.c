@@ -123,8 +123,6 @@ int _hash_init(struct hash_table_t **ht_ptr, unsigned int tsize,
     (*ht_ptr)->hash_func = hash_func;
     (*ht_ptr)->dtor_func = dtor_func ? dtor_func : dtor_func_lkmfree;  
 
-    mutex_init(&(*ht_ptr)->lock);
-    
     return 1;
 }
 
@@ -143,12 +141,9 @@ int hash_add_or_set(struct hash_table_t *ht,
 
     p = ht->buckets[idx];
 
-    mutex_lock(&ht->lock);
-
     for (; p; p = p->next) {
         if (p->hkey.klen == klen && !memcmp(p->hkey.key, key, klen)) {//Match       
             if (op == HASH_ADD) {
-                mutex_unlock(&ht->lock);
                 return 0;
             }
             UPDATE_VAL(ht, p, val, vlen);
@@ -156,10 +151,8 @@ int hash_add_or_set(struct hash_table_t *ht,
     }
     
     p = lkmalloc(sizeof(struct hash_bucket_t)); 
-    if (!p) {
-        mutex_unlock(&ht->lock);
+    if (!p)
         return 0;
-    }
    
     hlist_head = &ht->buckets[idx];
      
@@ -174,8 +167,6 @@ int hash_add_or_set(struct hash_table_t *ht,
     if (ht->elements_count > ht->table_size)
         hash_table_resize(ht);
     
-    mutex_unlock(&ht->lock);
-
     return 1;
 }
 
@@ -193,17 +184,12 @@ int hash_find(struct hash_table_t *ht,
 
     p = ht->buckets[idx];
 
-    mutex_lock(&ht->lock);
-
     for (; p; p = p->next) {
         if (p->hkey.klen == klen && !memcmp(p->hkey.key, key, klen)) {
             *val = (void *)p->hval.val;
-            mutex_unlock(&ht->lock);
             return 1;
         }
     }
-
-    mutex_unlock(&ht->lock);
 
     return 0;
 }
@@ -224,8 +210,6 @@ int hash_destroy(struct hash_table_t **ht_ptr)
     }
 
     lkmfree((*ht_ptr)->buckets);
-
-    mutex_destroy(&(*ht_ptr)->lock);
 
     lkmfree(*ht_ptr);
 

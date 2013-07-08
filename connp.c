@@ -132,8 +132,13 @@ int insert_into_connp_if_permitted(int fd)
 
     if (address.sa_family != AF_INET 
             || IN_LOOPBACK(ntohl(((struct sockaddr_in *)&address)->sin_addr.s_addr))
-            || !cfg_conn_is_positive(&address)) 
+            || !cfg_conn_acl_allowd(&address)) 
         goto ret_fail;
+
+    if (!SOCK_ESTABLISHED(sock)) {
+        cfg_conn_set_passive(&address); //May be passive sock.
+        goto ret_fail;
+    }
 
     connpd_runlock();
 
@@ -171,7 +176,6 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         ret = 0;
         goto ret_unlock;
     }
-
     if (address->sa_family != AF_INET
             || IN_LOOPBACK(ntohl(((struct sockaddr_in *)address)->sin_addr.s_addr))
             || !cfg_conn_acl_allowd(address)) {
@@ -189,13 +193,13 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         ret = 0;
         goto ret_unlock;
     }
-
+    
     if ((sock_new = apply_socket_from_sockp(address)))
         if (sock_remap_fd(fd, sock_new, sock)) {
             ret = 1;
             goto ret_unlock;
         }
-
+    
     SET_CLIENT_FLAG(sock);
 
 ret_unlock:
@@ -292,6 +296,7 @@ int scan_connp_shutdown_timeout_or_preconnect()
         do_close_timeout_pending_fds();
         scan_spare_conns_preconnect(); 
     }
+    
 
     return 0;
 }

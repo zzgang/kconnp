@@ -98,6 +98,7 @@ static int do_conn_spec_check_close_flag(void *data)
 
 int conn_spec_check_close_flag(struct sockaddr *address)
 {
+   conn_close_flag = 0;
    cfg_allowd_iport_node_for_each_call(address, do_conn_spec_check_close_flag); 
    return conn_close_flag;
 }

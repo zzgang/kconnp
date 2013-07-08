@@ -55,7 +55,6 @@ struct hash_table_t {
     unsigned int elements_count;
     dtor_func_t dtor_func;
     hash_func_t hash_func;
-    struct mutex lock;
 };
 
 

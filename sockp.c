@@ -5,6 +5,7 @@
 #include <linux/string.h>
 #include <linux/jiffies.h>
 #include <net/sock.h>
+#include <linux/spinlock.h> 
 #include "sys_call.h"
 #include "connp.h"
 #include "sockp.h"
@@ -12,28 +13,12 @@
 #include "cfg.h"
 #include "preconnect.h"
 
-#if LOCK_TYPE_MUTEX 
-#include <linux/mutex.h>
-#else
-#include <linux/spinlock.h> 
-#endif
-
-
-#if LOCK_TYPE_MUTEX 
-
-#define SOCKP_LOCK_INIT()  mutex_init(&ht.ht_lock)
-#define SOCKP_LOCK() mutex_lock(&ht.ht_lock)
-#define SOCKP_UNLOCK() mutex_unlock(&ht.ht_lock)
-#define SOCKP_LOCK_DESTROY() mutex_destroy(&ht.ht_lock)
-
-#else //spin_lock
-
+//spin lock
+#define SOCKP_LOCK_T spinlock_t
 #define SOCKP_LOCK_INIT()  spin_lock_init(&ht.ht_lock)
 #define SOCKP_LOCK() spin_lock(&ht.ht_lock)
 #define SOCKP_UNLOCK() spin_unlock(&ht.ht_lock)
 #define SOCKP_LOCK_DESTROY()
-
-#endif
 
 #define HASH(address_ptr) ht.hash_table[_hashfn((struct sockaddr_in *)(address_ptr))]
 #define SHASH(address_ptr, s) ht.shash_table[_shashfn((struct sockaddr_in *)(address_ptr), (struct socket *)s)]
@@ -141,11 +126,7 @@ static struct {
     struct socket_bucket *sb_free_p;
     struct socket_bucket *sb_trav_head;
     struct socket_bucket *sb_trav_tail;
-#if LOCK_TYPE_MUTEX
-    struct mutex ht_lock;
-#else
-    spinlock_t ht_lock;
-#endif
+    SOCKP_LOCK_T ht_lock;
 } ht;
 
 static struct socket_bucket SB[NR_SOCKET_BUCKET];
@@ -168,7 +149,7 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
     struct socket_bucket *p;
 
     SOCKP_LOCK();
-
+        
     for (p = HASH(address); p; p = p->sb_next) {
         if (KEY_MATCH(address, &p->address)) {
             if (p->sock_in_use || !SOCK_ESTABLISHED(p->sock) 
@@ -179,7 +160,7 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
             
             p->uc++; //inc used count
             p->sock_in_use = 1; //set "in use" tag.
-
+            
             SOCKP_UNLOCK();
             return p->sock;
         }
@@ -198,9 +179,12 @@ void sockp_get_fds(struct list_head *fds_list)
     SOCKP_LOCK();
 
     for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
-        if (p->connpd_fd < 0)
+        if (p->connpd_fd < 0) {
             continue;
+        }
        tmp = (typeof(*tmp) *)lkmalloc(sizeof(typeof(*tmp)));
+       if (!tmp) 
+           break;
        tmp->fd = p->connpd_fd;
        list_add_tail(&tmp->siblings, fds_list);  
     }
@@ -219,12 +203,12 @@ void shutdown_sock_list(int type)
     SOCKP_LOCK();
 
     for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
-        if (p->connpd_fd < 0)
-            continue;
-
         if (type) //shutdown all
             goto shutdown;
-        
+ 
+        if (p->connpd_fd < 0)
+            continue;
+       
         if (!SOCK_ESTABLISHED(p->sock)) {
             cfg_conn_set_passive(&p->address);
             goto shutdown;
@@ -235,7 +219,7 @@ void shutdown_sock_list(int type)
                 (SOCK_IS_RECLAIM(p) && !p->sock_in_use && 
                  (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;
-
+        
         if (!p->sock_in_use) {
             if (conn_spec_check_close_flag(&p->address))
                 goto shutdown;
@@ -243,6 +227,7 @@ void shutdown_sock_list(int type)
         }
         
         conn_add_all_count(&p->address, 1);
+        
         continue;
         
 shutdown:
