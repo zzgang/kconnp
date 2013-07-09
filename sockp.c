@@ -27,9 +27,17 @@
 #define KEY_MATCH(address_ptr1, address_ptr2) KEY_MATCH_CAST((struct sockaddr_in *)address_ptr1, (struct sockaddr_in *)address_ptr2)
 #define SKEY_MATCH(address_ptr1, sock_ptr1, address_ptr2, sock_ptr2) (KEY_MATCH(address_ptr1, address_ptr2) && (sock_ptr1 == sock_ptr2))
 
-#define PUT_SB(sb_ptr) ((sb_ptr)->sb_in_use = 0) 
+#define PUT_SB(sb) ((sb)->sb_in_use = 0) 
 
-#define INSERT_TO_HLIST(head, bucket) \
+#define IN_HLIST(head, bucket) ({                       \
+        struct socket_bucket *__p;                      \
+        for (__p = (head); __p; __p = __p->sb_next) {   \
+        if (__p == (bucket))                            \
+        break;                                          \
+        }                                               \
+        __p;})
+
+#define INSERT_INTO_HLIST(head, bucket) \
     do {                      \
         (bucket)->sb_prev = NULL; \
         (bucket)->sb_next = (head); \
@@ -48,7 +56,15 @@
         (head) = (bucket)->sb_next;     \
     } while(0)
 
-#define INSERT_TO_SHLIST(head, bucket) \
+#define IN_SHLIST(head, bucket) ({                      \
+        struct socket_bucket *__p;                      \
+        for (__p = (head); __p; __p = __p->sb_snext) {  \
+        if (__p == (bucket))                            \
+        break;                                          \
+        }                                               \
+        __p;})
+
+#define INSERT_INTO_SHLIST(head, bucket) \
     do {                               \
         (bucket)->sb_sprev = NULL; \
         (bucket)->sb_snext = (head); \
@@ -67,7 +83,15 @@
         (head) = (bucket)->sb_snext;    \
     } while(0)
 
-#define INSERT_TO_TLIST(bucket) \
+#define IN_TLIST(bucket) ({                                             \
+        struct socket_bucket *__p;                                      \
+        for (__p = ht.sb_trav_head; __p; __p = __p->sb_trav_next) {     \
+        if (__p == (bucket))                                            \
+        break;                                                          \
+        }                                                               \
+        __p;})
+
+#define INSERT_INTO_TLIST(bucket) \
     do {    \
         (bucket)->sb_trav_next = NULL; \
         (bucket)->sb_trav_prev = ht.sb_trav_tail;  \
@@ -77,7 +101,6 @@
         ht.sb_trav_tail->sb_trav_next = (bucket);  \
         ht.sb_trav_tail = (bucket); \
     } while(0)
-
 
 #define REMOVE_FROM_TLIST(bucket) \
     do {    \
@@ -91,7 +114,6 @@
         ht.sb_trav_tail = (bucket)->sb_trav_prev; \
     } while(0)
 
-
 #define SOCKADDR_COPY(sockaddr_dest, sockaddr_src) memcpy((void *)sockaddr_dest, (void *)sockaddr_src, sizeof(struct sockaddr))
 
 #define INIT_SB(sb, s, fd, way)   \
@@ -103,6 +125,12 @@
         sb->last_used_jiffies = jiffies;    \
         sb->connpd_fd = fd; \
         sb->uc = 0; \
+        sb->sb_prev = NULL; \
+        sb->sb_next = NULL; \
+        sb->sb_sprev = NULL; \
+        sb->sb_snext = NULL; \
+        sb->sb_trav_prev = NULL; \
+        sb->sb_trav_next = NULL; \
     } while(0)
 
 #define SOCK_IS_RECLAIM(sb) ((sb)->sock_create_way == SOCK_RECLAIM)
@@ -133,12 +161,12 @@ static struct socket_bucket SB[NR_SOCKET_BUCKET];
 
 static inline unsigned int _hashfn(struct sockaddr_in *address)
 {
-    return (unsigned)((*address).sin_port ^ (*address).sin_addr.s_addr) % NR_HASH;
+    return (unsigned)(((*address).sin_port ^ (*address).sin_addr.s_addr) & NR_HASH);
 }
 
 static inline unsigned int _shashfn(struct sockaddr_in *address, struct socket *s)
 {
-    return (unsigned)((*address).sin_port ^ (*address).sin_addr.s_addr ^ (unsigned long)s) % NR_HASH;
+    return (unsigned)(((*address).sin_port ^ (*address).sin_addr.s_addr ^ (unsigned long)s) & NR_SHASH);
 }
 
 /**
@@ -149,24 +177,26 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
     struct socket_bucket *p;
 
     SOCKP_LOCK();
-        
-    for (p = HASH(address); p; p = p->sb_next) {
+
+    for (p = HASH(address); p; p = p->sb_next) { 
         if (KEY_MATCH(address, &p->address)) {
             if (p->sock_in_use || !SOCK_ESTABLISHED(p->sock) 
                     || SOCK_IS_RECLAIM_PASSIVE(p))
                 continue;
 
-            REMOVE_FROM_HLIST(HASH(address), p);
-            
             p->uc++; //inc used count
             p->sock_in_use = 1; //set "in use" tag.
-            
+
+            REMOVE_FROM_HLIST(HASH(address), p);
+
             SOCKP_UNLOCK();
+
             return p->sock;
         }
     }
 
     SOCKP_UNLOCK();
+
     return NULL;
 }
 
@@ -182,13 +212,13 @@ void sockp_get_fds(struct list_head *fds_list)
         if (p->connpd_fd < 0) {
             continue;
         }
-       tmp = (typeof(*tmp) *)lkmalloc(sizeof(typeof(*tmp)));
-       if (!tmp) 
-           break;
-       tmp->fd = p->connpd_fd;
-       list_add_tail(&tmp->siblings, fds_list);  
+        tmp = (typeof(*tmp) *)lkmalloc(sizeof(typeof(*tmp)));
+        if (!tmp) 
+            break;
+        tmp->fd = p->connpd_fd;
+        list_add_tail(&tmp->siblings, fds_list);  
     }
-    
+
     SOCKP_UNLOCK();
 }
 
@@ -199,16 +229,16 @@ void sockp_get_fds(struct list_head *fds_list)
 void shutdown_sock_list(int type)
 {
     struct socket_bucket *p; 
-    
+
     SOCKP_LOCK();
 
     for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
         if (type) //shutdown all
             goto shutdown;
- 
+
         if (p->connpd_fd < 0)
             continue;
-       
+
         if (!SOCK_ESTABLISHED(p->sock)) {
             cfg_conn_set_passive(&p->address);
             goto shutdown;
@@ -219,21 +249,23 @@ void shutdown_sock_list(int type)
                 (SOCK_IS_RECLAIM(p) && !p->sock_in_use && 
                  (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;
-        
+
         if (!p->sock_in_use) {
             if (conn_spec_check_close_flag(&p->address))
                 goto shutdown;
             conn_add_idle_count(&p->address, 1);
         }
-        
+
         conn_add_all_count(&p->address, 1);
-        
+
         continue;
-        
 shutdown:
-        REMOVE_FROM_HLIST(HASH(&p->address), p);
+
+        if (IN_HLIST(HASH(&p->address), p))
+            REMOVE_FROM_HLIST(HASH(&p->address), p);
+        if (IN_SHLIST(SHASH(&p->address, p->sock), p))
+            REMOVE_FROM_SHLIST(SHASH(&p->address, p->sock), p);
         REMOVE_FROM_TLIST(p);
-        REMOVE_FROM_SHLIST(SHASH(&p->address, p->sock), p);
 
         PUT_SB(p);
 
@@ -249,19 +281,21 @@ shutdown:
 struct socket_bucket *free_socket_to_sockp(struct sockaddr *address, struct socket *s)
 {
     struct socket_bucket *p, *sb = NULL;
-    
+
     SOCKP_LOCK();
 
     for (p = SHASH(address, s); p; p = p->sb_snext) {
         if (SKEY_MATCH(address, s, &p->address, p->sock)) {
-            if (!p->sock_in_use) //can't release it repeatedly!
+            if (!p->sock_in_use) {//can't release it repeatedly!
+                printk(KERN_ERR "Free sock error!\n");
                 break;
+            }
             sb = p;
 
             sb->sock_in_use = 0; //clear "in use" tag.
             sb->last_used_jiffies = jiffies;
 
-            INSERT_TO_HLIST(HASH(address), sb);
+            INSERT_INTO_HLIST(HASH(address), sb);
         }
     }
 
@@ -269,7 +303,6 @@ struct socket_bucket *free_socket_to_sockp(struct sockaddr *address, struct sock
 
     return sb;
 }
-
 
 /**
  *Get a empty slot from sockp;
@@ -309,10 +342,16 @@ static struct socket_bucket *get_empty_slot(void)
     if (lru) {
         if (close_pending_fds_push(lru->connpd_fd) < 0)
             return NULL;
+
         ht.sb_free_p = lru->sb_free_next;
-        REMOVE_FROM_HLIST(HASH(&lru->address), lru);
-        REMOVE_FROM_TLIST(lru);
-        REMOVE_FROM_SHLIST(SHASH(&lru->address, lru->sock), lru);
+
+        if (IN_HLIST(HASH(&lru->address), lru))
+            REMOVE_FROM_HLIST(HASH(&lru->address), lru);
+        if (IN_SHLIST(SHASH(&lru->address, lru->sock), lru->sock), lru)
+            REMOVE_FROM_SHLIST(SHASH(&lru->address, lru->sock), lru);
+        if (IN_TLIST(lru))
+            REMOVE_FROM_TLIST(lru);
+
         return lru;
     } 
 #endif
@@ -333,17 +372,17 @@ struct socket_bucket *insert_socket_to_sockp(struct sockaddr *address,
 #if LRU
     if (!(empty = get_empty_slot(address))) 
 #else
-    if (!(empty = get_empty_slot())) 
+        if (!(empty = get_empty_slot())) 
 #endif
-        goto unlock_ret;
+            goto unlock_ret;
 
     INIT_SB(empty, s, connpd_fd, create_way);
 
     SOCKADDR_COPY(&empty->address, address);
 
-    INSERT_TO_HLIST(HASH(&empty->address), empty);
-    INSERT_TO_TLIST(empty);
-    INSERT_TO_SHLIST(SHASH(&empty->address, s), empty);
+    INSERT_INTO_HLIST(HASH(&empty->address), empty);
+    INSERT_INTO_TLIST(empty);
+    INSERT_INTO_SHLIST(SHASH(&empty->address, s), empty);
 
 unlock_ret:
     SOCKP_UNLOCK();
@@ -354,7 +393,10 @@ unlock_ret:
 int sockp_init()
 {
     struct socket_bucket *sb_tmp;
-    
+
+    memset((void *)SB, 0, sizeof(SB));
+    memset((void *)&ht, 0, sizeof(ht));
+
     //init sockp freelist.
     ht.sb_free_p = sb_tmp = SB;
     while (sb_tmp < SB + NR_SOCKET_BUCKET) {
@@ -376,7 +418,5 @@ int sockp_init()
  */
 void sockp_destroy(void)
 {
-    memset((void *)SB, 0, sizeof(SB));
-    memset((void *)&ht, 0, sizeof(ht));
     SOCKP_LOCK_DESTROY();
 }
