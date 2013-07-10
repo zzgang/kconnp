@@ -106,7 +106,7 @@ fi
 
 cat > Makefile <<MF
 obj-m += kconnp.o
-kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o hash.o cfg.o util.o
+kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o preconnect.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o hash.o cfg.o util.o
 
 $CCFLAGS_APPEND
 
