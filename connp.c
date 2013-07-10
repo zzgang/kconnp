@@ -123,16 +123,18 @@ int insert_into_connp_if_permitted(int fd)
         goto ret_fail;
 
     sock = getsock(fd);
-    if (!sock || !IS_TCP_SOCK(sock) || !IS_CLIENT_SOCK(sock) || !SOCK_ESTABLISHED(sock))
+    if (!sock || !IS_TCP_SOCK(sock) || !IS_CLIENT_SOCK(sock))
         goto ret_fail;
 
     err = getsockservaddr(sock, &address);
     if (err)
         goto ret_fail;
 
+    if (!cfg_conn_acl_allowd(&address))
+        goto ret_fail;
+
     if (address.sa_family != AF_INET 
-            || IN_LOOPBACK(ntohl(((struct sockaddr_in *)&address)->sin_addr.s_addr))
-            || !cfg_conn_acl_allowd(&address)) 
+            || IN_LOOPBACK(ntohl(((struct sockaddr_in *)&address)->sin_addr.s_addr))) 
         goto ret_fail;
 
     if (!SOCK_ESTABLISHED(sock)) {

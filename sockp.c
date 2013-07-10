@@ -139,6 +139,15 @@
 #define SOCK_IS_PRECONNECT(sb) ((sb)->sock_create_way == SOCK_PRECONNECT)
 #define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowd(&(sb)->address) && SOCK_IS_PRECONNECT(sb))
 
+static int loop_count = 0;
+
+#define LOOP_COUNT_SAFE_CHECK() do { \
+    if (++loop_count > NR_SOCKET_BUCKET) \
+    printk(KERN_ERR "Loop count overflow, function: %s, line: %d\n", __FUNCTION__, __LINE__);    \
+} while(0)
+
+#define LOOP_COUNT_RESET() (loop_count = 0)
+
 #if LRU
 static struct socket_bucket *get_empty_slot(struct sockaddr *);
 #else
@@ -161,12 +170,12 @@ static struct socket_bucket SB[NR_SOCKET_BUCKET];
 
 static inline unsigned int _hashfn(struct sockaddr_in *address)
 {
-    return (unsigned)(((*address).sin_port ^ (*address).sin_addr.s_addr) & NR_HASH);
+    return (unsigned)(((*address).sin_port ^ (*address).sin_addr.s_addr) % NR_HASH);
 }
 
 static inline unsigned int _shashfn(struct sockaddr_in *address, struct socket *s)
 {
-    return (unsigned)(((*address).sin_port ^ (*address).sin_addr.s_addr ^ (unsigned long)s) & NR_SHASH);
+    return (unsigned)(((*address).sin_port ^ (*address).sin_addr.s_addr ^ (unsigned long)s) % NR_SHASH);
 }
 
 /**
@@ -179,6 +188,9 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
     SOCKP_LOCK();
 
     for (p = HASH(address); p; p = p->sb_next) { 
+
+        LOOP_COUNT_SAFE_CHECK();
+
         if (KEY_MATCH(address, &p->address)) {
             if (p->sock_in_use || !SOCK_ESTABLISHED(p->sock) 
                     || SOCK_IS_RECLAIM_PASSIVE(p))
@@ -189,12 +201,16 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
 
             REMOVE_FROM_HLIST(HASH(address), p);
 
+            LOOP_COUNT_RESET();
+           
             SOCKP_UNLOCK();
 
             return p->sock;
         }
     }
 
+    LOOP_COUNT_RESET();
+    
     SOCKP_UNLOCK();
 
     return NULL;
@@ -209,6 +225,9 @@ void sockp_get_fds(struct list_head *fds_list)
     SOCKP_LOCK();
 
     for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
+
+        LOOP_COUNT_SAFE_CHECK();
+
         if (p->connpd_fd < 0) {
             continue;
         }
@@ -218,6 +237,8 @@ void sockp_get_fds(struct list_head *fds_list)
         tmp->fd = p->connpd_fd;
         list_add_tail(&tmp->siblings, fds_list);  
     }
+
+    LOOP_COUNT_RESET();
 
     SOCKP_UNLOCK();
 }
@@ -233,6 +254,9 @@ void shutdown_sock_list(int type)
     SOCKP_LOCK();
 
     for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
+
+        LOOP_COUNT_SAFE_CHECK();
+
         if (type) //shutdown all
             goto shutdown;
 
@@ -263,6 +287,7 @@ shutdown:
 
         if (IN_HLIST(HASH(&p->address), p))
             REMOVE_FROM_HLIST(HASH(&p->address), p);
+
         if (IN_SHLIST(SHASH(&p->address, p->sock), p))
             REMOVE_FROM_SHLIST(SHASH(&p->address, p->sock), p);
         REMOVE_FROM_TLIST(p);
@@ -272,6 +297,8 @@ shutdown:
         orig_sys_close(p->connpd_fd);
     }
 
+    LOOP_COUNT_RESET();
+    
     SOCKP_UNLOCK();
 }
 
@@ -285,9 +312,12 @@ struct socket_bucket *free_socket_to_sockp(struct sockaddr *address, struct sock
     SOCKP_LOCK();
 
     for (p = SHASH(address, s); p; p = p->sb_snext) {
+
+        LOOP_COUNT_SAFE_CHECK();
+        
         if (SKEY_MATCH(address, s, &p->address, p->sock)) {
             if (!p->sock_in_use) {//can't release it repeatedly!
-                printk(KERN_ERR "Free sock error!\n");
+                printk(KERN_ERR "Free socket error!\n");
                 break;
             }
             sb = p;
@@ -298,6 +328,8 @@ struct socket_bucket *free_socket_to_sockp(struct sockaddr *address, struct sock
             INSERT_INTO_HLIST(HASH(address), sb);
         }
     }
+
+    LOOP_COUNT_RESET();
 
     SOCKP_UNLOCK();
 
@@ -347,7 +379,7 @@ static struct socket_bucket *get_empty_slot(void)
 
         if (IN_HLIST(HASH(&lru->address), lru))
             REMOVE_FROM_HLIST(HASH(&lru->address), lru);
-        if (IN_SHLIST(SHASH(&lru->address, lru->sock), lru->sock), lru)
+        if (IN_SHLIST(SHASH(&lru->address, lru->sock), lru))
             REMOVE_FROM_SHLIST(SHASH(&lru->address, lru->sock), lru);
         if (IN_TLIST(lru))
             REMOVE_FROM_TLIST(lru);
@@ -371,10 +403,11 @@ struct socket_bucket *insert_socket_to_sockp(struct sockaddr *address,
 
 #if LRU
     if (!(empty = get_empty_slot(address))) 
+        goto unlock_ret;
 #else
-        if (!(empty = get_empty_slot())) 
+    if (!(empty = get_empty_slot())) 
+        goto unlock_ret;
 #endif
-            goto unlock_ret;
 
     INIT_SB(empty, s, connpd_fd, create_way);
 
