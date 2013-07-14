@@ -10,19 +10,26 @@
 #include <linux/net.h> /*define struct socket*/
 #include <net/tcp_states.h>
 
+#define DEBUG_ON 1
+
 #define NR_SOCKET_BUCKET 200
 #define NR_HASH (NR_SOCKET_BUCKET/2 + 1)
 #define NR_SHASH (NR_SOCKET_BUCKET)
 #define TIMEOUT 30 //seconds
-#define LRU 1 //LRU replace algorithm
+#define LRU 0 //LRU replace algorithm
 
-#define close_all_fds() shutdown_sock_list(1)
-#define shutdown_timeout_sock_list() shutdown_sock_list(0)
+#define close_all_fds() shutdown_sock_list(SHUTDOWN_ALL)
+#define shutdown_timeout_sock_list() shutdown_sock_list(SHUTDOWN_IDLE)
 
 typedef enum {
     SOCK_RECLAIM = 0,
     SOCK_PRECONNECT
 } sock_create_way_t;
+
+typedef enum {
+    SHUTDOWN_ALL,
+    SHUTDOWN_IDLE
+} shutdown_way_t;
 
 struct socket_bucket {
     struct sockaddr address;
@@ -59,7 +66,7 @@ extern struct socket_bucket *free_socket_to_sockp(struct sockaddr *, struct sock
 extern struct socket_bucket *insert_socket_to_sockp(struct sockaddr *, 
         struct socket *, int fd, sock_create_way_t create_way);
 
-extern void shutdown_sock_list(int type);
+extern void shutdown_sock_list(shutdown_way_t shutdown_way);
 
 extern void sockp_get_fds(struct list_head *);
 

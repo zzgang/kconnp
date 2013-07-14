@@ -32,9 +32,11 @@
 #define IN_HLIST(head, bucket) ({                       \
         struct socket_bucket *__p;                      \
         for (__p = (head); __p; __p = __p->sb_next) {   \
+        LOOP_COUNT_SAFE_CHECK(__p);                        \
         if (__p == (bucket))                            \
         break;                                          \
         }                                               \
+        LOOP_COUNT_RESET();                                 \
         __p;})
 
 #define INSERT_INTO_HLIST(head, bucket) \
@@ -59,9 +61,11 @@
 #define IN_SHLIST(head, bucket) ({                      \
         struct socket_bucket *__p;                      \
         for (__p = (head); __p; __p = __p->sb_snext) {  \
+        LOOP_COUNT_SAFE_CHECK(__p);                        \
         if (__p == (bucket))                            \
         break;                                          \
         }                                               \
+        LOOP_COUNT_RESET();                             \
         __p;})
 
 #define INSERT_INTO_SHLIST(head, bucket) \
@@ -86,9 +90,11 @@
 #define IN_TLIST(bucket) ({                                             \
         struct socket_bucket *__p;                                      \
         for (__p = ht.sb_trav_head; __p; __p = __p->sb_trav_next) {     \
+        LOOP_COUNT_SAFE_CHECK(__p);                                        \
         if (__p == (bucket))                                            \
         break;                                                          \
         }                                                               \
+        LOOP_COUNT_RESET();                                             \
         __p;})
 
 #define INSERT_INTO_TLIST(bucket) \
@@ -139,14 +145,23 @@
 #define SOCK_IS_PRECONNECT(sb) ((sb)->sock_create_way == SOCK_PRECONNECT)
 #define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowd(&(sb)->address) && SOCK_IS_PRECONNECT(sb))
 
+
+#if DEBUG_ON
+
 static int loop_count = 0;
-
-#define LOOP_COUNT_SAFE_CHECK() do { \
-    if (++loop_count > NR_SOCKET_BUCKET) \
+#define LOOP_COUNT_SAFE_CHECK(ptr) do { \
+    if (++loop_count > NR_SOCKET_BUCKET) { \
     printk(KERN_ERR "Loop count overflow, function: %s, line: %d\n", __FUNCTION__, __LINE__);    \
+    } \
 } while(0)
-
 #define LOOP_COUNT_RESET() (loop_count = 0)
+
+#else
+
+#define LOOP_COUNT_SAFE_CHECK(ptr)
+#define LOOP_COUNT_RESET()
+
+#endif
 
 #if LRU
 static struct socket_bucket *get_empty_slot(struct sockaddr *);
@@ -189,10 +204,11 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
 
     for (p = HASH(address); p; p = p->sb_next) { 
 
-        LOOP_COUNT_SAFE_CHECK();
+        LOOP_COUNT_SAFE_CHECK(p);
 
         if (KEY_MATCH(address, &p->address)) {
-            if (p->sock_in_use || !SOCK_ESTABLISHED(p->sock) 
+            if (p->sock_in_use 
+                    || !SOCK_ESTABLISHED(p->sock) 
                     || SOCK_IS_RECLAIM_PASSIVE(p))
                 continue;
 
@@ -226,11 +242,11 @@ void sockp_get_fds(struct list_head *fds_list)
 
     for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
 
-        LOOP_COUNT_SAFE_CHECK();
+        LOOP_COUNT_SAFE_CHECK(p);
 
-        if (p->connpd_fd < 0) {
+        if (p->connpd_fd < 0)
             continue;
-        }
+
         tmp = (typeof(*tmp) *)lkmalloc(sizeof(typeof(*tmp)));
         if (!tmp) 
             break;
@@ -247,7 +263,7 @@ void sockp_get_fds(struct list_head *fds_list)
  *To scan all sock pool to close the expired or all sockets. The caller is kconnpd.
  *type: 0 expired;1 all;
  */
-void shutdown_sock_list(int type)
+void shutdown_sock_list(shutdown_way_t shutdown_way)
 {
     struct socket_bucket *p; 
 
@@ -255,39 +271,42 @@ void shutdown_sock_list(int type)
 
     for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
 
-        LOOP_COUNT_SAFE_CHECK();
+        LOOP_COUNT_SAFE_CHECK(p);
 
-        if (type) //shutdown all
+        if (shutdown_way == SHUTDOWN_ALL) //shutdown all repeatly!
             goto shutdown;
 
         if (p->connpd_fd < 0)
             continue;
+
+        if (p->sock_in_use) {
+            conn_add_all_count(&p->address, 1);
+            continue;
+        }
 
         if (!SOCK_ESTABLISHED(p->sock)) {
             cfg_conn_set_passive(&p->address);
             goto shutdown;
         }
 
-        if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p) ||
-                SOCK_IS_RECLAIM_PASSIVE(p) || 
-                (SOCK_IS_RECLAIM(p) && !p->sock_in_use && 
-                 (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
+        if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p) 
+                || SOCK_IS_RECLAIM_PASSIVE(p) 
+                || (SOCK_IS_RECLAIM(p)
+                    && (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;
 
-        if (!p->sock_in_use) {
-            if (conn_spec_check_close_flag(&p->address))
-                goto shutdown;
-            conn_add_idle_count(&p->address, 1);
-        }
+        //luckly, selected as idle conn.
+        if (conn_spec_check_close_flag(&p->address))
+            goto shutdown;
 
+        conn_add_idle_count(&p->address, 1);
         conn_add_all_count(&p->address, 1);
 
         continue;
-shutdown:
 
+shutdown:
         if (IN_HLIST(HASH(&p->address), p))
             REMOVE_FROM_HLIST(HASH(&p->address), p);
-
         if (IN_SHLIST(SHASH(&p->address, p->sock), p))
             REMOVE_FROM_SHLIST(SHASH(&p->address, p->sock), p);
         REMOVE_FROM_TLIST(p);
@@ -313,7 +332,7 @@ struct socket_bucket *free_socket_to_sockp(struct sockaddr *address, struct sock
 
     for (p = SHASH(address, s); p; p = p->sb_snext) {
 
-        LOOP_COUNT_SAFE_CHECK();
+        LOOP_COUNT_SAFE_CHECK(p);
         
         if (SKEY_MATCH(address, s, &p->address, p->sock)) {
             if (!p->sock_in_use) {//can't release it repeatedly!
@@ -354,14 +373,19 @@ static struct socket_bucket *get_empty_slot(void)
     p = ht.sb_free_p;
 
     do {
+        LOOP_COUNT_SAFE_CHECK(p);
         if (!p->sb_in_use) {
             ht.sb_free_p = p->sb_free_next;
+            LOOP_COUNT_RESET();
             return p;
         }
 
 #if LRU
         /*connpd_fd: -1, was not attached to connpd*/
-        if (!p->sock_in_use && !KEY_MATCH(addr, &p->address) && p->connpd_fd >= 0 && p->uc <= uc) { 
+        if (!p->sock_in_use 
+                && !KEY_MATCH(addr, &p->address) 
+                && p->connpd_fd >= 0 
+                && p->uc <= uc) { 
             lru = p;
             uc = p->uc;
         }
@@ -369,6 +393,8 @@ static struct socket_bucket *get_empty_slot(void)
 
         p = p->sb_free_next;
     } while (p != ht.sb_free_p);
+
+    LOOP_COUNT_RESET();
 
 #if LRU
     if (lru) {
@@ -414,8 +440,8 @@ struct socket_bucket *insert_socket_to_sockp(struct sockaddr *address,
     SOCKADDR_COPY(&empty->address, address);
 
     INSERT_INTO_HLIST(HASH(&empty->address), empty);
-    INSERT_INTO_TLIST(empty);
     INSERT_INTO_SHLIST(SHASH(&empty->address, s), empty);
+    INSERT_INTO_TLIST(empty);
 
 unlock_ret:
     SOCKP_UNLOCK();
