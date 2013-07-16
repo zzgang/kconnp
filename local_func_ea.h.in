@@ -1,7 +1,0 @@
-//Get EA from symbol.map file.
-#ifndef _LOCAL_FUNC_EA_H
-#define _LOCAL_FUNC_EA_H
-
-#define FREE_FDTABLE_RCU_EA %%FREE_FDTABLE_RCU_EA%%
-
-#endif
