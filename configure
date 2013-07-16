@@ -88,12 +88,6 @@ sed -e "s/%%SYS_SHUTDOWN_EA%%/0x${sys_shutdown_ea}/" |
 sed -e "s/%%SYS_EXIT_GROUP_EA%%/0x${sys_exit_group_ea}/" | 
 sed -e "s/%%SYS_EXIT_EA%%/0x${sys_exit_ea}/"  > sys_call_table_ea.h;
 
-#########################
-#Generate local funcs ea.
-#########################
-free_fdtable_rcu_ea=`pcregrep '\bfree_fdtable_rcu\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
-cat local_func_ea.h.in |
-sed -e "s/%%FREE_FDTABLE_RCU_EA%%/0x${free_fdtable_rcu_ea}/" > local_func_ea.h;
 
 CCFLAGS_APPEND="ccflags-y +="
 
