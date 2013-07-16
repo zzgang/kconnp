@@ -7,7 +7,7 @@
 #include <net/sock.h>
 #include <linux/spinlock.h> 
 #include "sys_call.h"
-#include "connp.h"
+#include "connpd.h"
 #include "sockp.h"
 #include "util.h"
 #include "cfg.h"
@@ -250,6 +250,7 @@ void sockp_get_fds(struct list_head *fds_list)
         tmp = (typeof(*tmp) *)lkmalloc(sizeof(typeof(*tmp)));
         if (!tmp) 
             break;
+
         tmp->fd = p->connpd_fd;
         list_add_tail(&tmp->siblings, fds_list);  
     }
@@ -398,7 +399,7 @@ static struct socket_bucket *get_empty_slot(void)
 
 #if LRU
     if (lru) {
-        if (close_pending_fds_push(lru->connpd_fd) < 0)
+        if (connpd_close_pending_fds_push(lru->connpd_fd) < 0)
             return NULL;
 
         ht.sb_free_p = lru->sb_free_next;

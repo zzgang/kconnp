@@ -5,9 +5,6 @@
 #include <linux/sched.h>
 #include "sockp.h"
 
-#define NR_MAX_BINDING_FDS 1024
-#define NR_SOCKET_CLOSE_PENDING NR_MAX_BINDING_FDS
-
 typedef enum {
     CLOSE_POSITIVE = 0,
     CLOSE_PASSIVE
@@ -22,13 +19,6 @@ struct conn_attr_t {
     } stats;
 };
 
-extern struct socket_bucket *attach_pending_sbs_push(struct socket_bucket *);
-extern struct socket_bucket *attach_pending_sbs_pop(void);
-
-extern int close_pending_fds_push(int fd);
-extern int close_pending_fds_pop(void);
-
-extern int scan_connp_shutdown_timeout_or_preconnect(void);
 extern int insert_into_connp_if_permitted(int fd);
 extern int fetch_conn_from_connp(int fd, struct sockaddr *);
 

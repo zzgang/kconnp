@@ -18,7 +18,7 @@
 #define TIMEOUT 30 //seconds
 #define LRU 0 //LRU replace algorithm
 
-#define close_all_fds() shutdown_sock_list(SHUTDOWN_ALL)
+#define close_all_files() shutdown_sock_list(SHUTDOWN_ALL)
 #define shutdown_timeout_sock_list() shutdown_sock_list(SHUTDOWN_IDLE)
 
 typedef enum {

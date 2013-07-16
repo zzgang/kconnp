@@ -17,7 +17,6 @@
 #endif
 #include <asm/atomic.h>
 #include <linux/slab.h>
-#include <linux/vmalloc.h>
 #include <linux/rcupdate.h>
 #include <linux/list.h>
 #include <linux/poll.h>
@@ -106,13 +105,15 @@ static inline int file_count_inc(struct file *filp, int i)
         rcu_read_unlock();  \
         __tmp;})
 
-
-int task_alloc_fd(struct task_struct *tsk, unsigned start, unsigned flags);
-
-
-static inline int task_get_unused_fd(struct task_struct *tsk)
+static inline int lkm_get_unused_fd(void)
 {
-    return task_alloc_fd(tsk, 0, 0);
+    int fd;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 10)
+    fd = get_unused_fd_flags(0);
+#else
+    fd = get_unused_fd();
+#endif
+    return fd;
 }
 
 struct sockaddr_in;
@@ -249,18 +250,6 @@ static inline void TASK_GET_FDS(struct task_struct *tsk, struct list_head *fds_l
             set >>= 1;
         }
     }
-}
-
-static inline void task_put_unused_fd(struct task_struct *tsk, unsigned int fd)
-{
-    struct files_struct *files = TASK_FILES(tsk);
-    FILE_FDT_TYPE *fdt = TASK_FILES_FDT(tsk);
-
-    spin_lock(&files->file_lock);
-    lkm_clear_open_fd(fd, fdt);
-    if (fd < files->next_fd)
-        files->next_fd = fd;
-    spin_unlock(&files->file_lock);
 }
 
 static inline void task_fd_install(struct task_struct *tsk, int fd, struct file *filp)
