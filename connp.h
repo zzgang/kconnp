@@ -27,4 +27,32 @@ extern void connp_sys_exit_prepare(void);
 extern int connp_init(void);
 extern void connp_destroy(void);
 
+extern rwlock_t connp_rwlock;
+/* connpd lock funcions */
+static inline void connp_rwlock_init(void) 
+{
+    rwlock_init(&connp_rwlock);
+}
+
+static inline void connp_rlock(void)
+{
+    read_lock(&connp_rwlock);
+}
+
+static inline void connp_runlock(void)
+{
+    read_unlock(&connp_rwlock);
+}
+
+static inline void connp_wlock(void)
+{
+    write_lock(&connp_rwlock);
+}
+
+static inline void connp_wunlock(void)
+{
+    write_unlock(&connp_rwlock);
+}
+/*end*/
+
 #endif

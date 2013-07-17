@@ -1,6 +1,7 @@
 #include <linux/string.h>
 #include <linux/in.h>
 #include <linux/uaccess.h>
+#include "connp.h"
 #include "util.h"
 #include "hash.h"
 #include "cfg.h"
@@ -9,14 +10,16 @@
 #define CFG_DENIED_IPORTS_FILE "iports.deny"
 
 #define cfg_entries_walk_func_check(func_name)    \
-    do {    \
+    ({    \
+        int __check_ret = 1;    \
         struct cfg_entry *p, *entry = (struct cfg_entry *)cfg;  \
         for (p = entry; \
                 p < entry + sizeof(struct cfg_dir) / sizeof(struct cfg_entry); p++) {\
-            if (!p->func_name(p))    \
-                return 0;   \
+            if (!p->func_name(p))   \
+                __check_ret = 0;          \
         } \
-    } while (0)
+        __check_ret;    \
+    })
 
 #define cfg_entries_walk_func_no_check(func_name) \
     do {    \
@@ -108,13 +111,14 @@ static int cfg_iports_list_init(struct cfg_entry *);
 static void cfg_iports_list_destroy(struct cfg_entry *);
 static int cfg_iports_list_reload(struct cfg_entry *);
 
-static inline struct conn_node_t *iport_in_list_check_or_call(struct sockaddr_in *, struct cfg_entry *, int (*call_func)(void *data));
+static inline struct conn_node_t *iport_in_list_check_or_call(struct sockaddr_in *, struct cfg_entry *, void (*call_func)(void *data));
 
 struct cfg_dir {
     struct cfg_entry allowed_list;
 #define al allowed_list
 #define al_ptr allowed_list.cfg_ptr
 #define al_mtime allowed_list.f_mtime
+#define al_rwlock allowed_list.cfg_rwlock
 #define al_init(cfg_entry_ptr) allowed_list.init(cfg_entry_ptr)
 #define al_destory(cfg_entry_ptr) allowed_list.destroy(cfg_entry_ptr)
 #define al_reload(cfg_entry_ptr) allowed_list.reload(cfg_entry_ptr)
@@ -122,6 +126,7 @@ struct cfg_dir {
 #define dl denied_list
 #define dl_ptr denied_list.cfg_ptr
 #define dl_mtime denied_list.f_mtime
+#define dl_rwlock denied_list.cfg_rwlock
 #define dl_init(cfg_entry_ptr) denied_list.init(cfg_entry_ptr)
 #define dl_destory(cfg_entry_ptr) denied_list.destroy(cfg_entry_ptr)
 #define dl_reload(cfg_entry_ptr) denied_list.reload(cfg_entry_ptr)
@@ -172,6 +177,8 @@ int cfg_proc_read(char *buffer,
     struct cfg_entry *ce;
 
     ce = get_ce(data);
+    if (!ce) 
+        return 0;
 
     if (offset >= ce->raw_len) { //has read all data.
         *eof = 1;
@@ -211,6 +218,7 @@ int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
     }
 
     if (ce->raw_ptr) {
+        /*Remove ldcfg for safety*/
         old_raw_ptr = ce->raw_ptr;
         old_raw_len = ce->raw_len;
     }
@@ -218,6 +226,7 @@ int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
     ce->raw_ptr = lkmalloc(count);
     if (!ce->raw_ptr)
         return -ENOMEM;
+
     ce->raw_len = count;
 
     /* Write data to the buffer */
@@ -231,8 +240,10 @@ int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
     if (old_raw_ptr) {
         lkmfree(old_raw_ptr);
     }
-    
+   
+    write_lock(&ce->cfg_rwlock); 
     ce->reload(ce); //Reload cfg.
+    write_unlock(&ce->cfg_rwlock);
 
     return count;
 }
@@ -255,7 +266,6 @@ static int cfg_proc_init(struct cfg_entry *ce)
             cfg_base_dir);
 
     if (!ce->cfg_proc_file) {
-        remove_proc_entry(ce->f_name, cfg_base_dir);
         printk(KERN_ERR
                 "Error: Could not initialize /proc/%s/%s\n",
                 CFG_BASE_DIR_NAME, ce->f_name);
@@ -268,12 +278,15 @@ static int cfg_proc_init(struct cfg_entry *ce)
     ce->cfg_proc_file->uid = 0;
     ce->cfg_proc_file->gid = 0;
 
+    rwlock_init(&ce->cfg_rwlock);
+
     return 1;
 }
 
 static inline void cfg_proc_destroy(struct cfg_entry *ce)
 {
-    remove_proc_entry(ce->f_name, cfg_base_dir);
+    if (ce->cfg_proc_file)
+        remove_proc_entry(ce->f_name, cfg_base_dir);
 }
 
 static int cfg_iports_list_init(struct cfg_entry *ce)
@@ -281,16 +294,18 @@ static int cfg_iports_list_init(struct cfg_entry *ce)
     if (!cfg_proc_init(ce))
         return 0;
 
-    if (!cfg_iports_entity_init(ce))
+    if (!cfg_iports_entity_init(ce)) {
+        cfg_proc_destroy(ce);
         return 0;
+    }
 
     return 1;
 }
 
 static void cfg_iports_list_destroy(struct cfg_entry *ce)
 {
-    cfg_proc_destroy(ce);
     cfg_iports_entity_destroy(ce);
+    cfg_proc_destroy(ce);
 }
 
 /**
@@ -759,13 +774,23 @@ static int cfg_iports_list_reload(struct cfg_entry *ce)
 }
 
 #define iport_in_list(addr, ce) iport_in_list_check_or_call(addr, ce, NULL)
+#define iport_in_allowd_list(addr) iport_in_list((struct sockaddr_in *)addr, &cfg->al)
+#define iport_in_denied_list(addr) iport_in_list((struct sockaddr_in *)addr, &cfg->dl)
+
 #define iport_in_list_for_each_call(addr, ce, call_func) iport_in_list_check_or_call(addr, ce, call_func)
-static inline struct conn_node_t *iport_in_list_check_or_call(struct sockaddr_in *addr, struct cfg_entry *ce, int (*call_func)(void *data))
+static inline struct conn_node_t *iport_in_list_check_or_call(struct sockaddr_in *addr, struct cfg_entry *ce, void (*call_func)(void *data))
 {
     struct iport_t zip_port, ip_zport, ip_port, **p;
     struct iport_t *iport_list[] = {&ip_port, &ip_zport, &zip_port, NULL}; 
-    struct hash_table_t *ht_ptr = (struct hash_table_t *)ce->cfg_ptr;
-   
+    struct hash_table_t *ht_ptr;
+
+    read_lock(&ce->cfg_rwlock);
+
+    ht_ptr = (struct hash_table_t *)ce->cfg_ptr;
+
+    if (!ht_ptr)
+        goto unlock_ret;
+    
     for (p = &iport_list[0]; *p; p++) 
         memset(*p, 0, sizeof(struct iport_t));
 
@@ -785,28 +810,16 @@ static inline struct conn_node_t *iport_in_list_check_or_call(struct sockaddr_in
                     (const char *)*p, sizeof(struct iport_t), (void **)&tmp)) {
             if (call_func)
                 call_func(tmp);
-            else
+            else {
+                read_unlock(&ce->cfg_rwlock);
                 return tmp;
+            }
         }
     }
-    
+
+unlock_ret: 
+    read_unlock(&ce->cfg_rwlock); 
     return NULL;
-}
-
-struct conn_node_t *iport_in_allowd_list(struct sockaddr *address)
-{
-    if (!cfg->al.cfg_ptr) //if allowed list is null, none allowed.
-        return NULL;
-
-    return iport_in_list((struct sockaddr_in *)address, &cfg->al);
-}
-
-struct conn_node_t *iport_in_denied_list(struct sockaddr *address)
-{
-    if (!cfg->dl.cfg_ptr)
-        return NULL;
-
-    return iport_in_list((struct sockaddr_in *)address, &cfg->dl);
 }
 
 int cfg_init()
@@ -818,7 +831,10 @@ int cfg_init()
         return 0;
     }
     //Init cfg entries.
-    cfg_entries_walk_func_check(init);
+    if (!cfg_entries_walk_func_check(init)) {
+        cfg_destroy();
+        return 0;
+    }
 
     return 1;
 }
@@ -827,22 +843,66 @@ void cfg_destroy()
 {
     //Destory cfg entries
     cfg_entries_walk_func_no_check(destroy);
+
     //Destroy cfg base dir.
     remove_proc_entry(CFG_BASE_DIR_NAME, NULL);
 }
+ 
+int cfg_conn_op(struct sockaddr *address, int op_type)
+{
+    struct conn_node_t *conn_node;
+    int ret = 1;
 
-void do_cfg_allowed_entries_for_each_call(int (*call_func)(void *data), int type)
+    if (iport_in_denied_list(address))
+        return 0;
+   
+    read_lock(&cfg->al_rwlock);
+
+    conn_node = iport_in_allowd_list(address); 
+    if (!conn_node) {
+        ret = 0;
+        goto unlock_ret;
+    }
+
+    switch (op_type) {
+        case ACL_CHECK:
+            ret = (conn_node ? 1 : 0);
+            break;
+        case ACL_SPEC_CHECK:
+            ret = (conn_node->conn_ip != 0 && conn_node->conn_port != 0);
+            break;
+        case POSITIVE_CHECK:
+            ret = (conn_node->conn_close_way == CLOSE_POSITIVE);
+            break;
+        case PASSIVE_SET:
+            conn_node->conn_close_way = CLOSE_PASSIVE;
+            break;
+        default:
+            ret = 0;
+            break;
+    }
+
+unlock_ret:
+    read_unlock(&cfg->al_rwlock);
+    return ret;
+}
+
+void do_cfg_allowed_entries_for_each_call(void (*call_func)(void *data), int type)
 {
     struct conn_node_t *conn_node; 
     struct hash_bucket_t *pos;
 
+    read_lock(&cfg->al_rwlock);
+
+    if (!cfg->al_ptr)
+        goto unlock_ret;
+
     hash_for_each(cfg->al_ptr, pos) {
         conn_node = hash_value(pos);
         //printk(KERN_ERR "conn close way: %d\n", conn_node->conn_close_way);
-        if (type == CALL_DIRECTLY) {
-            if (!call_func((void *)conn_node))
-                continue;
-        } else if (type == CALL_CHECK) {
+        if (type == CALL_DIRECTLY)
+            call_func((void *)conn_node);
+        else if (type == CALL_CHECK) {
             struct sockaddr_in address;
             if (conn_node->conn_ip == 0 || conn_node->conn_port == 0)
                 continue;
@@ -850,15 +910,18 @@ void do_cfg_allowed_entries_for_each_call(int (*call_func)(void *data), int type
             address.sin_addr.s_addr = conn_node->conn_ip;
             address.sin_port = conn_node->conn_port;
 
-            if (!iport_in_denied_list((struct sockaddr *)&address));
-                if (!call_func((void *)conn_node))
-                    continue;
+            if (!iport_in_denied_list((struct sockaddr *)&address))
+                call_func((void *)conn_node);
         }
     }
+
+unlock_ret:
+    read_unlock(&cfg->al_rwlock);
+    return;
 }
 
 void cfg_allowd_iport_node_for_each_call(struct sockaddr *addr, 
-        int (*call_func)(void *data)) 
+        void (*call_func)(void *data)) 
 {
     iport_in_list_for_each_call((struct sockaddr_in *)addr, &cfg->al, call_func);
 }

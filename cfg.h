@@ -14,6 +14,7 @@ struct cfg_entry {
     unsigned int raw_len; /*the data length read from the procfile*/
     char *raw_ptr; /*cfg raw data pointer*/ 
     void *cfg_ptr; /*handle the cfg storage*/
+    rwlock_t cfg_rwlock;
 
     /*cfg funcs*/
     int (*init)(struct cfg_entry *); 
@@ -56,9 +57,6 @@ struct iport_pos_t {
     int port_end;
 };
 
-extern struct conn_node_t *iport_in_allowd_list(struct sockaddr *);
-extern struct conn_node_t *iport_in_denied_list(struct sockaddr *);
-
 #define ACL_CHECK 0x0
 #define ACL_SPEC_CHECK 0x1
 #define POSITIVE_CHECK 0x2
@@ -68,43 +66,17 @@ extern struct conn_node_t *iport_in_denied_list(struct sockaddr *);
 #define cfg_conn_acl_spec_allowd(addr) cfg_conn_op(addr, ACL_SPEC_CHECK)
 #define cfg_conn_is_positive(addr) cfg_conn_op(addr, POSITIVE_CHECK)
 #define cfg_conn_set_passive(addr) cfg_conn_op(addr, PASSIVE_SET)
-
-static inline int cfg_conn_op(struct sockaddr *address, int op_type)
-{
-    struct conn_node_t *conn_node;
-
-    if (iport_in_denied_list(address))
-        return 0;
-   
-    conn_node = iport_in_allowd_list(address); 
-    if (!conn_node)
-        return 0;
-
-    switch (op_type) {
-        case ACL_CHECK:
-            return (conn_node ? 1 : 0);
-        case ACL_SPEC_CHECK:
-            return (conn_node->conn_ip != 0 && conn_node->conn_port != 0);
-        case POSITIVE_CHECK:
-            return (conn_node->conn_close_way == CLOSE_POSITIVE);
-        case PASSIVE_SET:
-            conn_node->conn_close_way = CLOSE_PASSIVE;
-        default:
-            return 0;
-    }
-
-    return 1;
-}
-
-extern int cfg_init(void);
-extern void cfg_destroy(void);
+extern int cfg_conn_op(struct sockaddr *address, int op_type);
 
 #define CALL_CHECK 0
 #define CALL_DIRECTLY 1
 #define cfg_allowed_entries_for_each_call(call_func) do_cfg_allowed_entries_for_each_call(call_func, CALL_CHECK)
 #define cfg_allowed_entries_for_each_call_directly(call_func) do_cfg_allowed_entries_for_each_call(call_func, CALL_DIRECTLY)
-extern void do_cfg_allowed_entries_for_each_call(int (*call_func)(void *data), int type);
+extern void do_cfg_allowed_entries_for_each_call(void (*call_func)(void *data), int type);
 
-extern void cfg_allowd_iport_node_for_each_call(struct sockaddr *,int (*call_func)(void *data));
+extern void cfg_allowd_iport_node_for_each_call(struct sockaddr *,void (*call_func)(void *data));
+
+extern int cfg_init(void);
+extern void cfg_destroy(void);
 
 #endif

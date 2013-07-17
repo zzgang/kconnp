@@ -21,33 +21,4 @@ extern int connpd_unused_fds_pop(void);
 extern int connpd_close_pending_fds_push(int fd);
 extern int connpd_close_pending_fds_pop(void);
 
-
-extern rwlock_t connpd_lock;
-/* connpd lock funcions */
-static inline void connpd_rwlock_init(void) 
-{
-    rwlock_init(&connpd_lock);
-}
-
-static inline void connpd_rlock(void)
-{
-    read_lock(&connpd_lock);
-}
-
-static inline void connpd_runlock(void)
-{
-    read_unlock(&connpd_lock);
-}
-
-static inline void connpd_wlock(void)
-{
-    write_lock(&connpd_lock);
-}
-
-static inline void connpd_wunlock(void)
-{
-    write_unlock(&connpd_lock);
-}
-
-/*end*/
 #endif

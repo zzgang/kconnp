@@ -11,6 +11,8 @@
 #include "connpd.h"
 #include "preconnect.h"
 
+rwlock_t connp_rwlock; //global connp read/write lock;
+
 static inline int insert_socket_to_connp(struct sockaddr *, struct socket *);
 static inline int insert_into_connp(struct sockaddr *, struct socket *);
 static inline int sock_remap_fd(int fd, struct socket *, struct socket *);
@@ -65,7 +67,7 @@ int insert_into_connp_if_permitted(int fd)
     struct sockaddr address;
     int err;
 
-    connpd_rlock();
+    connp_rlock();
 
     if (!CONNP_DAEMON_EXISTS() || INVOKED_BY_CONNP_DAEMON())
         goto ret_fail;
@@ -90,10 +92,10 @@ int insert_into_connp_if_permitted(int fd)
 
     err = insert_into_connp(&address, sock);
     
-    connpd_runlock();
+    connp_runlock();
     return err;
 ret_fail:
-    connpd_runlock();
+    connp_runlock();
     return 0;
 }
 
@@ -114,7 +116,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     struct socket *sock, *sock_new;
     int ret = 0; 
 
-    connpd_rlock(); 
+    connp_rlock(); 
 
     if (!CONNP_DAEMON_EXISTS()) {
         ret = 0;
@@ -147,7 +149,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     SET_CLIENT_FLAG(sock);
 
 ret_unlock:
-    connpd_runlock();
+    connp_runlock();
     return ret;
 }
 
@@ -165,6 +167,8 @@ void connp_sys_exit_prepare()
 
 int connp_init()
 {
+    connp_rwlock_init();
+
     if (!cfg_init()) {
         printk(KERN_ERR "Error: cfg_init error!\n");
         return 0;

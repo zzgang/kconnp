@@ -12,24 +12,22 @@
  *If the spare counts of conns lower than the MIN_SPARE_CONNECTIONS, create the conns.
  */
 
-static int do_preconnect(void *data);
-static int conn_init_count(void *data);
-static int do_conn_spec_check_close_flag(void *data);
+static void do_preconnect(void *data);
+static void conn_init_count(void *data);
+static void do_conn_spec_check_close_flag(void *data);
 
 static int do_create_connect(struct sockaddr_in *);
 
-static int conn_init_count(void *data)
+static void conn_init_count(void *data)
 {
     struct conn_node_t *conn_node;
     
     conn_node = (typeof(conn_node))data;
     conn_node->conn_all_count = 0;
     conn_node->conn_idle_count = 0;
-    
-    return 1;
 }
 
-static int do_preconnect(void *data)
+static void do_preconnect(void *data)
 {
     struct conn_node_t *conn_node;
     struct sockaddr_in address;
@@ -46,15 +44,15 @@ static int do_preconnect(void *data)
     //set close flag for one group conns.
     if (idle_count > MAX_SPARE_CONNECTIONS) {
         conn_node->conn_close_now = 1;
-        return 1;
+        return;
     }
     
     //do preconnect
     for (i = MIN_SPARE_CONNECTIONS - idle_count; i > 0; i--)
         if (!do_create_connect(&address))
-            return 0;
+            return;
 
-    return 1;
+    return;
 }
 
 static int do_create_connect(struct sockaddr_in *address)
@@ -84,7 +82,7 @@ void scan_spare_conns_preconnect()
 }
 
 static int conn_close_flag = 0; 
-static int do_conn_spec_check_close_flag(void *data)
+static void do_conn_spec_check_close_flag(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
 
@@ -92,8 +90,6 @@ static int do_conn_spec_check_close_flag(void *data)
         conn_close_flag = conn_node->conn_close_now;
         conn_node->conn_close_now = 0; //clear the close flag.
     }
-
-    return 1;
 }
 
 int conn_spec_check_close_flag(struct sockaddr *address)
@@ -104,25 +100,23 @@ int conn_spec_check_close_flag(struct sockaddr *address)
 }
 
 static int g_count = 0;
-static int do_conn_add_all_count(void *data)
+static void do_conn_add_all_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
 
     conn_node->conn_all_count += g_count;
-    return conn_node->conn_all_count;
 }
 
-static int do_conn_add_idle_count(void *data)
+static void do_conn_add_idle_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
     
     conn_node->conn_idle_count += g_count;
-    return conn_node->conn_idle_count;
 }
 
 int conn_add_count(struct sockaddr *addr, int count, int count_type)
 {
-   int (*conn_add_count_func)(void *data);
+   void (*conn_add_count_func)(void *data);
 
    g_count = count;
 

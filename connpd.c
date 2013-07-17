@@ -1,5 +1,6 @@
 #include <linux/kthread.h>
 #include "connpd.h"
+#include "connp.h"
 #include "sockp.h"
 #include "sys_call.h"
 #include "preconnect.h"
@@ -9,7 +10,6 @@
 #define CONNP_DAEMON_SET(v) (connp_daemon = (v))
 
 
-rwlock_t connpd_lock;
 struct task_struct * volatile connp_daemon;
 
 static int connpd_func(void *data);
@@ -262,9 +262,9 @@ static int connpd_func(void *data)
 
         if (kthread_should_stop()) {
 
-            connpd_wlock();
+            connp_wlock();
             CONNP_DAEMON_SET(NULL);
-            connpd_wunlock();
+            connp_wunlock();
            
             connpd_unused_fds_put(); 
             do_close_timeout_pending_fds();
@@ -275,7 +275,10 @@ static int connpd_func(void *data)
         } else {
 
             connpd_unused_fds_prefetch();
+
+            connp_rlock();
             shutdown_timeout_or_preconnect();
+            connp_runlock();
 
         }
 
@@ -311,8 +314,6 @@ static void connpd_stop(void)
 
 int connpd_init()
 {
-    connpd_rwlock_init();
-
     connpd_unused_fds_init();
     connpd_close_pending_fds_init();
 

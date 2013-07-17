@@ -262,7 +262,6 @@ void sockp_get_fds(struct list_head *fds_list)
 
 /**
  *To scan all sock pool to close the expired or all sockets. The caller is kconnpd.
- *type: 0 expired;1 all;
  */
 void shutdown_sock_list(shutdown_way_t shutdown_way)
 {
@@ -277,8 +276,8 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
         if (shutdown_way == SHUTDOWN_ALL) //shutdown all repeatly!
             goto shutdown;
 
-        if (p->connpd_fd < 0)
-            continue;
+        if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p)) 
+            goto shutdown;
 
         if (p->sock_in_use) {
             conn_add_all_count(&p->address, 1);
@@ -290,8 +289,7 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
             goto shutdown;
         }
 
-        if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p) 
-                || SOCK_IS_RECLAIM_PASSIVE(p) 
+        if (SOCK_IS_RECLAIM_PASSIVE(p) 
                 || (SOCK_IS_RECLAIM(p)
                     && (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;

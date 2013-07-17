@@ -115,6 +115,7 @@ int _hash_init(struct hash_table_t **ht_ptr, unsigned int tsize,
     (*ht_ptr)->buckets = lkmalloc((*ht_ptr)->table_size * sizeof(struct hash_bucket_t *));
     if (!(*ht_ptr)->buckets) {
         lkmfree(*ht_ptr);
+        *ht_ptr = NULL;
         return 0;
     }
     
