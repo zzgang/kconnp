@@ -43,7 +43,7 @@ static inline int insert_into_connp(struct sockaddr *servaddr, struct socket *so
 
     fc = file_count_read(sock->file);
 
-    if (fc == 1) {
+    if (fc == 1) { //To insert
         if (!cfg_conn_is_positive(servaddr))
            return 0; 
 
@@ -55,6 +55,7 @@ static inline int insert_into_connp(struct sockaddr *servaddr, struct socket *so
         return insert_socket_to_connp(servaddr, sock);
     }
 
+    //To free
     if (fc == 2 && free_socket_to_sockp(servaddr, sock)) 
         return 1;
 
@@ -81,9 +82,6 @@ int insert_into_connp_if_permitted(int fd)
 
     err = getsockservaddr(sock, &address);
     if (err)
-        goto ret_fail;
-
-    if (!cfg_conn_acl_allowd(&address))
         goto ret_fail;
 
     if (address.sa_family != AF_INET 

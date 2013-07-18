@@ -185,12 +185,12 @@ static struct socket_bucket SB[NR_SOCKET_BUCKET];
 
 static inline unsigned int _hashfn(struct sockaddr_in *address)
 {
-    return (unsigned)(((*address).sin_port ^ (*address).sin_addr.s_addr) % NR_HASH);
+    return (unsigned)((*address).sin_port ^ (*address).sin_addr.s_addr) % NR_HASH;
 }
 
 static inline unsigned int _shashfn(struct sockaddr_in *address, struct socket *s)
 {
-    return (unsigned)(((*address).sin_port ^ (*address).sin_addr.s_addr ^ (unsigned long)s) % NR_SHASH);
+    return (unsigned)((*address).sin_port ^ (*address).sin_addr.s_addr ^ (unsigned long)s) % NR_SHASH;
 }
 
 /**
@@ -276,9 +276,6 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
         if (shutdown_way == SHUTDOWN_ALL) //shutdown all repeatly!
             goto shutdown;
 
-        if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p)) 
-            goto shutdown;
-
         if (p->sock_in_use) {
             conn_add_all_count(&p->address, 1);
             continue;
@@ -289,7 +286,8 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
             goto shutdown;
         }
 
-        if (SOCK_IS_RECLAIM_PASSIVE(p) 
+        if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p)
+                || SOCK_IS_RECLAIM_PASSIVE(p) 
                 || (SOCK_IS_RECLAIM(p)
                     && (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;
