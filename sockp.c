@@ -321,6 +321,8 @@ shutdown:
             LOOP_COUNT_LOCAL_DEFINE(local_loop_count);
             LOOP_COUNT_SAVE(local_loop_count);
 
+            LOOP_COUNT_RESET();
+
             if (IN_HLIST(HASH(&p->address), p))
                 REMOVE_FROM_HLIST(HASH(&p->address), p);
             if (IN_SHLIST(SHASH(&p->address, p->sock), p))
