@@ -275,10 +275,7 @@ static int connpd_func(void *data)
         } else {
 
             connpd_unused_fds_prefetch();
-
-            connp_rlock();
             shutdown_timeout_or_preconnect();
-            connp_runlock();
 
         }
 

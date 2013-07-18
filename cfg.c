@@ -778,7 +778,10 @@ static int cfg_iports_list_reload(struct cfg_entry *ce)
 #define iport_in_denied_list(addr) iport_in_list((struct sockaddr_in *)addr, &cfg->dl)
 
 #define iport_in_list_for_each_call(addr, ce, call_func) iport_in_list_check_or_call(addr, ce, call_func)
-static inline struct conn_node_t *iport_in_list_check_or_call(struct sockaddr_in *addr, struct cfg_entry *ce, void (*call_func)(void *data))
+
+static inline struct conn_node_t *iport_in_list_check_or_call(
+        struct sockaddr_in *addr, struct cfg_entry *ce, 
+        void (*call_func)(void *data))
 {
     struct iport_t zip_port, ip_zport, ip_port, **p;
     struct iport_t *iport_list[] = {&ip_port, &ip_zport, &zip_port, NULL}; 

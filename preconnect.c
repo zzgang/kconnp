@@ -116,7 +116,7 @@ static void do_conn_add_idle_count(void *data)
 
 int conn_add_count(struct sockaddr *addr, int count, int count_type)
 {
-   void (*conn_add_count_func)(void *data);
+   void (*conn_add_count_func)(void *data) = NULL;
 
    g_count = count;
 
@@ -124,8 +124,6 @@ int conn_add_count(struct sockaddr *addr, int count, int count_type)
        conn_add_count_func = do_conn_add_all_count;
    else if (count_type == IDLE_COUNT)
        conn_add_count_func = do_conn_add_idle_count;
-   else
-       return 0;
 
    cfg_allowd_iport_node_for_each_call(addr, conn_add_count_func); 
 
