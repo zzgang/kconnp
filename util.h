@@ -35,7 +35,7 @@ struct fd_entry {
 #define lkmalloc(size) kzalloc(size, GFP_ATOMIC)
 #define lkmfree(ptr) kfree(ptr)
 
-//#define SOCK_CLIENT_TAG 1 << (sizeof(unsigned long)*8 - 1)
+//#define SOCK_CLIENT_TAG 1 << (sizeof(unsigned int)*8 - 1)
 
 #define SOCK_CLIENT_TAG 0x10000000
 
