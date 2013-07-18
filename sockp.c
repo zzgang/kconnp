@@ -148,17 +148,32 @@
 
 #if DEBUG_ON
 
-static int loop_count = 0;
+static unsigned int loop_count = 0;
 #define LOOP_COUNT_SAFE_CHECK(ptr) do { \
     if (++loop_count > NR_SOCKET_BUCKET) { \
     printk(KERN_ERR "Loop count overflow, function: %s, line: %d\n", __FUNCTION__, __LINE__);    \
     } \
 } while(0)
+
+#define LOOP_COUNT_LOCAL_DEFINE(var_name) unsigned int var_name
+
+#define LOOP_COUNT_SAVE(local) do { \
+    local = loop_count; \
+} while(0) 
+
+#define LOOP_COUNT_RESTORE(local) do {   \
+    loop_count = local;   \
+} while(0)
+
+#define LOOP_COUNT_VALUE() (loop_count)
 #define LOOP_COUNT_RESET() (loop_count = 0)
 
 #else
 
 #define LOOP_COUNT_SAFE_CHECK(ptr)
+#define LOOP_COUNT_LOCAL_DEFINE(var)
+#define LOOP_COUNT_SAVE(local)
+#define LOOP_COUNT_RESTORE(local)
 #define LOOP_COUNT_RESET()
 
 #endif
@@ -302,15 +317,22 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
         continue;
 
 shutdown:
-        if (IN_HLIST(HASH(&p->address), p))
-            REMOVE_FROM_HLIST(HASH(&p->address), p);
-        if (IN_SHLIST(SHASH(&p->address, p->sock), p))
-            REMOVE_FROM_SHLIST(SHASH(&p->address, p->sock), p);
-        REMOVE_FROM_TLIST(p);
+        {
+            LOOP_COUNT_LOCAL_DEFINE(local_loop_count);
+            LOOP_COUNT_SAVE(local_loop_count);
 
-        PUT_SB(p);
+            if (IN_HLIST(HASH(&p->address), p))
+                REMOVE_FROM_HLIST(HASH(&p->address), p);
+            if (IN_SHLIST(SHASH(&p->address, p->sock), p))
+                REMOVE_FROM_SHLIST(SHASH(&p->address, p->sock), p);
+            REMOVE_FROM_TLIST(p);
 
-        orig_sys_close(p->connpd_fd);
+            PUT_SB(p);
+
+            orig_sys_close(p->connpd_fd);
+
+            LOOP_COUNT_RESTORE(local_loop_count);
+        }
     }
 
     LOOP_COUNT_RESET();
