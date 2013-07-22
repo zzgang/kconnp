@@ -43,17 +43,9 @@ static inline int insert_into_connp(struct sockaddr *servaddr, struct socket *so
 
     fc = file_count_read(sock->file);
 
-    if (fc == 1) { //To insert
-        if (!cfg_conn_is_positive(servaddr))
-           return 0; 
-
-        if (!SOCK_ESTABLISHED(sock)) {
-            cfg_conn_set_passive(servaddr); //May be passive sock.
-            return 0;
-        }
-        
-        return insert_socket_to_connp(servaddr, sock);
-    }
+    //To insert
+    if (fc == 1 && insert_socket_to_connp(servaddr, sock))
+        return 1;
 
     //To free
     if (fc == 2 && free_socket_to_sockp(servaddr, sock)) 
@@ -88,6 +80,14 @@ int insert_into_connp_if_permitted(int fd)
             || IN_LOOPBACK(ntohl(((struct sockaddr_in *)&address)->sin_addr.s_addr))) 
         goto ret_fail;
 
+    if (!SOCK_ESTABLISHED(sock)) {
+        cfg_conn_set_passive(&address); //May be passive sock.
+        goto ret_fail;
+    }
+
+    if (!cfg_conn_is_positive(&address))
+        goto ret_fail;
+    
     err = insert_into_connp(&address, sock);
     
     connp_runlock();

@@ -245,7 +245,9 @@ break_timeout:
 static int shutdown_timeout_or_preconnect()
 {
     if (connp_fds_events_or_timout()) {
+        connp_wlock();
         do_close_timeout_pending_fds();
+        connp_wunlock();
         scan_spare_conns_preconnect(); 
     }
     
@@ -263,12 +265,14 @@ static int connpd_func(void *data)
         if (kthread_should_stop()) {
 
             connp_wlock();
-            CONNP_DAEMON_SET(NULL);
-            connp_wunlock();
            
             connpd_unused_fds_put(); 
             do_close_timeout_pending_fds();
             close_all_files();
+
+            CONNP_DAEMON_SET(NULL);
+
+            connp_wunlock();
 
             break;
 

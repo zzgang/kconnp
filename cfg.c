@@ -117,7 +117,6 @@ struct cfg_dir {
     struct cfg_entry allowed_list;
 #define al allowed_list
 #define al_ptr allowed_list.cfg_ptr
-#define al_mtime allowed_list.f_mtime
 #define al_rwlock allowed_list.cfg_rwlock
 #define al_init(cfg_entry_ptr) allowed_list.init(cfg_entry_ptr)
 #define al_destory(cfg_entry_ptr) allowed_list.destroy(cfg_entry_ptr)
@@ -125,7 +124,6 @@ struct cfg_dir {
     struct cfg_entry denied_list;
 #define dl denied_list
 #define dl_ptr denied_list.cfg_ptr
-#define dl_mtime denied_list.f_mtime
 #define dl_rwlock denied_list.cfg_rwlock
 #define dl_init(cfg_entry_ptr) denied_list.init(cfg_entry_ptr)
 #define dl_destory(cfg_entry_ptr) denied_list.destroy(cfg_entry_ptr)
@@ -257,6 +255,7 @@ static inline struct cfg_entry *get_ce(void *data)
         if (p == data)
             return p;
     }
+
     return NULL;
 }
 
@@ -774,7 +773,7 @@ static int cfg_iports_list_reload(struct cfg_entry *ce)
 }
 
 #define iport_in_list(addr, ce) iport_in_list_check_or_call(addr, ce, NULL)
-#define iport_in_allowd_list(addr) iport_in_list((struct sockaddr_in *)addr, &cfg->al)
+#define iport_in_allowed_list(addr) iport_in_list((struct sockaddr_in *)addr, &cfg->al)
 #define iport_in_denied_list(addr) iport_in_list((struct sockaddr_in *)addr, &cfg->dl)
 
 #define iport_in_list_for_each_call(addr, ce, call_func) iport_in_list_check_or_call(addr, ce, call_func)
@@ -787,13 +786,11 @@ static inline struct conn_node_t *iport_in_list_check_or_call(
     struct iport_t *iport_list[] = {&ip_port, &ip_zport, &zip_port, NULL}; 
     struct hash_table_t *ht_ptr;
 
-    read_lock(&ce->cfg_rwlock);
-
     ht_ptr = (struct hash_table_t *)ce->cfg_ptr;
 
     if (!ht_ptr)
-        goto unlock_ret;
-    
+        return NULL;
+        
     for (p = &iport_list[0]; *p; p++) 
         memset(*p, 0, sizeof(struct iport_t));
 
@@ -806,7 +803,7 @@ static inline struct conn_node_t *iport_in_list_check_or_call(
     ip_port.ip = addr->sin_addr.s_addr;
     ip_port.port = addr->sin_port;
 
-    for (p = &iport_list[0]; *p; p++) {
+    for (p = &iport_list[0]; (*p); p++) {
         struct conn_node_t *tmp;
 
         if (hash_find(ht_ptr, 
@@ -814,14 +811,11 @@ static inline struct conn_node_t *iport_in_list_check_or_call(
             if (call_func)
                 call_func(tmp);
             else {
-                read_unlock(&ce->cfg_rwlock);
                 return tmp;
             }
         }
     }
 
-unlock_ret: 
-    read_unlock(&ce->cfg_rwlock); 
     return NULL;
 }
 
@@ -856,12 +850,16 @@ int cfg_conn_op(struct sockaddr *address, int op_type)
     struct conn_node_t *conn_node;
     int ret = 1;
 
-    if (iport_in_denied_list(address))
+    read_lock(&cfg->dl_rwlock);
+    if (iport_in_denied_list(address)) {
+        read_unlock(&cfg->dl_rwlock);
         return 0;
+    }
+    read_unlock(&cfg->dl_rwlock);
    
     read_lock(&cfg->al_rwlock);
 
-    conn_node = iport_in_allowd_list(address); 
+    conn_node = iport_in_allowed_list(address); 
     if (!conn_node) {
         ret = 0;
         goto unlock_ret;
@@ -926,5 +924,7 @@ unlock_ret:
 void cfg_allowd_iport_node_for_each_call(struct sockaddr *addr, 
         void (*call_func)(void *data)) 
 {
+    read_lock(&cfg->al_rwlock);
     iport_in_list_for_each_call((struct sockaddr_in *)addr, &cfg->al, call_func);
+    read_unlock(&cfg->al_rwlock);
 }

@@ -282,6 +282,8 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
 {
     struct socket_bucket *p; 
 
+    BUG_ON(!INVOKED_BY_CONNP_DAEMON());
+
     SOCKP_LOCK();
 
     for (p = ht.sb_trav_head; p; p = p->sb_trav_next) {
@@ -291,23 +293,21 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
         if (shutdown_way == SHUTDOWN_ALL) //shutdown all repeatly!
             goto shutdown;
 
-        if (p->sock_in_use) {
-            conn_add_all_count(&p->address, 1);
-            continue;
-        }
-
         if (!SOCK_ESTABLISHED(p->sock)) {
             cfg_conn_set_passive(&p->address);
             goto shutdown;
         }
-
+        
         if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p)
                 || SOCK_IS_RECLAIM_PASSIVE(p) 
                 || (SOCK_IS_RECLAIM(p)
+                    && (jiffies - p->last_used_jiffies > TIMEOUT * HZ))
+                || (SOCK_IS_PRECONNECT(p) 
+                    && p->sock_in_use 
                     && (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;
 
-        //luckly, selected as idle conn.
+        //Luckly, selected as idle conn.
         if (conn_spec_check_close_flag(&p->address))
             goto shutdown;
 
