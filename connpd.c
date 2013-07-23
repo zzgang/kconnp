@@ -278,6 +278,7 @@ static int connpd_func(void *data)
 
         } else {
 
+            conn_stats_info_dump();
             connpd_unused_fds_prefetch();
             shutdown_timeout_or_preconnect();
 

@@ -311,8 +311,8 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
         if (conn_spec_check_close_flag(&p->address))
             goto shutdown;
 
-        conn_add_idle_count(&p->address, 1);
-        conn_add_all_count(&p->address, 1);
+        conn_add_idle_count(&p->address);
+        conn_add_all_count(&p->address);
 
         continue;
 

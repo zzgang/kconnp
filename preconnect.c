@@ -4,6 +4,7 @@
 #include "preconnect.h"
 #include "util.h"
 #include "sys_call.h"
+#include "connp.h"
 
 /*
  *Scan cfg entries to find the spare conns.
@@ -14,7 +15,6 @@
 
 static void do_preconnect(void *data);
 static void conn_init_count(void *data);
-static void do_conn_spec_check_close_flag(void *data);
 
 static int do_create_connect(struct sockaddr_in *);
 
@@ -35,6 +35,10 @@ static void do_preconnect(void *data)
     int i;
 
     conn_node = (typeof(conn_node))data;
+
+    if (conn_node->conn_ip == 0 || conn_node->conn_port == 0)
+        return;
+
     idle_count = conn_node->conn_idle_count;    
  
     address.sin_family = AF_INET;
@@ -78,56 +82,5 @@ static int do_create_connect(struct sockaddr_in *address)
 void scan_spare_conns_preconnect()
 {
     cfg_allowed_entries_for_each_call(do_preconnect);
-    cfg_allowed_entries_for_each_call_directly(conn_init_count);
-}
-
-static int conn_close_flag = 0; 
-static void do_conn_spec_check_close_flag(void *data)
-{
-    struct conn_node_t *conn_node = (typeof(conn_node))data;
-
-    if (conn_node->conn_ip != 0 && conn_node->conn_port != 0) {
-        conn_close_flag = conn_node->conn_close_now;
-        conn_node->conn_close_now = 0; //clear the close flag.
-    }
-}
-
-int conn_spec_check_close_flag(struct sockaddr *address)
-{
-   conn_close_flag = 0;
-   cfg_allowd_iport_node_for_each_call(address, do_conn_spec_check_close_flag); 
-   return conn_close_flag;
-}
-
-static int g_count = 0;
-static void do_conn_add_all_count(void *data)
-{
-    struct conn_node_t *conn_node = (typeof(conn_node))data;
-
-    conn_node->conn_all_count += g_count;
-}
-
-static void do_conn_add_idle_count(void *data)
-{
-    struct conn_node_t *conn_node = (typeof(conn_node))data;
-    
-    conn_node->conn_idle_count += g_count;
-}
-
-int conn_add_count(struct sockaddr *addr, int count, int count_type)
-{
-   void (*conn_add_count_func)(void *data) = NULL;
-
-   g_count = count;
-
-   if (count_type == ALL_COUNT)
-       conn_add_count_func = do_conn_add_all_count;
-   else if (count_type == IDLE_COUNT)
-       conn_add_count_func = do_conn_add_idle_count;
-
-   cfg_allowd_iport_node_for_each_call(addr, conn_add_count_func); 
-
-   g_count = 0;
-
-   return count;
+    cfg_allowed_entries_for_each_call(conn_init_count);
 }

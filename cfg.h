@@ -16,10 +16,21 @@ struct cfg_entry {
     void *cfg_ptr; /*handle the cfg storage*/
     rwlock_t cfg_rwlock;
 
+
+    /*proc r/w funcs*/
+    int (*proc_read)(char *buffer,
+                    char **buffer_location,
+                            off_t offset, int buffer_length, int *eof, void *data);
+    int (*proc_write)(struct file *file, const char *buffer, unsigned long count, 
+            void *data);
+
     /*cfg funcs*/
     int (*init)(struct cfg_entry *); 
     void (*destroy)(struct cfg_entry *); 
-    int (*reload)(struct cfg_entry *); 
+
+    int (*entity_init)(struct cfg_entry *);
+    void (*entity_destroy)(struct cfg_entry *);
+    int (*entity_reload)(struct cfg_entry *); 
 };
 
 struct iport_t {
@@ -36,6 +47,8 @@ struct conn_node_t {
 #define conn_close_now conn_attrs.close_now
 #define conn_all_count conn_attrs.stats.all_count
 #define conn_idle_count conn_attrs.stats.idle_count
+#define conn_connected_all_count conn_attrs.stats.connected_all_count
+#define conn_connected_hit_count conn_attrs.stats.connected_hit_count
 };
 
 struct iport_str_t {
@@ -66,15 +79,11 @@ struct iport_pos_t {
 #define cfg_conn_acl_spec_allowd(addr) cfg_conn_op(addr, ACL_SPEC_CHECK)
 #define cfg_conn_is_positive(addr) cfg_conn_op(addr, POSITIVE_CHECK)
 #define cfg_conn_set_passive(addr) cfg_conn_op(addr, PASSIVE_SET)
-extern int cfg_conn_op(struct sockaddr *address, int op_type);
+extern int cfg_conn_op(struct sockaddr *addr, int op_type);
 
-#define CALL_CHECK 0
-#define CALL_DIRECTLY 1
-#define cfg_allowed_entries_for_each_call(call_func) do_cfg_allowed_entries_for_each_call(call_func, CALL_CHECK)
-#define cfg_allowed_entries_for_each_call_directly(call_func) do_cfg_allowed_entries_for_each_call(call_func, CALL_DIRECTLY)
-extern void do_cfg_allowed_entries_for_each_call(void (*call_func)(void *data), int type);
+extern void cfg_allowed_entries_for_each_call(void (*call_func)(void *data));
 
-extern void cfg_allowd_iport_node_for_each_call(struct sockaddr *,void (*call_func)(void *data));
+extern void cfg_allowd_iport_node_for_each_call(unsigned int ip, unsigned short int port ,void (*call_func)(void *data));
 
 extern int cfg_init(void);
 extern void cfg_destroy(void);

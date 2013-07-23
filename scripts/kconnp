@@ -3,6 +3,7 @@
 help(){
     cat <<EOF
 Kconnp actions:
+    stats
     ldcfg
     start
     stop
@@ -14,6 +15,10 @@ exit;
 kv=`uname -r`;
 kmconnp="/lib/modules/$kv/kernel/net/kconnp/kconnp.ko"
 net_iports_cfgs="iports.allow iports.deny"
+
+stats(){
+    cat /proc/kconnp/stats.info
+}
 
 ldcfg(){
     for f in $net_iports_cfgs 
@@ -46,6 +51,9 @@ fi
 while [ $# -gt 0 ]
 do
     case "$1" in
+        stats)
+            stats;
+            ;;
         ldcfg)
             ldcfg;
             ;;
