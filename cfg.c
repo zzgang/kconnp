@@ -1088,7 +1088,7 @@ void cfg_allowd_iport_node_for_each_call(unsigned int ip, unsigned short int por
 
 void conn_stats_info_dump(void)
 {
-    const char *conn_stat_str_fmt = "%s:%u, Mode: %s, Hits: %lu(%d.0%), Misses: %lu(%d.0%)\n";
+    const char *conn_stat_str_fmt = "%s:%u, Mode: %s, Hits: %lu(%u.0%), Misses: %lu(%u.0%)\n";
     char *buffer;
     struct hash_bucket_t *pos;
     int offset = 0;
@@ -1113,7 +1113,7 @@ void conn_stats_info_dump(void)
         unsigned short int port;
         unsigned long all_count, misses_count, hits_count;
         unsigned int misses_percent, hits_percent; 
-        char mode[32];
+        char mode[16];
         char ip_str[16], *ip_ptr;
         int l;
         
@@ -1147,7 +1147,9 @@ void conn_stats_info_dump(void)
 
         buffer = lkmalloc(128);
         
-        l = sprintf(buffer, conn_stat_str_fmt, ip_ptr, port, mode, 
+        l = sprintf(buffer, conn_stat_str_fmt, 
+                ip_ptr, port, 
+                mode, 
                 hits_count, hits_percent,
                 misses_count, misses_percent);
 
