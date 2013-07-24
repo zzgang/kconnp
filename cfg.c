@@ -1088,7 +1088,7 @@ void cfg_allowd_iport_node_for_each_call(unsigned int ip, unsigned short int por
 
 void conn_stats_info_dump(void)
 {
-    const char *conn_stat_str_fmt = "%s:%u, Mode: %s, Hits: %lu, Misses: %lu\n";
+    const char *conn_stat_str_fmt = "%s:%u, Mode: %s, Hits: %lu(%d.0%), Misses: %lu(%d.0%)\n";
     char *buffer;
     struct hash_bucket_t *pos;
     int offset = 0;
@@ -1111,7 +1111,8 @@ void conn_stats_info_dump(void)
         struct conn_node_t *conn_node;
         unsigned int ip;
         unsigned short int port;
-        unsigned long all_count, miss_count, hits_count;
+        unsigned long all_count, misses_count, hits_count;
+        unsigned int misses_percent, hits_percent; 
         char mode[32];
         char ip_str[16], *ip_ptr;
         int l;
@@ -1131,14 +1132,24 @@ void conn_stats_info_dump(void)
             ip_ptr = ip_ntoa(ip);
            
         port = ntohs(conn_node->conn_port);
+        
         all_count = lkm_atomic_read(&conn_node->conn_connected_all_count);
         hits_count = lkm_atomic_read(&conn_node->conn_connected_hit_count);
-        miss_count = all_count - hits_count;
+        misses_count = all_count - hits_count;
+
+        if (all_count == 0) {
+            misses_percent = 0;
+            hits_percent = 0;
+        } else {
+            misses_percent = (misses_count * 100) / all_count;
+            hits_percent = 100 - misses_percent;
+        }
 
         buffer = lkmalloc(128);
         
         l = sprintf(buffer, conn_stat_str_fmt, ip_ptr, port, mode, 
-                hits_count, miss_count);
+                hits_count, hits_percent,
+                misses_count, misses_percent);
 
         if (l > (PAGE_SIZE - cfg->st_len)) {
             lkmfree(buffer);
