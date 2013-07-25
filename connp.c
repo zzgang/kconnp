@@ -12,16 +12,18 @@
 
 rwlock_t connp_rwlock; //global connp read/write lock;
 
-static void do_conn_spec_check_close_flag(void *data);
-static void do_conn_add_all_count(void *data);
-static void do_conn_add_idle_count(void *data);
+static inline void do_conn_spec_check_close_flag(void *data);
+static inline void do_conn_add_all_count(void *data);
+static inline void do_conn_add_idle_count(void *data);
+static inline void do_conn_add_connected_all_count(void *data);
+static inline void do_conn_add_connected_hit_count(void *data);
 
 static inline int insert_socket_to_connp(struct sockaddr *, struct socket *);
 static inline int insert_into_connp(struct sockaddr *, struct socket *);
 static inline int sock_remap_fd(int fd, struct socket *, struct socket *);
 
 static int conn_close_flag = 0; 
-static void do_conn_spec_check_close_flag(void *data)
+static inline void do_conn_spec_check_close_flag(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
 
@@ -44,28 +46,28 @@ int conn_spec_check_close_flag(struct sockaddr *address)
    return conn_close_flag;
 }
 
-static void do_conn_add_all_count(void *data)
+static inline void do_conn_add_all_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
 
     conn_node->conn_all_count += 1;
 }
 
-static void do_conn_add_idle_count(void *data)
+static inline void do_conn_add_idle_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
     
     conn_node->conn_idle_count += 1;
 }
 
-static void do_conn_add_connected_all_count(void *data)
+static inline void do_conn_add_connected_all_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
     
     lkm_atomic_add(&conn_node->conn_connected_all_count, 1);
 }
 
-static void do_conn_add_connected_hit_count(void *data)
+static inline void do_conn_add_connected_hit_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
 
