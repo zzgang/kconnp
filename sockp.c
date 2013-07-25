@@ -331,7 +331,7 @@ shutdown:
 
             PUT_SB(p);
 
-            orig_sys_close(p->connpd_fd);
+            connpd_close_pending_fds_push(p->connpd_fd);
 
             LOOP_COUNT_RESTORE(local_loop_count);
         }

@@ -21,7 +21,12 @@ static void connpd_unused_fds_put(void);
 
 static int shutdown_timeout_or_preconnect(void);
 static int connp_fds_events_or_timout(void);
-static void do_close_timeout_pending_fds(void);
+
+#define CLOSE_ALL 0
+#define CLOSE_TIMEOUT 1
+#define close_all_files() do_close_files(CLOSE_ALL)
+#define close_timeout_files() do_close_files(CLOSE_TIMEOUT)
+static void do_close_files(int close_type);
 
 static int connpd_unused_fds_init(void);
 static inline int connpd_unused_fds_is_empty(void);
@@ -162,11 +167,14 @@ static void connpd_unused_fds_put()
         put_unused_fd(fd);
 }
 
-static void do_close_timeout_pending_fds()
+static void do_close_files(int close_type)
 {
     int fd;
 
-    shutdown_timeout_sock_list();
+    if (close_type == CLOSE_ALL)
+        shutdown_all_sock_list();
+    else 
+        shutdown_timeout_sock_list();
 
     while ((fd = connpd_close_pending_fds_pop()) >= 0)
         orig_sys_close(fd);
@@ -245,9 +253,8 @@ break_timeout:
 static int shutdown_timeout_or_preconnect()
 {
     if (connp_fds_events_or_timout()) {
-        connp_wlock();
-        do_close_timeout_pending_fds();
-        connp_wunlock();
+        
+        close_timeout_files();
         scan_spare_conns_preconnect(); 
     }
     
@@ -267,7 +274,6 @@ static int connpd_func(void *data)
             connp_wlock();
            
             connpd_unused_fds_put(); 
-            do_close_timeout_pending_fds();
             close_all_files();
 
             CONNP_DAEMON_SET(NULL);
