@@ -216,6 +216,8 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
 
     SOCKP_LOCK();
 
+    conn_add_connected_all_count(address);
+
     for (p = HASH(address); p; p = p->sb_next) { 
 
         LOOP_COUNT_SAFE_CHECK(p);
@@ -232,6 +234,8 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
 
             REMOVE_FROM_HLIST(HASH(address), p);
 
+            conn_add_connected_hit_count(address);
+            
             LOOP_COUNT_RESET();
            
             SOCKP_UNLOCK();

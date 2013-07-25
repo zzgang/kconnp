@@ -22,7 +22,7 @@ static inline int insert_socket_to_connp(struct sockaddr *, struct socket *);
 static inline int insert_into_connp(struct sockaddr *, struct socket *);
 static inline int sock_remap_fd(int fd, struct socket *, struct socket *);
 
-static int conn_close_flag = 0; 
+static int conn_close_flag; 
 static void do_conn_spec_check_close_flag(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
@@ -42,7 +42,9 @@ int conn_spec_check_close_flag(struct sockaddr *address)
    port = ((struct sockaddr_in *)address)->sin_port;
 
    conn_close_flag = 0;
+
    cfg_allowd_iport_node_for_each_call(ip, port, do_conn_spec_check_close_flag); 
+
    return conn_close_flag;
 }
 
@@ -50,28 +52,28 @@ static void do_conn_add_all_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
 
-    conn_node->conn_all_count += 1;
+    ++conn_node->conn_all_count;
 }
 
 static void do_conn_add_idle_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
     
-    conn_node->conn_idle_count += 1;
+    ++conn_node->conn_idle_count;
 }
 
 static void do_conn_add_connected_all_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
     
-    lkm_atomic_add(&conn_node->conn_connected_all_count, 1);
+    ++conn_node->conn_connected_all_count;
 }
 
 static void do_conn_add_connected_hit_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
 
-    lkm_atomic_add(&conn_node->conn_connected_hit_count, 1);
+    ++conn_node->conn_connected_hit_count;
 }
 
 int conn_add_count(struct sockaddr *addr, int count_type)
@@ -218,13 +220,8 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         goto ret_unlock;
     }
 
-    //connected count stat
-
-    conn_add_connected_all_count(address);
-
     if ((sock_new = apply_socket_from_sockp(address))) {
         if (sock_remap_fd(fd, sock_new, sock)) {
-            conn_add_connected_hit_count(address);
             ret = 1;
             goto ret_unlock;
         }
