@@ -13,12 +13,12 @@
  *If the spare counts of conns lower than the MIN_SPARE_CONNECTIONS, create the conns.
  */
 
-static inline void do_preconnect(void *data);
-static inline void conn_init_count(void *data);
+static void do_preconnect(void *data);
+static void conn_init_count(void *data);
 
 static int do_create_connect(struct sockaddr_in *);
 
-static inline void conn_init_count(void *data)
+static void conn_init_count(void *data)
 {
     struct conn_node_t *conn_node;
     
@@ -27,7 +27,7 @@ static inline void conn_init_count(void *data)
     conn_node->conn_idle_count = 0;
 }
 
-static inline void do_preconnect(void *data)
+static void do_preconnect(void *data)
 {
     struct conn_node_t *conn_node;
     struct sockaddr_in address;
