@@ -10,6 +10,8 @@
 #define CFG_DENIED_IPORTS_FILE "iports.deny"
 #define CFG_CONN_STATS_INFO_FILE "stats.info"
 
+#define DUMP_INTERVAL 5 //seconds
+
 #define cfg_entries_walk_func_check(func_name)    \
     ({    \
         int __check_ret = 1;    \
@@ -1097,6 +1099,9 @@ void conn_stats_info_dump(void)
     struct hash_bucket_t *pos;
     int offset = 0;
 
+    if (wl->mtime - NOW_SECS < DUMP_INTERVAL)
+        return;
+
     write_lock(&cfg->st_rwlock);
 
     if (cfg->st_ptr) {
@@ -1172,6 +1177,8 @@ void conn_stats_info_dump(void)
         lkmfree(buffer);
 
     }
+
+    wl->mtime = NOW_SECS;
 
 unlock_ret:
 

@@ -14,6 +14,7 @@ struct cfg_entry {
     unsigned int raw_len; /*the data length read from the procfile*/
     char *raw_ptr; /*cfg raw data pointer*/ 
     void *cfg_ptr; /*handle the cfg storage*/
+    time_t mtime;
     rwlock_t cfg_rwlock;
 
 

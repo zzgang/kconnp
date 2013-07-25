@@ -23,6 +23,8 @@
 #include <linux/list.h>
 #include <linux/poll.h>
 
+#define NOW_SECS (CURRENT_TIME_SEC.tv_sec)
+
 #define NOTIFY_SIG (SIGINT)
 #define SEND_FORCE (1)
 #define notify(tskp) send_sig(NOTIFY_SIG, (tskp), SEND_FORCE)
