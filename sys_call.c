@@ -7,6 +7,7 @@
 #ifdef __NR_socketcall
 sys_socketcall_func_ptr_t orig_sys_socketcall = (void *)SYS_SOCKETCALL_EA;
 #endif
+
 sys_connect_func_ptr_t orig_sys_connect = (void *)SYS_CONNECT_EA;
 sys_shutdown_func_ptr_t orig_sys_shutdown = (void *)SYS_SHUTDOWN_EA;
 sys_close_func_ptr_t orig_sys_close = (void *)SYS_CLOSE_EA;
@@ -20,6 +21,7 @@ static sys_socketcall_func_ptr_t new_sys_socketcall = connp_sys_socketcall;
 static sys_connect_func_ptr_t new_sys_connect = connp_sys_connect;
 static sys_shutdown_func_ptr_t new_sys_shutdown = connp_sys_shutdown;
 #endif
+
 static sys_close_func_ptr_t new_sys_close = connp_sys_close;
 static sys_exit_func_ptr_t new_sys_exit = connp_sys_exit;
 static sys_exit_func_ptr_t new_sys_exit_group = connp_sys_exit_group;
@@ -100,6 +102,7 @@ static int build_syscall_func_table(unsigned long * sys_call_table)
     }
     return 1;
 }
+
 /**
  *@brief set syscall table.
  *@param flag: 0: replace 1: restore

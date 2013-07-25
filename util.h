@@ -12,9 +12,11 @@
 #include <linux/net.h>
 #include <linux/stat.h>
 #include <linux/sched.h>
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
 #include <linux/fdtable.h>
 #endif
+
 #include <asm/atomic.h>
 #include <linux/slab.h>
 #include <linux/rcupdate.h>
@@ -87,6 +89,7 @@ static inline int file_count_inc(struct file *filp, int i)
         __tmp = rcu_dereference(TASK_FILES(tsk)->fdt);  \
         rcu_read_unlock();  \
         __tmp;})
+
 #else
 
 #define TASK_FILES_FDT(tsk) ({   \
@@ -108,16 +111,19 @@ static inline int file_count_inc(struct file *filp, int i)
 static inline int lkm_get_unused_fd(void)
 {
     int fd;
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 10)
     fd = get_unused_fd_flags(0);
 #else
     fd = get_unused_fd();
 #endif
+
     return fd;
 }
 
 struct sockaddr_in;
 extern int lkm_create_tcp_connect(struct sockaddr_in *);
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 10)
 extern int lkm_sock_map_fd(struct socket *sock, int flags);
 #endif
@@ -189,14 +195,18 @@ static inline int fd_poll(int fd, int events, poll_table *pwait)
 
         //file = fget_light(fd, &fput_needed);
         file = lkm_get_file(fd); /*Needn't add f_count*/
+
         mask = POLLNVAL;
+
         if (file != NULL) {
             mask = DEFAULT_POLLMASK;
             if (file->f_op && file->f_op->poll) {
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
                 if (pwait)
                     set_pt_key(pwait, events);
 #endif
+
                 mask = file->f_op->poll(file, pwait);
             }
             /* Mask out unneeded events. */
@@ -227,19 +237,24 @@ static inline void TASK_GET_FDS(struct task_struct *tsk, struct list_head *fds_l
     for (;;) {
         unsigned long set;
         struct fd_entry *tmp;
+
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
         i = j * __NFDBITS;
 #else
         i = j * BITS_PER_LONG;
 #endif
+
         if (i >= fdt->max_fds)
             break;
+
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
         set = fdt->open_fds->fds_bits[j++];
 #else
         set = fdt->open_fds[j++];
 #endif
+
         while (set) {
+
             if (set & 1) {
                 /*Collect the fds list and must free mem space by caller.*/
                 tmp = (typeof(*tmp) *)lkmalloc(sizeof(typeof(*tmp)));
@@ -248,6 +263,7 @@ static inline void TASK_GET_FDS(struct task_struct *tsk, struct list_head *fds_l
             }
             i++;
             set >>= 1;
+
         }
     }
 }
@@ -258,8 +274,10 @@ static inline void task_fd_install(struct task_struct *tsk, int fd, struct file 
     struct files_struct *files = TASK_FILES(tsk);
 
     spin_lock(&files->file_lock);
+
     fdt = TASK_FILES_FDT(tsk);
     rcu_assign_pointer(fdt->fd[fd], filp);
+
     spin_unlock(&files->file_lock);
 }
 
@@ -285,16 +303,20 @@ static inline int getsockservaddr(struct socket *sock, struct sockaddr *address)
 static inline int is_sock_fd(int fd)
 {
     struct kstat statbuf;
+
     if(vfs_fstat(fd, &statbuf) < 0)
         return 0;
+
     return S_ISSOCK(statbuf.mode);
 }
 
 static inline time_t get_fmtime(char *fname)
 {
     struct kstat statbuf;
+
     if (vfs_stat(fname, &statbuf) < 0)
         return 0;
+
     return statbuf.mtime.tv_sec; 
 }
 
@@ -303,7 +325,9 @@ static inline time_t get_fmtime(char *fname)
 static inline void set_page_rw(unsigned long addr) 
 {
     unsigned int level;
+
     pte_t *pte = lookup_address(addr, &level);
+
     if (pte->pte & ~_PAGE_RW) 
         pte->pte |= _PAGE_RW;
 }
@@ -311,6 +335,7 @@ static inline void set_page_rw(unsigned long addr)
 static inline void set_page_ro(unsigned long addr) 
 {
     unsigned int level;
+
     pte_t *pte = lookup_address(addr, &level);
     pte->pte &= ~_PAGE_RW;
 }
@@ -320,7 +345,9 @@ static inline void set_page_ro(unsigned long addr)
 static inline void disable_page_protection(void) 
 {
     unsigned long value;
+
     asm volatile("mov %%cr0,%0" : "=r" (value));
+
     if (value & 0x00010000) {
         value &= ~0x00010000;
         asm volatile("mov %0,%%cr0": : "r" (value));
@@ -330,7 +357,9 @@ static inline void disable_page_protection(void)
 static inline void enable_page_protection(void) 
 {
     unsigned long value;
+
     asm volatile("mov %%cr0,%0" : "=r" (value));
+
     if (!(value & 0x00010000)) {
         value |= 0x00010000;
         asm volatile("mov %0,%%cr0": : "r" (value));

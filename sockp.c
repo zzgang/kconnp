@@ -145,7 +145,6 @@
 #define SOCK_IS_PRECONNECT(sb) ((sb)->sock_create_way == SOCK_PRECONNECT)
 #define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowd(&(sb)->address) && SOCK_IS_PRECONNECT(sb))
 
-
 #if DEBUG_ON
 
 static unsigned int loop_count = 0;
@@ -222,6 +221,7 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
         LOOP_COUNT_SAFE_CHECK(p);
 
         if (KEY_MATCH(address, &p->address)) {
+
             if (p->sock_in_use 
                     || !SOCK_ESTABLISHED(p->sock) 
                     || SOCK_IS_RECLAIM_PASSIVE(p))
@@ -237,6 +237,7 @@ struct socket *apply_socket_from_sockp(struct sockaddr *address)
             SOCKP_UNLOCK();
 
             return p->sock;
+
         }
     }
 
@@ -267,7 +268,9 @@ void sockp_get_fds(struct list_head *fds_list)
             break;
 
         tmp->fd = p->connpd_fd;
+
         list_add_tail(&tmp->siblings, fds_list);  
+
     }
 
     LOOP_COUNT_RESET();
@@ -367,6 +370,7 @@ struct socket_bucket *free_socket_to_sockp(struct sockaddr *address, struct sock
 
             INSERT_INTO_HLIST(HASH(address), sb);
         }
+
     }
 
     LOOP_COUNT_RESET();
@@ -394,7 +398,9 @@ static struct socket_bucket *get_empty_slot(void)
     p = ht.sb_free_p;
 
     do {
+
         LOOP_COUNT_SAFE_CHECK(p);
+
         if (!p->sb_in_use) {
             ht.sb_free_p = p->sb_free_next;
             LOOP_COUNT_RESET();
@@ -413,12 +419,14 @@ static struct socket_bucket *get_empty_slot(void)
 #endif
 
         p = p->sb_free_next;
+
     } while (p != ht.sb_free_p);
 
     LOOP_COUNT_RESET();
 
 #if LRU
     if (lru) {
+
         if (connpd_close_pending_fds_push(lru->connpd_fd) < 0)
             return NULL;
 
@@ -432,6 +440,7 @@ static struct socket_bucket *get_empty_slot(void)
             REMOVE_FROM_TLIST(lru);
 
         return lru;
+
     } 
 #endif
 
@@ -479,11 +488,13 @@ int sockp_init()
 
     //init sockp freelist.
     ht.sb_free_p = sb_tmp = SB;
+
     while (sb_tmp < SB + NR_SOCKET_BUCKET) {
         sb_tmp->sb_free_prev = sb_tmp - 1;
         sb_tmp->sb_free_next = sb_tmp + 1;
         sb_tmp++;
     }
+
     sb_tmp--;
     SB[0].sb_free_prev = sb_tmp;
     sb_tmp->sb_free_next = SB;

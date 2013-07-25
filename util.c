@@ -40,8 +40,10 @@ void lkm_poll_freewait(struct poll_wqueues *pwq)
 {
     struct poll_table_page * p = pwq->table;
     int i;
+
     for (i = 0; i < pwq->inline_index; i++)
         free_poll_entry(pwq->inline_entries + i);
+
     while (p) {
         struct poll_table_entry * entry;
         struct poll_table_page *old;
@@ -105,6 +107,7 @@ static int pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
     if (key && !((unsigned long)key & entry->key))
         return 0;
 #endif
+
     return __pollwake(wait, mode, sync, key);
 }
 #endif
@@ -143,7 +146,9 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
 static int sock_map_fd(struct socket *sock, int flags)
 {
     struct file *newfile;
-    int fd = get_unused_fd_flags(flags);
+    int fd;
+    
+    fd = get_unused_fd_flags(flags);
     if (unlikely(fd < 0))
         return fd;
 

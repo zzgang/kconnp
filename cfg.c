@@ -932,6 +932,7 @@ static int cfg_white_list_entity_init(struct cfg_entry *ce)
     read_lock(&cfg->al_rwlock);
 
     hash_for_each(cfg->al_ptr, pos) {
+
         int in_denied_list;
         struct conn_node_t conn_node; 
 
@@ -957,6 +958,7 @@ static int cfg_white_list_entity_init(struct cfg_entry *ce)
             read_unlock(&cfg->al_rwlock);
             return 0;
         }
+
     }
 
     read_unlock(&cfg->al_rwlock);
@@ -998,7 +1000,7 @@ int cfg_init()
         return 0;
     }
 
-    //white list init
+    //White list init
     rwlock_init(&wl->cfg_rwlock);
     wl->entity_init(wl);
 
@@ -1069,8 +1071,10 @@ void cfg_allowed_entries_for_each_call(void (*call_func)(void *data))
         goto unlock_ret;
 
     hash_for_each(wl->cfg_ptr, pos) {
+
         conn_node = (struct conn_node_t *)hash_value(pos);
         call_func((void *)conn_node);
+
     }
 
 unlock_ret:
@@ -1108,6 +1112,7 @@ void conn_stats_info_dump(void)
         goto unlock_ret;
     
     hash_for_each((struct hash_table_t *)wl->cfg_ptr, pos) {
+
         struct conn_node_t *conn_node;
         unsigned int ip;
         unsigned short int port;
@@ -1165,10 +1170,14 @@ void conn_stats_info_dump(void)
         cfg->st_len += l;
 
         lkmfree(buffer);
+
     }
 
 unlock_ret:
+
     read_unlock(&wl->cfg_rwlock); 
+
     write_unlock(&cfg->st_rwlock);
+
     return;
 }
