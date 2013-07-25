@@ -220,11 +220,11 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
 
     //connected count stat
 
-    //conn_add_connected_all_count(address);
+    conn_add_connected_all_count(address);
 
     if ((sock_new = apply_socket_from_sockp(address))) {
         if (sock_remap_fd(fd, sock_new, sock)) {
-            //conn_add_connected_hit_count(address);
+            conn_add_connected_hit_count(address);
             ret = 1;
             goto ret_unlock;
         }
