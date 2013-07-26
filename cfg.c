@@ -10,7 +10,7 @@
 #define CFG_DENIED_IPORTS_FILE "iports.deny"
 #define CFG_CONN_STATS_INFO_FILE "stats.info"
 
-#define DUMP_INTERVAL 5 //seconds
+#define DUMP_INTERVAL 1 //seconds
 
 #define cfg_entries_walk_func_check(func_name)    \
     ({    \
@@ -116,22 +116,25 @@ static int cfg_proc_read(char *buffer, char **buffer_location,
 static int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
         void *data);
 
+static int cfg_iports_list_init(struct cfg_entry *);
+static void cfg_iports_list_destroy(struct cfg_entry *);
 
 static int cfg_iports_entity_init(struct cfg_entry *);
 static void cfg_iports_entity_destroy(struct cfg_entry *);
 static int cfg_iports_entity_reload(struct cfg_entry *);
 
-static int cfg_iports_list_init(struct cfg_entry *);
-static void cfg_iports_list_destroy(struct cfg_entry *);
-
-
 static int cfg_stats_info_init(struct cfg_entry *);
 static void cfg_stats_info_destroy(struct cfg_entry *);
+
+static int cfg_stats_info_entity_init(struct cfg_entry *);
+static void cfg_stats_info_entity_destroy(struct cfg_entry *);
+
+static int cfg_white_list_init(struct cfg_entry *);
+static void cfg_white_list_destroy(struct cfg_entry *);
 
 static int cfg_white_list_entity_init(struct cfg_entry *);
 static void cfg_white_list_entity_destroy(struct cfg_entry *);
 static int cfg_white_list_entity_reload(struct cfg_entry *);
-
 
 static inline void *iport_in_list_check_or_call(unsigned int ip, unsigned short int port,  struct cfg_entry *, void (*call_func)(void *data));
 
@@ -185,7 +188,11 @@ static struct cfg_dir cfg_dentry = { //initial the cfg directory.
         .proc_write = NULL,
 
         .init = cfg_stats_info_init,
-        .destroy = cfg_stats_info_destroy
+        .destroy = cfg_stats_info_destroy,
+
+        .entity_init = cfg_stats_info_entity_init,
+        .entity_destroy = cfg_stats_info_entity_destroy,
+        .entity_reload = NULL
     }
 };
 static struct cfg_dir *cfg = &cfg_dentry;
@@ -194,6 +201,9 @@ static struct proc_dir_entry *cfg_base_dir;
 
 //white list.
 static struct cfg_entry white_list = { //final allowed list.
+    .init = cfg_white_list_init,
+    .destroy = cfg_white_list_destroy,
+
     .entity_init = cfg_white_list_entity_init,
     .entity_destroy = cfg_white_list_entity_destroy,
     .entity_reload = cfg_white_list_entity_reload
@@ -365,23 +375,48 @@ static int cfg_iports_list_init(struct cfg_entry *ce)
     return 1;
 }
 
-static int cfg_stats_info_init(struct cfg_entry *ce)
-{
-    return cfg_proc_init(ce);
-}
-
 static void cfg_iports_list_destroy(struct cfg_entry *ce)
 {
     ce->entity_destroy(ce);
     cfg_proc_destroy(ce);
 }
 
+static int cfg_stats_info_init(struct cfg_entry *ce)
+{
+    if (!cfg_proc_init(ce))
+        return 0;
+
+    if (!ce->entity_init(ce)) {
+        cfg_proc_destroy(ce);
+        return 0;
+    }
+
+    return 1;
+}
+
 static void cfg_stats_info_destroy(struct cfg_entry *ce)
+{
+    ce->entity_destroy(ce);
+    cfg_proc_destroy(ce);
+}
+
+static int cfg_stats_info_entity_init(struct cfg_entry *ce)
+{
+    ce->raw_ptr = lkmalloc(PAGE_SIZE);
+    if (!ce->raw_ptr)
+        return 0;
+
+    ce->raw_len = 0;
+
+    return 1;
+}
+
+static void cfg_stats_info_entity_destroy(struct cfg_entry *ce)
 {
     if (ce->raw_ptr)
         lkmfree(ce->raw_ptr);
 
-    cfg_proc_destroy(ce);
+    ce->raw_len = 0;
 }
 
 /**
@@ -920,6 +955,18 @@ static inline void *iport_in_list_check_or_call(
     return NULL;
 }
 
+static int cfg_white_list_init(struct cfg_entry *ce)
+{
+    rwlock_init(&wl->cfg_rwlock);
+
+    return ce->entity_init(ce);
+}
+
+static void cfg_white_list_destroy(struct cfg_entry *ce)
+{
+    ce->entity_destroy(ce);
+}
+
 static int cfg_white_list_entity_init(struct cfg_entry *ce)
 {
     struct iport_t *iport_node; 
@@ -996,25 +1043,25 @@ int cfg_init()
         printk(KERN_ERR "Error: Couldn't create dir /proc/%s\n", CFG_BASE_DIR_NAME);
         return 0;
     }
+    
     //Init cfg entries.
     if (!cfg_entries_walk_func_check(init)) {
         cfg_destroy();
         return 0;
     }
 
-    //White list init
-    rwlock_init(&wl->cfg_rwlock);
-    wl->entity_init(wl);
+    //Init white list
+    wl->init(wl);
 
     return 1;
 }
 
 void cfg_destroy()
 {
-    //White list destory
-    wl->entity_destroy(wl);
+    //Destroy white list.
+    wl->destroy(wl);
 
-    //Destory cfg entries
+    //Destory cfg entries.
     cfg_entries_walk_func_no_check(destroy);
 
     //Destroy cfg base dir.
@@ -1095,7 +1142,6 @@ void cfg_allowd_iport_node_for_each_call(unsigned int ip, unsigned short int por
 void conn_stats_info_dump(void)
 {
     const char *conn_stat_str_fmt = "%s:%u, Mode: %s, Hits: %lu(%u.0%), Misses: %lu(%u.0%)\n";
-    char *buffer;
     struct hash_bucket_t *pos;
     int offset = 0;
 
@@ -1105,12 +1151,10 @@ void conn_stats_info_dump(void)
     write_lock(&cfg->st_rwlock);
 
     if (cfg->st_ptr) {
+        memset(cfg->st_ptr, 0, cfg->st_len);
         cfg->st_len = 0;
-        lkmfree(cfg->st_ptr);
     }
 
-    cfg->st_ptr = lkmalloc(PAGE_SIZE);
-   
     read_lock(&wl->cfg_rwlock); 
 
     if (!wl->cfg_ptr)
@@ -1123,8 +1167,9 @@ void conn_stats_info_dump(void)
         unsigned short int port;
         unsigned long all_count, misses_count, hits_count;
         unsigned int misses_percent, hits_percent; 
-        char mode[16];
-        char ip_str[16], *ip_ptr;
+        char *ip_ptr, ip_str[16] = {0, };
+        char mode[16] = {0, };
+        char buffer[128] = {0, };
         int l;
         
         conn_node = (struct conn_node_t *)hash_value(pos);
@@ -1155,8 +1200,6 @@ void conn_stats_info_dump(void)
             hits_percent = 100 - misses_percent;
         }
 
-        buffer = lkmalloc(128);
-        
         l = sprintf(buffer, conn_stat_str_fmt, 
                 ip_ptr, port, 
                 mode, 
@@ -1164,7 +1207,6 @@ void conn_stats_info_dump(void)
                 misses_count, misses_percent);
 
         if (l > (PAGE_SIZE - cfg->st_len)) {
-            lkmfree(buffer);
             goto unlock_ret;
         }
         
@@ -1173,8 +1215,6 @@ void conn_stats_info_dump(void)
         offset += l; 
 
         cfg->st_len += l;
-
-        lkmfree(buffer);
 
     }
 
