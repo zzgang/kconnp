@@ -225,7 +225,7 @@ static int connp_fds_events_or_timout(void)
 
         set_pt_qproc(pt, NULL); 
 
-        if (events)
+        if (events) 
             break;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 28)
@@ -256,6 +256,7 @@ static int shutdown_timeout_or_preconnect()
         
         close_timeout_files();
         scan_spare_conns_preconnect(); 
+
     }
     
     return 0;
