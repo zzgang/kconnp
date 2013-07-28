@@ -66,14 +66,14 @@ static void do_conn_add_connected_all_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
     
-    ++conn_node->conn_connected_all_count;
+    lkm_atomic_add(&conn_node->conn_connected_all_count, 1);
 }
 
 static void do_conn_add_connected_hit_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
 
-    ++conn_node->conn_connected_hit_count;
+    lkm_atomic_add(&conn_node->conn_connected_hit_count, 1);
 }
 
 int conn_add_count(struct sockaddr *addr, int count_type)

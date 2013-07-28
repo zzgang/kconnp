@@ -1188,8 +1188,8 @@ void conn_stats_info_dump(void)
            
         port = ntohs(conn_node->conn_port);
         
-        all_count = conn_node->conn_connected_all_count;
-        hits_count = conn_node->conn_connected_hit_count;
+        all_count = lkm_atomic_read(&conn_node->conn_connected_all_count);
+        hits_count = lkm_atomic_read(&conn_node->conn_connected_hit_count);
         misses_count = all_count - hits_count;
 
         if (all_count == 0) {
