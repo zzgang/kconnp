@@ -14,7 +14,7 @@
 
 #define NR_SOCKET_BUCKET 200
 #define NR_HASH (NR_SOCKET_BUCKET/2 + 1)
-#define NR_SHASH (NR_SOCKET_BUCKET)
+#define NR_SKHASH (NR_SOCKET_BUCKET)
 #define TIMEOUT 30 //seconds
 #define LRU 0 //LRU replace algorithm
 
@@ -34,15 +34,17 @@ typedef enum {
 struct socket_bucket {
     struct sockaddr address;
     struct socket *sock;
+    struct sock *sk;
     sock_create_way_t sock_create_way;
     unsigned char sb_in_use;
-    unsigned char sock_in_use; /*tag: if it is in use*/
+    unsigned char sock_in_use; /*tag: wether it is in use*/
+    unsigned char sock_close_now; /*tag: wether be closed at once*/
     unsigned long last_used_jiffies; /*the last used jiffies*/
     unsigned long uc; /*used count*/
     struct socket_bucket *sb_prev;
     struct socket_bucket *sb_next; /*for hash table*/
-    struct socket_bucket *sb_sprev;
-    struct socket_bucket *sb_snext; /*for with sock addr hash table*/
+    struct socket_bucket *sb_skprev;
+    struct socket_bucket *sb_sknext; /*for with sock addr hash table*/
     struct socket_bucket *sb_trav_prev; /*traverse all used buckets*/
     struct socket_bucket *sb_trav_next;
     struct socket_bucket *sb_free_prev;
@@ -50,25 +52,28 @@ struct socket_bucket {
     int connpd_fd;
 };
 
+#define SOCK_SET_ATTR_DEFINE(sock, attr) \
+    void set_##attr(struct socket *sock, typeof(((struct socket_bucket *)NULL)->attr) attr)
+
+extern void set_sock_close_now(struct socket *sock, typeof(((struct socket_bucket *)NULL)->sock_close_now) close_now);
+
 /**
  *Apply a existed socket from socket pool.
  */
-extern struct socket *apply_socket_from_sockp(struct sockaddr *);
+extern struct sock *apply_sk_from_sockp(struct sockaddr *);
 
 /**
  *Free a socket which is returned by 'apply_socket_from_sockp', return the bucket of this socket.
  */
-extern struct socket_bucket *free_socket_to_sockp(struct sockaddr *, struct socket *);
+extern struct socket_bucket *free_sk_to_sockp(struct sock *);
 
 /**
  *Insert a new socket to sockp, return the new bucket of this socket.
  */
-extern struct socket_bucket *insert_socket_to_sockp(struct sockaddr *, 
+extern struct socket_bucket *insert_sock_to_sockp(struct sockaddr *, 
         struct socket *, int fd, sock_create_way_t create_way);
 
 extern void shutdown_sock_list(shutdown_way_t shutdown_way);
-
-extern void sockp_get_fds(struct list_head *);
 
 extern int sockp_init(void);
 extern void sockp_destroy(void);

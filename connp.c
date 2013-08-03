@@ -20,7 +20,7 @@ static void do_conn_add_connected_hit_count(void *data);
 
 static inline int insert_socket_to_connp(struct sockaddr *, struct socket *);
 static inline int insert_into_connp(struct sockaddr *, struct socket *);
-static inline int sock_remap_fd(int fd, struct socket *, struct socket *);
+static inline void sk_attach_sock(struct sock *, struct socket *);
 
 static int conn_close_flag; 
 static void do_conn_spec_check_close_flag(void *data)
@@ -109,10 +109,10 @@ static inline int insert_socket_to_connp(struct sockaddr *servaddr,
         return 0;
 
     task_fd_install(CONNP_DAEMON_TSKP, connpd_fd, sock->file);
-    file_count_inc(sock->file, 1); //add file reference count.
+    file_count_inc(sock->file); //add file reference count.
 
-    if (!insert_socket_to_sockp(servaddr, sock, connpd_fd, SOCK_RECLAIM)) {
-        connpd_close_pending_fds_push(connpd_fd);
+    if (!insert_sock_to_sockp(servaddr, sock, connpd_fd, SOCK_RECLAIM)) {
+        connpd_close_pending_fds_in(connpd_fd);
         return 0;
     }
 
@@ -124,13 +124,17 @@ static inline int insert_into_connp(struct sockaddr *servaddr, struct socket *so
     int fc;
 
     fc = file_count_read(sock->file);
-
-    //To insert
-    if (fc == 1 && insert_socket_to_connp(servaddr, sock))
-        return 1;
+    if (fc != 1)
+        return 0;
 
     //To free
-    if (fc == 2 && free_socket_to_sockp(servaddr, sock)) 
+    if (free_sk_to_sockp(sock->sk)) {
+        sock->sk = NULL; //Remove reference to avoid to destroy the sk.
+        return 1;
+    }
+    
+    //To insert
+    if (insert_socket_to_connp(servaddr, sock))
         return 1;
 
     return 0;
@@ -159,7 +163,7 @@ int insert_into_connp_if_permitted(int fd)
         goto ret_fail;
 
     if (address.sa_family != AF_INET 
-            || IN_LOOPBACK(ntohl(((struct sockaddr_in *)&address)->sin_addr.s_addr))) 
+       /*|| IN_LOOPBACK(ntohl(((struct sockaddr_in *)&address)->sin_addr.s_addr))*/) 
         goto ret_fail;
 
     if (!SOCK_ESTABLISHED(sock)) {
@@ -182,18 +186,15 @@ ret_fail:
 /**
  *Destory the new alloc socket and map the sockd's socket.
  */
-static inline int sock_remap_fd(int fd, struct socket *new_sock, struct socket *old_sock)
+static inline void sk_attach_sock(struct sock *sk, struct socket *sock)
 {
-    fput(old_sock->file); //close file and socket.
-    task_fd_install(current, fd, new_sock->file);
-    file_count_inc(new_sock->file, 1); //add file reference count;
-
-    return 1;
+    sock_graft(sk, sock);
 }
 
 int fetch_conn_from_connp(int fd, struct sockaddr *address)
 {
-    struct socket *sock, *sock_new;
+    struct socket *sock;
+    struct sock *sk;
     int ret = 0; 
 
     connp_rlock(); 
@@ -202,8 +203,9 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         ret = 0;
         goto ret_unlock;
     }
+
     if (address->sa_family != AF_INET 
-            || IN_LOOPBACK(ntohl(((struct sockaddr_in *)address)->sin_addr.s_addr)) 
+          /*|| IN_LOOPBACK(ntohl(((struct sockaddr_in *)address)->sin_addr.s_addr))*/ 
             || !cfg_conn_acl_allowd(address)) {
         ret = 0;
         goto ret_unlock;
@@ -213,18 +215,16 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         ret = 0;
         goto ret_unlock;
     }
-
+   
     sock = getsock(fd);
     if (!sock || !IS_TCP_SOCK(sock)) {
         ret = 0;
         goto ret_unlock;
     }
 
-    if ((sock_new = apply_socket_from_sockp(address))) {
-        if (sock_remap_fd(fd, sock_new, sock)) {
-            ret = 1;
-            goto ret_unlock;
-        }
+    if ((sk = apply_sk_from_sockp(address))) {
+        sk_attach_sock(sk, sock);
+        ret = 1;
     }
 
     SET_CLIENT_FLAG(sock);

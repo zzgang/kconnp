@@ -16,8 +16,8 @@ struct conn_attr_t {
     struct {
         unsigned int all_count;
         unsigned int idle_count;
-        atomic64_t connected_all_count;
-        atomic64_t connected_hit_count;
+        atomic_t connected_all_count;
+        atomic_t connected_hit_count;
     } stats;
 };
 

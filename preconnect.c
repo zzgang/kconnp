@@ -16,7 +16,7 @@
 static void do_preconnect(void *data);
 static void conn_init_count(void *data);
 
-static int do_create_connect(struct sockaddr_in *);
+static void do_create_connects(struct sockaddr_in *, int nums);
 
 static void conn_init_count(void *data)
 {
@@ -32,7 +32,7 @@ static void do_preconnect(void *data)
     struct conn_node_t *conn_node;
     struct sockaddr_in address;
     unsigned int idle_count;
-    int i;
+    int preconnect_nums;
 
     conn_node = (typeof(conn_node))data;
 
@@ -52,31 +52,34 @@ static void do_preconnect(void *data)
     }
     
     //do preconnect
-    for (i = MIN_SPARE_CONNECTIONS - idle_count; i > 0; i--)
-        if (!do_create_connect(&address))
-            return;
+    preconnect_nums = MIN_SPARE_CONNECTIONS - idle_count;
+    do_create_connects(&address, preconnect_nums);
 
     return;
 }
 
-static int do_create_connect(struct sockaddr_in *address)
+static void do_create_connects(struct sockaddr_in *address, int nums)
 {
     int fd;
     struct socket *sock;
-     
-    fd = lkm_create_tcp_connect(address);
-    if (fd < 0)
-        return 0;
+    int i;
 
-    sock = getsock(fd); 
-   
-    if (!insert_socket_to_sockp((struct sockaddr *)address, sock, fd, 
-                SOCK_PRECONNECT)) {
-        orig_sys_close(fd);
-        return 0;
-    } 
+    for (i = 0; i < nums; i++) {
 
-    return fd;
+        fd = lkm_create_tcp_connect(address);
+        if (fd < 0)
+            break;
+
+        sock = getsock(fd); 
+
+        if (!insert_sock_to_sockp((struct sockaddr *)address, sock, fd, 
+                    SOCK_PRECONNECT)) {
+            orig_sys_close(fd);
+            break;
+        } 
+    }
+
+    return;
 }
 
 void scan_spare_conns_preconnect()

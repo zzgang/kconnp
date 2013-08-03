@@ -3,8 +3,9 @@
 #include <linux/in.h>
 #include "sys_call.h"
 #include "util.h"
+#include "array.h"
 
-/**poll functions**/
+/**Poll start**/
 struct poll_table_page {
     struct poll_table_page * next;
     struct poll_table_entry * entry;
@@ -17,7 +18,97 @@ struct poll_table_page {
 static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
         poll_table *p);
 
-void lkm_poll_initwait(struct poll_wqueues *pwq)
+/*
+ * Add two timespec values and do a safety check for overflow.
+ * It's assumed that both values are valid (>= 0)
+ */
+
+#undef TIME_T_MAX
+#define TIME_T_MAX (time_t)((1UL << ((sizeof(time_t) << 3) - 1)) - 1)
+static inline struct timespec lkm_timespec_add_safe(const struct timespec lhs,
+        const struct timespec rhs)
+{
+    struct timespec res;
+
+    set_normalized_timespec(&res, lhs.tv_sec + rhs.tv_sec,
+            lhs.tv_nsec + rhs.tv_nsec);
+
+    if (res.tv_sec < lhs.tv_sec || res.tv_sec < rhs.tv_sec)
+        res.tv_sec = TIME_T_MAX;
+
+    return res;
+}
+
+static inline void set_pt_qproc(poll_table *pt, void *v)
+{
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
+    pt = NULL;
+#else
+    pt->_qproc = v;
+#endif
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
+
+static inline void set_pt_key(poll_table *pt, int events)
+{
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
+                    pt->key = events;
+#else
+                    pt->_key = events;
+#endif
+}
+
+#endif
+
+#define lkm_get_file(fd)            \
+({ struct file * __file;    \
+ rcu_read_lock();       \
+ __file = fcheck_files(TASK_FILES(current), fd); \
+ rcu_read_unlock(); \
+ __file;})
+
+#undef DEFAULT_POLLMASK
+#define DEFAULT_POLLMASK (POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM)
+
+static int fd_poll(int fd, int events, poll_table *pwait)
+{
+    unsigned int mask;
+
+    mask = 0;
+    if (fd >= 0) {
+        struct file * file;
+        //int fput_needed;
+
+        //file = fget_light(fd, &fput_needed);
+        file = lkm_get_file(fd); /*Needn't add f_count*/
+
+        mask = POLLNVAL;
+
+        if (file != NULL) {
+            mask = DEFAULT_POLLMASK;
+
+            events = events|POLLERR|POLLHUP;
+
+            if (file->f_op && file->f_op->poll) {
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
+                if (pwait)
+                    set_pt_key(pwait, events);
+#endif
+
+                mask = file->f_op->poll(file, pwait);
+            }
+            /* Mask out unneeded events. */
+            mask &= events;
+            //fput_light(file, fput_needed);
+        }
+    }
+
+    return mask;
+}
+
+static void lkm_poll_initwait(struct poll_wqueues *pwq)
 {
     init_poll_funcptr(&pwq->pt, __pollwait);
     pwq->error = 0;
@@ -36,7 +127,7 @@ static void free_poll_entry(struct poll_table_entry *entry)
     //fput(entry->filp);
 }
 
-void lkm_poll_freewait(struct poll_wqueues *pwq)
+static void lkm_poll_freewait(struct poll_wqueues *pwq)
 {
     struct poll_table_page * p = pwq->table;
     int i;
@@ -140,7 +231,92 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
 
     add_wait_queue(wait_address, &entry->wait);
 }
-/**End poll functions**/
+
+int lkm_poll(array_t *list, int sec)
+{
+    struct poll_wqueues table;
+    poll_table *pt;
+    int count = 0;
+    int timed_out = 0;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 28)
+
+    ktime_t expire;
+    struct timespec end_time, time_out = {.tv_sec = sec/*second*/, .tv_nsec = 0};
+
+    ktime_get_ts(&end_time);
+    end_time = lkm_timespec_add_safe(end_time, time_out);
+    expire = timespec_to_ktime(end_time);
+
+#else
+
+    long __timeout = sec * 1000/*miliseconds*/;
+
+#endif
+
+    lkm_poll_initwait(&table);
+    pt = &(&table)->pt;
+    
+    for (;;) {
+        struct pollfd *pfd;
+        int idx;
+        struct socket *sock;
+
+        if (!(list))
+            goto ignore_poll;
+
+        for (idx = 0; idx < (list)->elements; idx++) {
+            
+            pfd = (struct pollfd *)(list)->get(list, idx);
+
+            sock = getsock(pfd->fd);
+
+            spin_lock(&sock->file->f_lock);
+
+            if (sock->sk)
+                pfd->revents = fd_poll(pfd->fd, pfd->events, pt);
+
+            spin_unlock(&sock->file->f_lock);
+
+            if (pfd->revents) {
+
+                count++;
+                
+                set_pt_qproc(pt, NULL);
+            }
+
+        }
+
+ignore_poll:
+
+        set_pt_qproc(pt, NULL); 
+        
+        if (!count) {
+            if (signal_pending(current)) {
+                count = -EINTR;
+                flush_signals(current);
+            }
+        }
+
+        if (count || timed_out)
+            break;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 28)
+        if (!poll_schedule_timeout(&table, TASK_INTERRUPTIBLE/*Receive signals*/, 
+                    &expire, 0))
+            timed_out = 1;
+#else
+        __timeout = schedule_timeout_interruptible(__timeout);
+        if (!__timeout)
+            timed_out = 1;
+#endif
+    }
+
+    lkm_poll_freewait(&table); 
+
+    return count;
+}
+/**Poll END**/
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 10)
 static int sock_map_fd(struct socket *sock, int flags)
@@ -183,12 +359,10 @@ int lkm_create_tcp_connect(struct sockaddr_in *address)
         return fd;
     }
 
+    sock->file->f_flags |= O_NONBLOCK;
+
     err = sock->ops->connect(sock, (struct sockaddr *)address,
             sizeof(struct sockaddr), sock->file->f_flags);
-    if (err < 0) {
-        orig_sys_close(fd);
-        return err;
-    }
 
     SET_CLIENT_FLAG(sock);
 

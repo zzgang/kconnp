@@ -10,6 +10,7 @@
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/net.h>
+#include <net/sock.h>
 #include <linux/stat.h>
 #include <linux/sched.h>
 
@@ -23,6 +24,16 @@
 #include <linux/list.h>
 #include <linux/poll.h>
 
+#define E_EVENTS (POLLERR|POLLHUP|POLLNVAL)
+
+#define fd_list_in(list, fd) \
+        ({int *ele = (int *)(list)->in(list, &fd); \
+              ele ? *ele : -1;})
+
+#define fd_list_out(list) \
+        ({int *ele = (int *)(list)->out(list); \
+              ele ? *ele : -1;})
+
 #define NOW_SECS (CURRENT_TIME_SEC.tv_sec)
 
 #define NOTIFY_SIG (SIGINT)
@@ -31,17 +42,12 @@
 
 #define INVOKED_BY_TGROUP_LEADER() (current == current->group_leader)
 
-struct fd_entry {
-    int fd;
-    struct list_head siblings;
-};
-
 #define lkmalloc(size) kzalloc(size, GFP_ATOMIC)
 #define lkmfree(ptr) kfree(ptr)
 
-//#define SOCK_CLIENT_TAG 1 << (sizeof(unsigned int)*8 - 1)
+#define BYTES_ALIGN(size) (((size) + (sizeof(long) - 1)) & ~(sizeof(long) - 1))
 
-#define SOCK_CLIENT_TAG 0x10000000
+#define SOCK_CLIENT_TAG (1 << 31)
 
 #define IS_CLIENT_SOCK(sock) \
     ((sock)->file->f_flags & SOCK_CLIENT_TAG)
@@ -52,32 +58,20 @@ struct fd_entry {
 #define CLEAR_CLIENT_FLAG(sock) \
     ((sock)->file->f_flags &= ~SOCK_CLIENT_TAG)
 
+#define SK_ESTABLISHED(sk)  \
+    (sk->sk_state == TCP_ESTABLISHED)
+
 #define SOCK_ESTABLISHED(sock) \
-    ((sock)->sk && (sock)->sk->sk_state == TCP_ESTABLISHED)
+    ((sock)->sk && SK_ESTABLISHED((sock)->sk))
 
 #define IS_TCP_SOCK(sock) \
     ((sock)->type == SOCK_STREAM)
 
 
-#define lkm_atomic_read(v) atomic64_read((atomic64_t *)v) 
-#define lkm_atomic_add(v, a) atomic64_add_return(a, (atomic64_t *)v)
-#define lkm_atomic_sub(v, a) atomic64_sub_return(a, (atomic64_t *)v)
-#define lkm_atomic_set(v, a) atomic64_set_return((atomic64_t *)v, a) 
-
-static inline int file_count_read(struct file *filp)
-{
-    return lkm_atomic_read(&filp->f_count);
-}
-
-static inline int file_count_dec(struct file *filp, int c)
-{
-    return lkm_atomic_sub(&filp->f_count, c);
-}
-
-static inline int file_count_inc(struct file *filp, int i)
-{
-    return lkm_atomic_add(&filp->f_count, i);
-}
+#define lkm_atomic_read(v) atomic_read((atomic_t *)v) 
+#define lkm_atomic_add(v, a) atomic_add_return(a, (atomic_t *)v)
+#define lkm_atomic_sub(v, a) atomic_sub_return(a, (atomic_t *)v)
+#define lkm_atomic_set(v, a) atomic_set((atomic_t *)v, a) 
 
 #define TASK_FILES(tsk) (tsk)->files
 
@@ -110,6 +104,34 @@ static inline int file_count_inc(struct file *filp, int i)
         rcu_read_unlock();  \
         __tmp;})
 
+typedef struct array_t array_t;
+extern int lkm_poll(array_t *, int timeout);
+
+static inline int file_count_read(struct file *filp)
+{
+    return lkm_atomic_read(&filp->f_count);
+}
+
+static inline int file_count_inc(struct file *filp)
+{
+    return lkm_atomic_add(&filp->f_count, 1);
+}
+
+static inline int file_count_dec(struct file *filp)
+{
+    return lkm_atomic_sub(&filp->f_count, 1);
+}
+
+static inline void file_count_set(struct file *filp, int c)
+{
+    lkm_atomic_set(&filp->f_count, c);
+}
+
+struct fd_entry {
+    int fd;
+    struct list_head siblings;
+};
+
 static inline int lkm_get_unused_fd(void)
 {
     int fd;
@@ -129,105 +151,6 @@ extern int lkm_create_tcp_connect(struct sockaddr_in *);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 10)
 extern int lkm_sock_map_fd(struct socket *sock, int flags);
 #endif
-
-/*
- * Add two timespec values and do a safety check for overflow.
- * It's assumed that both values are valid (>= 0)
- */
-
-#undef TIME_T_MAX
-#define TIME_T_MAX (time_t)((1UL << ((sizeof(time_t) << 3) - 1)) - 1)
-static inline struct timespec lkm_timespec_add_safe(const struct timespec lhs,
-        const struct timespec rhs)
-{
-    struct timespec res;
-
-    set_normalized_timespec(&res, lhs.tv_sec + rhs.tv_sec,
-            lhs.tv_nsec + rhs.tv_nsec);
-
-    if (res.tv_sec < lhs.tv_sec || res.tv_sec < rhs.tv_sec)
-        res.tv_sec = TIME_T_MAX;
-
-    return res;
-}
-
-static inline void set_pt_qproc(poll_table *pt, void *v)
-{
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
-    pt = NULL;
-#else
-    pt->_qproc = v;
-#endif
-}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
-
-static inline void set_pt_key(poll_table *pt, int events)
-{
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
-                    pt->key = events;
-#else
-                    pt->_key = events;
-#endif
-}
-
-#endif
-
-void lkm_poll_initwait(struct poll_wqueues *pwq);
-void lkm_poll_freewait(struct poll_wqueues *pwq);
-
-#define lkm_get_file(fd)            \
-({ struct file * __file;    \
- rcu_read_lock();       \
- __file = fcheck_files(TASK_FILES(current), fd); \
- rcu_read_unlock(); \
- __file;})
-
-#undef DEFAULT_POLLMASK
-#define DEFAULT_POLLMASK (POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM)
-
-static inline int fd_poll(int fd, int events, poll_table *pwait)
-{
-    unsigned int mask;
-
-    mask = 0;
-    if (fd >= 0) {
-        struct file * file;
-        //int fput_needed;
-
-        //file = fget_light(fd, &fput_needed);
-        file = lkm_get_file(fd); /*Needn't add f_count*/
-
-        mask = POLLNVAL;
-
-        if (file != NULL) {
-            mask = DEFAULT_POLLMASK;
-            if (file->f_op && file->f_op->poll) {
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
-                if (pwait)
-                    set_pt_key(pwait, events);
-#endif
-
-                mask = file->f_op->poll(file, pwait);
-            }
-            /* Mask out unneeded events. */
-            mask &= events;
-            //fput_light(file, fput_needed);
-        }
-    }
-
-    return mask;
-}
-
-static inline void lkm_clear_open_fd(int fd, FILE_FDT_TYPE *fdt)
-{
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 45)
-    __FD_CLR(fd, fdt->open_fds);
-#else
-    __clear_bit(fd, fdt->open_fds);
-#endif
-}
 
 static inline void TASK_GET_FDS(struct task_struct *tsk, struct list_head *fds_list)
 {
@@ -299,6 +222,7 @@ static inline struct socket *getsock(int fd)
 static inline int getsockservaddr(struct socket *sock, struct sockaddr *address)
 {
     int len;
+
     return sock->ops->getname(sock, address, &len, 1);
 }
 
