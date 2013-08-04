@@ -14,7 +14,7 @@
 
 #define NR_SOCKET_BUCKET 200
 #define NR_HASH (NR_SOCKET_BUCKET/2 + 1)
-#define NR_SKHASH (NR_SOCKET_BUCKET)
+#define NR_SHASH (NR_SOCKET_BUCKET)
 #define TIMEOUT 30 //seconds
 #define LRU 0 //LRU replace algorithm
 
@@ -43,8 +43,8 @@ struct socket_bucket {
     unsigned long uc; /*used count*/
     struct socket_bucket *sb_prev;
     struct socket_bucket *sb_next; /*for hash table*/
-    struct socket_bucket *sb_skprev;
-    struct socket_bucket *sb_sknext; /*for with sock addr hash table*/
+    struct socket_bucket *sb_sprev;
+    struct socket_bucket *sb_snext; /*for with sk addr hash table*/
     struct socket_bucket *sb_trav_prev; /*traverse all used buckets*/
     struct socket_bucket *sb_trav_next;
     struct socket_bucket *sb_free_prev;

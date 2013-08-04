@@ -21,7 +21,7 @@
 #define SOCKP_LOCK_DESTROY()
 
 #define HASH(address_ptr) ht.hash_table[_hashfn((struct sockaddr_in *)(address_ptr))]
-#define SKHASH(sk) ht.skhash_table[_skhashfn(sk)]
+#define SHASH(sk) ht.shash_table[_shashfn(sk)]
 
 #define KEY_MATCH_CAST(address_ptr1, address_ptr2) ((address_ptr1)->sin_port == (address_ptr2)->sin_port && (address_ptr1)->sin_addr.s_addr == (address_ptr2)->sin_addr.s_addr)
 #define KEY_MATCH(address_ptr1, address_ptr2) KEY_MATCH_CAST((struct sockaddr_in *)address_ptr1, (struct sockaddr_in *)address_ptr2)
@@ -58,9 +58,9 @@
         (head) = (bucket)->sb_next;     \
     } while(0)
 
-#define IN_SKHLIST(head, bucket) ({                      \
+#define IN_SHLIST(head, bucket) ({                      \
         struct socket_bucket *__p;                      \
-        for (__p = (head); __p; __p = __p->sb_sknext) {  \
+        for (__p = (head); __p; __p = __p->sb_snext) {  \
         LOOP_COUNT_SAFE_CHECK(__p);                        \
         if (__p == (bucket))                            \
         break;                                          \
@@ -68,23 +68,23 @@
         LOOP_COUNT_RESET();                             \
         __p;})
 
-#define INSERT_INTO_SKHLIST(head, bucket) \
+#define INSERT_INTO_SHLIST(head, bucket) \
     do {                               \
-        (bucket)->sb_skprev = NULL; \
-        (bucket)->sb_sknext = (head); \
+        (bucket)->sb_sprev = NULL; \
+        (bucket)->sb_snext = (head); \
         if ((head))     \
-        (head)->sb_skprev = (bucket); \
+        (head)->sb_sprev = (bucket); \
         (head) = (bucket);\
     } while(0)
 
-#define REMOVE_FROM_SKHLIST(head, bucket) \
+#define REMOVE_FROM_SHLIST(head, bucket) \
     do {    \
-        if ((bucket)->sb_skprev)                  \
-        (bucket)->sb_skprev->sb_sknext = (bucket)->sb_sknext; \
-        if ((bucket)->sb_sknext)              \
-        (bucket)->sb_sknext->sb_skprev = (bucket)->sb_skprev; \
+        if ((bucket)->sb_sprev)                  \
+        (bucket)->sb_sprev->sb_snext = (bucket)->sb_snext; \
+        if ((bucket)->sb_snext)              \
+        (bucket)->sb_snext->sb_sprev = (bucket)->sb_sprev; \
         if ((head) == (bucket)) \
-        (head) = (bucket)->sb_sknext;    \
+        (head) = (bucket)->sb_snext;    \
     } while(0)
 
 #define IN_TLIST(bucket) ({                                             \
@@ -135,8 +135,8 @@
         sb->uc = 0; \
         sb->sb_prev = NULL; \
         sb->sb_next = NULL; \
-        sb->sb_skprev = NULL; \
-        sb->sb_sknext = NULL; \
+        sb->sb_sprev = NULL; \
+        sb->sb_snext = NULL; \
         sb->sb_trav_prev = NULL; \
         sb->sb_trav_next = NULL; \
     } while(0)
@@ -150,8 +150,8 @@ do {                                                                    \
     if (!sock->sk)                                                      \
         goto break_unlock;                                              \
                                                                         \
-    p = SKHASH(sock->sk);                                               \
-    for (; p; p = p->sb_sknext) {                                        \
+    p = SHASH(sock->sk);                                               \
+    for (; p; p = p->sb_snext) {                                        \
         if (SKEY_MATCH(sock->sk, p->sk)) {                        \
             p->attr = attr;                                             \
             break;                                                      \
@@ -208,11 +208,11 @@ static struct socket_bucket *get_empty_slot(void);
 #endif
 
 static inline unsigned int _hashfn(struct sockaddr_in *);
-static inline unsigned int _skhashfn(struct sock *);
+static inline unsigned int _shashfn(struct sock *);
 
 static struct {
     struct socket_bucket *hash_table[NR_HASH];
-    struct socket_bucket *skhash_table[NR_SKHASH]; //for sock addr hash table.
+    struct socket_bucket *shash_table[NR_SHASH]; //for sock addr hash table.
     struct socket_bucket *sb_free_p;
     struct socket_bucket *sb_trav_head;
     struct socket_bucket *sb_trav_tail;
@@ -226,9 +226,9 @@ static inline unsigned int _hashfn(struct sockaddr_in *address)
     return (unsigned)((*address).sin_port ^ (*address).sin_addr.s_addr) % NR_HASH;
 }
 
-static inline unsigned int _skhashfn(struct sock *sk)
+static inline unsigned int _shashfn(struct sock *sk)
 {
-    return (unsigned long)sk % NR_SKHASH;
+    return (unsigned long)sk % NR_SHASH;
 }
 
 SOCK_SET_ATTR_DEFINE(sock, sock_close_now)
@@ -340,8 +340,8 @@ shutdown:
 
             if (IN_HLIST(HASH(&p->address), p))
                 REMOVE_FROM_HLIST(HASH(&p->address), p);
-            if (IN_SKHLIST(SKHASH(p->sk), p))
-                REMOVE_FROM_SKHLIST(SKHASH(p->sk), p);
+            if (IN_SHLIST(SHASH(p->sk), p))
+                REMOVE_FROM_SHLIST(SHASH(p->sk), p);
             REMOVE_FROM_TLIST(p);
 
             PUT_SB(p);
@@ -366,8 +366,8 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
 
     SOCKP_LOCK();
 
-    p = SKHASH(sk);
-    for (; p; p = p->sb_sknext) {
+    p = SHASH(sk);
+    for (; p; p = p->sb_snext) {
 
         LOOP_COUNT_SAFE_CHECK(p);
         
@@ -453,8 +453,8 @@ static struct socket_bucket *get_empty_slot(void)
 
         if (IN_HLIST(HASH(&lru->address), lru))
             REMOVE_FROM_HLIST(HASH(&lru->address), lru);
-        if (IN_SKHLIST(SKHASH(lru->sk), lru))
-            REMOVE_FROM_SKHLIST(SKHASH(lru->sk), lru);
+        if (IN_SHLIST(SHASH(lru->sk), lru))
+            REMOVE_FROM_SHLIST(SHASH(lru->sk), lru);
         if (IN_TLIST(lru))
             REMOVE_FROM_TLIST(lru);
 
@@ -489,7 +489,7 @@ struct socket_bucket *insert_sock_to_sockp(struct sockaddr *address,
     SOCKADDR_COPY(&empty->address, address);
 
     INSERT_INTO_HLIST(HASH(&empty->address), empty);
-    INSERT_INTO_SKHLIST(SKHASH(empty->sk), empty);
+    INSERT_INTO_SHLIST(SHASH(empty->sk), empty);
     INSERT_INTO_TLIST(empty);
 
 unlock_ret:
