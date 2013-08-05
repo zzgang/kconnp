@@ -29,18 +29,10 @@ static void connpd_unused_fds_put(void);
 static void do_close_files(int close_type);
 
 struct stack_t *connpd_close_pending_fds, 
-               *connpd_poll_pending_fds, 
                *connpd_unused_fds;
 
 #define connpd_close_pending_fds_init(num) \
     stack_init(&connpd_close_pending_fds, num, sizeof(int))
-
-#define connpd_poll_pending_fds_init(num) \
-    stack_init(&connpd_poll_pending_fds, num, sizeof(int))
-
-#define connpd_unused_fds_init(num) \
-    stack_init(&connpd_unused_fds, num, sizeof(int))
-
 
 #define connpd_close_pending_fds_destroy() \
     do {     \
@@ -48,11 +40,8 @@ struct stack_t *connpd_close_pending_fds,
         connpd_close_pending_fds->destroy(&connpd_close_pending_fds); \
     } while(0)
 
-#define connpd_poll_pending_fds_destroy() \
-    do {  \
-        if (connpd_poll_pending_fds)                    \
-        connpd_poll_pending_fds->destroy(&connpd_poll_pending_fds);  \
-    } while(0)
+#define connpd_unused_fds_init(num) \
+    stack_init(&connpd_unused_fds, num, sizeof(int))
 
 #define connpd_unused_fds_destroy() \
     do {    \
@@ -96,28 +85,33 @@ static void do_close_files(int close_type)
 
 }
 
+struct pollfd_ex {
+    struct pollfd pollfd;
+    void *data;
+};
 /**
  *Wait events of connpd fds or timeout.
  */
 static inline int connp_fds_events_or_timout(void)
 {
     int nums;
-    int fd;
-    struct pollfd pfd;
-    struct array_t *pollfd_array = NULL;
+    struct socket_bucket **sb;
+    struct pollfd_ex pfd;
+    struct array_t *pollfd_array;
     int count;
     int idx = 0;
 
-    nums = connpd_poll_pending_fds->elements;
+    nums = sockp_sbs_check_list->elements;
 
-    if (!array_init(&pollfd_array, nums, sizeof(struct pollfd)))
+    if (!array_init(&pollfd_array, nums, sizeof(struct pollfd_ex)))
         goto poll;
     
-    while ((fd = fd_list_out(connpd_poll_pending_fds)) >= 0) {
+    while ((sb = (struct socket_bucket **)sockp_sbs_check_list_out())) {
 
-        pfd.fd = fd;
-        pfd.events = POLLRDHUP;
-        pfd.revents = 0;
+        pfd.pollfd.fd = (*sb)->connpd_fd;
+        pfd.pollfd.events = POLLRDHUP;
+        pfd.pollfd.revents = 0;
+        pfd.data = (*sb);
 
         pollfd_array->set(pollfd_array, &pfd, idx++);
 
@@ -130,16 +124,14 @@ poll:
         goto out;
     
     {
-        struct pollfd *pfdp;
+        struct pollfd_ex *pfdp;
         
         for(idx = 0; idx < pollfd_array->elements; idx++) {
 
-            pfdp = (struct pollfd *)pollfd_array->get(pollfd_array, idx);
+            pfdp = (struct pollfd_ex *)pollfd_array->get(pollfd_array, idx);
 
-            if (pfdp && (pfdp->revents & (POLLRDHUP|E_EVENTS))) {
-                struct socket *sock = getsock(pfdp->fd);
-                set_sock_close_now(sock, 1); 
-            }
+            if (pfdp && (pfdp->pollfd.revents & (POLLRDHUP|E_EVENTS)))
+                ((struct socket_bucket *)pfdp->data)->sock_close_now = 1;
 
         }
     }
@@ -161,7 +153,7 @@ static int shutdown_timeout_or_preconnect()
         scan_spare_conns_preconnect(); 
 
     }
-
+    
     return 0;
 }
 
@@ -227,13 +219,7 @@ int connpd_init()
     if (!connpd_close_pending_fds_init(NR_MAX_OPEN_FDS))
         return 0;
 
-    if (!connpd_poll_pending_fds_init(NR_MAX_OPEN_FDS)) {
-        connpd_close_pending_fds_destroy();
-        return 0;
-    }
-
     if (!connpd_unused_fds_init(NR_MAX_OPEN_FDS/2)) {
-        connpd_poll_pending_fds_destroy();
         connpd_close_pending_fds_destroy();
         return 0;
     }
@@ -249,6 +235,5 @@ void connpd_destroy(void)
     connpd_stop();
 
     connpd_close_pending_fds_destroy();
-    connpd_poll_pending_fds_destroy();
     connpd_unused_fds_destroy();
 }

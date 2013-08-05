@@ -26,14 +26,6 @@
 
 #define E_EVENTS (POLLERR|POLLHUP|POLLNVAL)
 
-#define fd_list_in(list, fd) \
-        ({int *ele = (int *)(list)->in(list, &fd); \
-              ele ? *ele : -1;})
-
-#define fd_list_out(list) \
-        ({int *ele = (int *)(list)->out(list); \
-              ele ? *ele : -1;})
-
 #define NOW_SECS (CURRENT_TIME_SEC.tv_sec)
 
 #define NOTIFY_SIG (SIGINT)

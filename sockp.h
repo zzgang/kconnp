@@ -9,9 +9,12 @@
 #include <linux/in.h> /*define struct sockaddr_in*/
 #include <linux/net.h> /*define struct socket*/
 #include <net/tcp_states.h>
+#include "stack.h"
 
 #define DEBUG_ON 1
 
+#define NR_SOCKET_BUCKET_LIMIT 1024
+#define connpd_poll_pending_fds_init()
 #define NR_SOCKET_BUCKET 200
 #define NR_HASH (NR_SOCKET_BUCKET/2 + 1)
 #define NR_SHASH (NR_SOCKET_BUCKET)
@@ -50,7 +53,16 @@ struct socket_bucket {
     struct socket_bucket *sb_free_prev;
     struct socket_bucket *sb_free_next;
     int connpd_fd;
+    spinlock_t sb_lock;
 };
+
+extern struct stack_t *sockp_sbs_check_list;
+
+#define sockp_sbs_check_list_in(sb) \
+    sockp_sbs_check_list->in(sockp_sbs_check_list, sb)
+
+#define sockp_sbs_check_list_out(sb) \
+    sockp_sbs_check_list->out(sockp_sbs_check_list)
 
 #define SOCK_SET_ATTR_DEFINE(sock, attr) \
     void set_##attr(struct socket *sock, typeof(((struct socket_bucket *)NULL)->attr) attr)

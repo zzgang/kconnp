@@ -4,6 +4,7 @@
 #include "sys_call.h"
 #include "util.h"
 #include "array.h"
+#include "sockp.h"
 
 /**Poll start**/
 struct poll_table_page {
@@ -71,16 +72,18 @@ static inline void set_pt_key(poll_table *pt, int events)
 #undef DEFAULT_POLLMASK
 #define DEFAULT_POLLMASK (POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM)
 
-static int fd_poll(int fd, int events, poll_table *pwait)
+static int inline do_poll(struct pollfd *pfd, poll_table *pwait)
 {
     unsigned int mask;
+    int events;
+    int fd;
 
+    fd = pfd->fd;
+    events = pfd->events;
     mask = 0;
     if (fd >= 0) {
         struct file * file;
-        //int fput_needed;
 
-        //file = fget_light(fd, &fput_needed);
         file = lkm_get_file(fd); /*Needn't add f_count*/
 
         mask = POLLNVAL;
@@ -96,12 +99,11 @@ static int fd_poll(int fd, int events, poll_table *pwait)
                 if (pwait)
                     set_pt_key(pwait, events);
 #endif
-
                 mask = file->f_op->poll(file, pwait);
             }
+
             /* Mask out unneeded events. */
             mask &= events;
-            //fput_light(file, fput_needed);
         }
     }
 
@@ -120,11 +122,9 @@ static void lkm_poll_initwait(struct poll_wqueues *pwq)
 #endif
 }
 
-static void free_poll_entry(struct poll_table_entry *entry)
+static inline void free_poll_entry(struct poll_table_entry *entry)
 {
     remove_wait_queue(entry->wait_address, &entry->wait);
-    /*Not needed by f_count*/
-    //fput(entry->filp);
 }
 
 static void lkm_poll_freewait(struct poll_wqueues *pwq)
@@ -208,10 +208,10 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
 {
     struct poll_wqueues *pwq = container_of(p, struct poll_wqueues, pt);
     struct poll_table_entry *entry = poll_get_entry(pwq);
+    
     if (!entry)
         return;
-    /*Needn't add f_count*/
-    //get_file(filp);
+
     entry->filp = filp;
     entry->wait_address = wait_address;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
@@ -258,35 +258,27 @@ int lkm_poll(array_t *list, int sec)
     pt = &(&table)->pt;
     
     for (;;) {
-        struct pollfd *pfd;
         int idx;
-        struct socket *sock;
 
         if (!(list))
             goto ignore_poll;
 
         for (idx = 0; idx < (list)->elements; idx++) {
+            struct pollfd *pfd;
             
             pfd = (struct pollfd *)(list)->get(list, idx);
 
-            sock = getsock(pfd->fd);
-
-            spin_lock(&sock->file->f_lock);
-
-            if (sock->sk)
-                pfd->revents = fd_poll(pfd->fd, pfd->events, pt);
-
-            spin_unlock(&sock->file->f_lock);
+            pfd->revents = do_poll(pfd, pt);
 
             if (pfd->revents) {
 
                 count++;
-                
                 set_pt_qproc(pt, NULL);
+
             }
 
         }
-
+        
 ignore_poll:
 
         set_pt_qproc(pt, NULL); 

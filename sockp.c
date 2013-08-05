@@ -139,6 +139,7 @@
         sb->sb_snext = NULL; \
         sb->sb_trav_prev = NULL; \
         sb->sb_trav_next = NULL; \
+        spin_lock_init(&sb->sb_lock); \
     } while(0)
 
 #define ATOMIC_SET_SOCK_ATTR(sock, attr)                                \
@@ -221,6 +222,8 @@ static struct {
 
 static struct socket_bucket SB[NR_SOCKET_BUCKET];
 
+struct stack_t *sockp_sbs_check_list;
+
 static inline unsigned int _hashfn(struct sockaddr_in *address)
 {
     return (unsigned)((*address).sin_port ^ (*address).sin_addr.s_addr) % NR_HASH;
@@ -230,6 +233,15 @@ static inline unsigned int _shashfn(struct sock *sk)
 {
     return (unsigned long)sk % NR_SHASH;
 }
+
+#define sockp_sbs_check_list_init(num) \
+    stack_init(&sockp_sbs_check_list, num, sizeof(struct socket_bucket *))
+
+#define sockp_sbs_check_list_destroy() \
+    do {  \
+        if (sockp_sbs_check_list)                    \
+        sockp_sbs_check_list->destroy(&sockp_sbs_check_list);  \
+    } while(0)
 
 SOCK_SET_ATTR_DEFINE(sock, sock_close_now)
 {
@@ -263,10 +275,7 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
             p->uc++; //inc used count
             p->sock_in_use = 1; //set "in use" tag.
             sk = p->sock->sk;
-
-            spin_lock(&p->sock->file->f_lock);
             p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
-            spin_unlock(&p->sock->file->f_lock);
 
             REMOVE_FROM_HLIST(HASH(address), p);
             
@@ -329,7 +338,7 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
 
         conn_add_all_count(&p->address);
 
-        connpd_poll_pending_fds_in(p->connpd_fd);
+        sockp_sbs_check_list_in(&p);
 
         continue;
 
@@ -385,7 +394,9 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
 
             INSERT_INTO_HLIST(HASH(&p->address), p);
 
+            spin_lock(&p->sb_lock);
             sock_graft(sk, p->sock);
+            spin_unlock(&p->sb_lock);
 
             sb = p;
             
@@ -521,6 +532,9 @@ int sockp_init()
     sb_tmp->sb_free_next = SB;
 
     SOCKP_LOCK_INIT();
+    
+    if (!sockp_sbs_check_list_init(NR_SOCKET_BUCKET))
+        return 0;
 
     return 1;
 }
@@ -530,5 +544,6 @@ int sockp_init()
  */
 void sockp_destroy(void)
 {
+    sockp_sbs_check_list_destroy();
     SOCKP_LOCK_DESTROY();
 }
