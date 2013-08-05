@@ -162,24 +162,27 @@ int insert_into_connp_if_permitted(int fd)
     if (err)
         goto ret_fail;
 
-    if (address.sa_family != AF_INET 
-       /*|| IN_LOOPBACK(ntohl(((struct sockaddr_in *)&address)->sin_addr.s_addr))*/) 
+    if (address.sa_family != AF_INET)
         goto ret_fail;
 
+    if (!cfg_conn_acl_allowd(&address))
+        goto ret_fail;
+ 
     if (!SOCK_ESTABLISHED(sock)) {
-        cfg_conn_set_passive(&address); //May be passive sock.
+        cfg_conn_set_passive(&address); //may be passive sock.
+        set_sock_close_now(sock, 1);
+        notify(CONNP_DAEMON_TSKP); //wake up connpd to nonconnection collection.
         goto ret_fail;
     }
 
-    if (!cfg_conn_is_positive(&address))
-        goto ret_fail;
-    
     err = insert_into_connp(&address, sock);
     
     connp_runlock();
     return err;
+
 ret_fail:
     connp_runlock();
+
     return 0;
 }
 
