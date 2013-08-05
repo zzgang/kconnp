@@ -54,20 +54,20 @@ static inline void set_pt_qproc(poll_table *pt, void *v)
 static inline void set_pt_key(poll_table *pt, int events)
 {
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
-                    pt->key = events;
+    pt->key = events;
 #else
-                    pt->_key = events;
+    pt->_key = events;
 #endif
 }
 
 #endif
 
 #define lkm_get_file(fd)            \
-({ struct file * __file;    \
- rcu_read_lock();       \
- __file = fcheck_files(TASK_FILES(current), fd); \
- rcu_read_unlock(); \
- __file;})
+    ({ struct file * __file;    \
+     rcu_read_lock();       \
+     __file = fcheck_files(TASK_FILES(current), fd); \
+     rcu_read_unlock(); \
+     __file;})
 
 #undef DEFAULT_POLLMASK
 #define DEFAULT_POLLMASK (POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM)
@@ -208,7 +208,7 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
 {
     struct poll_wqueues *pwq = container_of(p, struct poll_wqueues, pt);
     struct poll_table_entry *entry = poll_get_entry(pwq);
-    
+
     if (!entry)
         return;
 
@@ -256,7 +256,7 @@ int lkm_poll(array_t *list, int sec)
 
     lkm_poll_initwait(&table);
     pt = &(&table)->pt;
-    
+
     for (;;) {
         int idx;
 
@@ -265,7 +265,7 @@ int lkm_poll(array_t *list, int sec)
 
         for (idx = 0; idx < (list)->elements; idx++) {
             struct pollfd *pfd;
-            
+
             pfd = (struct pollfd *)(list)->get(list, idx);
 
             pfd->revents = do_poll(pfd, pt);
@@ -278,11 +278,11 @@ int lkm_poll(array_t *list, int sec)
             }
 
         }
-        
+
 ignore_poll:
 
         set_pt_qproc(pt, NULL); 
-        
+
         if (!count) {
             if (signal_pending(current)) {
                 count = -EINTR;
@@ -315,7 +315,7 @@ static int sock_map_fd(struct socket *sock, int flags)
 {
     struct file *newfile;
     int fd;
-    
+
     fd = get_unused_fd_flags(flags);
     if (unlikely(fd < 0))
         return fd;
