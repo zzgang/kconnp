@@ -19,7 +19,7 @@ static void connpd_stop(void);
 static void connpd_unused_fds_prefetch(void);
 static void connpd_unused_fds_put(void);
 
-static inline void connp_wait_sig_or_timeout(void);
+static inline void connp_wait_events_or_timeout(void);
 
 #define CLOSE_ALL 0
 #define CLOSE_TIMEOUT 1
@@ -87,7 +87,7 @@ static void do_close_files(int close_type)
 /**
  *Wait events of connpd fds or timeout.
  */
-static inline void connp_wait_sig_or_timeout(void)
+static inline void connp_wait_events_or_timeout(void)
 {
     int timeout = 1;//s
     
@@ -127,7 +127,7 @@ static int connpd_func(void *data)
 
             scan_spare_conns_preconnect(); 
 
-            connp_wait_sig_or_timeout();
+            connp_wait_events_or_timeout();
 
         }
 
