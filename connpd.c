@@ -98,66 +98,6 @@ static inline void connp_wait_sig_or_timeout(void)
     wait_sig_or_timeout(timeout);
 }
 
-/**
- *Wait events of connpd fds or timeout.
- */
-/*
-struct pollfd_ex {
-    struct pollfd pollfd;
-    void *data;
-};
-
-static inline int connp_fds_events_or_timout(void)
-{
-    int nums;
-    struct socket_bucket **sb;
-    struct pollfd_ex pfd;
-    struct array_t *pollfd_array;
-    int count;
-    int idx = 0;
-
-    nums = sockp_sbs_check_list->elements;
-
-    if (!array_init(&pollfd_array, nums, sizeof(struct pollfd_ex)))
-        goto poll;
-    
-    while ((sb = (struct socket_bucket **)sockp_sbs_check_list_out())) {
-
-        pfd.pollfd.fd = (*sb)->connpd_fd;
-        pfd.pollfd.events = POLLRDHUP;
-        pfd.pollfd.revents = 0;
-        pfd.data = (*sb);
-
-        pollfd_array->set(pollfd_array, &pfd, idx++);
-
-    }
-
-poll:
-    count = lkm_poll(pollfd_array, 1);
-
-    if (!pollfd_array || count <= 0)
-        goto out;
-    
-    {
-        struct pollfd_ex *pfdp;
-        
-        for(idx = 0; idx < pollfd_array->elements; idx++) {
-
-            pfdp = (struct pollfd_ex *)pollfd_array->get(pollfd_array, idx);
-
-            if (pfdp && (pfdp->pollfd.revents & (POLLRDHUP|E_EVENTS)))
-                ((struct socket_bucket *)pfdp->data)->sock_close_now = 1;
-
-        }
-    }
-
-    pollfd_array->destroy(&pollfd_array);
-
-out:
-    return 1;
-}
-*/
-
 static int connpd_func(void *data)
 {
     allow_signal(NOTIFY_SIG);
