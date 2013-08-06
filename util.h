@@ -32,7 +32,7 @@
 #define SEND_FORCE (1)
 #define notify(tskp) send_sig(NOTIFY_SIG, (tskp), SEND_FORCE)
 
-#define wait_sig_or_timeout(timeout) schedule_timeout_interruptible(timeout)
+#define wait_sig_or_timeout(timeout) schedule_timeout_uninterruptible(timeout * HZ)
 
 #define INVOKED_BY_TGROUP_LEADER() (current == current->group_leader)
 

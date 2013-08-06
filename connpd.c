@@ -91,11 +91,12 @@ static inline void connp_wait_sig_or_timeout(void)
 {
     int timeout = 1;//s
     
+
+    wait_sig_or_timeout(timeout);
+
     //clear the previous signal 
     if (signal_pending(current))
         flush_signals(current);
-
-    wait_sig_or_timeout(timeout);
 }
 
 static int connpd_func(void *data)
