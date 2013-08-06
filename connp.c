@@ -175,6 +175,7 @@ int insert_into_connp_if_permitted(int fd)
     }
 
     if (!SOCK_ESTABLISHED(sock)) {
+        printk(KERN_ERR "close\n");
         cfg_conn_set_passive(&address); //may be passive sock.
         notify(CONNP_DAEMON_TSKP); //wake up connpd to nonconnection collection.
         goto ret_fail;

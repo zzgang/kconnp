@@ -322,7 +322,7 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
         if (conn_spec_check_close_flag(&p->address))
             goto shutdown;
 
-        if (!p->sock_in_use && SOCK_ESTABLISHED(p->sock))
+        if (!p->sock_in_use)
             conn_add_idle_count(&p->address);
 
         conn_add_all_count(&p->address);
