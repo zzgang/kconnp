@@ -124,22 +124,21 @@
 
 #define INIT_SB(sb, s, fd, way)   \
     do {    \
-        sb->sb_in_use = 1;  \
-        sb->sock_in_use = 0;    \
-        sb->sock_close_now = 0; \
-        sb->sock = s;    \
-        sb->sk = s->sk;      \
-        sb->sock_create_way = way; \
-        sb->last_used_jiffies = jiffies;    \
-        sb->connpd_fd = fd; \
-        sb->uc = 0; \
-        sb->sb_prev = NULL; \
-        sb->sb_next = NULL; \
-        sb->sb_sprev = NULL; \
-        sb->sb_snext = NULL; \
-        sb->sb_trav_prev = NULL; \
-        sb->sb_trav_next = NULL; \
-        spin_lock_init(&sb->sb_lock); \
+        (sb)->sb_in_use = 1;  \
+        (sb)->sock_in_use = 0;    \
+        (sb)->sock_close_now = 0; \
+        (sb)->sock = s;    \
+        (sb)->sk = (s)->sk;      \
+        (sb)->sock_create_way = way; \
+        (sb)->last_used_jiffies = jiffies;    \
+        (sb)->connpd_fd = fd; \
+        (sb)->uc = 0; \
+        (sb)->sb_prev = NULL; \
+        (sb)->sb_next = NULL; \
+        (sb)->sb_sprev = NULL; \
+        (sb)->sb_snext = NULL; \
+        (sb)->sb_trav_prev = NULL; \
+        (sb)->sb_trav_next = NULL; \
     } while(0)
 
 #define ATOMIC_SET_SOCK_ATTR(sock, attr)                                \
@@ -169,6 +168,8 @@ break_unlock:                                                           \
 
 #define SOCK_IS_PRECONNECT(sb) ((sb)->sock_create_way == SOCK_PRECONNECT)
 #define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowd(&(sb)->address) && SOCK_IS_PRECONNECT(sb))
+
+#define SOCK_IS_TIMEOUT(sb) ((jiffies - (sb)->last_used_jiffies) > TIMEOUT * HZ)
 
 #if DEBUG_ON
 
@@ -222,8 +223,6 @@ static struct {
 
 static struct socket_bucket SB[NR_SOCKET_BUCKET];
 
-struct stack_t *sockp_sbs_check_list;
-
 static inline unsigned int _hashfn(struct sockaddr_in *address)
 {
     return (unsigned)((*address).sin_port ^ (*address).sin_addr.s_addr) % NR_HASH;
@@ -233,15 +232,6 @@ static inline unsigned int _shashfn(struct sock *sk)
 {
     return (unsigned long)sk % NR_SHASH;
 }
-
-#define sockp_sbs_check_list_init(num) \
-    stack_init(&sockp_sbs_check_list, num, sizeof(struct socket_bucket *))
-
-#define sockp_sbs_check_list_destroy() \
-    do {  \
-        if (sockp_sbs_check_list)                    \
-        sockp_sbs_check_list->destroy(&sockp_sbs_check_list);  \
-    } while(0)
 
 SOCK_SET_ATTR_DEFINE(sock, sock_close_now)
 {
@@ -312,33 +302,30 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
 
         LOOP_COUNT_SAFE_CHECK(p);
 
-        if (shutdown_way == SHUTDOWN_ALL)
+        if ((shutdown_way == SHUTDOWN_ALL) || p->sock_close_now)
             goto shutdown;
 
-        if (p->sock_close_now) {
+        if (!SK_ESTABLISHING(p->sk)) {
            cfg_conn_set_passive(&p->address); //may be passive socket 
            goto shutdown;
         }
 
         if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p)
                 || SOCK_IS_RECLAIM_PASSIVE(p) 
-                || (SOCK_IS_RECLAIM(p)
-                    && (jiffies - p->last_used_jiffies > TIMEOUT * HZ))
+                || (SOCK_IS_RECLAIM(p) && SOCK_IS_TIMEOUT(p))
                 || (SOCK_IS_PRECONNECT(p) 
                     && p->sock_in_use 
-                    && (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
+                    && SOCK_IS_TIMEOUT(p))) 
             goto shutdown;
 
         //Luckly, selected as idle conn.
         if (conn_spec_check_close_flag(&p->address))
             goto shutdown;
 
-        if (!p->sock_in_use)
+        if (!p->sock_in_use && SOCK_ESTABLISHED(p->sock))
             conn_add_idle_count(&p->address);
 
         conn_add_all_count(&p->address);
-
-        sockp_sbs_check_list_in(&p);
 
         continue;
 
@@ -394,9 +381,7 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
 
             INSERT_INTO_HLIST(HASH(&p->address), p);
 
-            spin_lock(&p->sb_lock);
             sock_graft(sk, p->sock);
-            spin_unlock(&p->sb_lock);
 
             sb = p;
             
@@ -533,9 +518,6 @@ int sockp_init()
 
     SOCKP_LOCK_INIT();
     
-    if (!sockp_sbs_check_list_init(NR_SOCKET_BUCKET))
-        return 0;
-
     return 1;
 }
 
@@ -544,6 +526,5 @@ int sockp_init()
  */
 void sockp_destroy(void)
 {
-    sockp_sbs_check_list_destroy();
     SOCKP_LOCK_DESTROY();
 }

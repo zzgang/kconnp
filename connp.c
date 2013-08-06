@@ -167,10 +167,15 @@ int insert_into_connp_if_permitted(int fd)
 
     if (!cfg_conn_acl_allowd(&address))
         goto ret_fail;
- 
+
+    if (!cfg_conn_is_positive(&address)) {
+        set_sock_close_now(sock, 1);
+        notify(CONNP_DAEMON_TSKP);
+        goto ret_fail;
+    }
+
     if (!SOCK_ESTABLISHED(sock)) {
         cfg_conn_set_passive(&address); //may be passive sock.
-        set_sock_close_now(sock, 1);
         notify(CONNP_DAEMON_TSKP); //wake up connpd to nonconnection collection.
         goto ret_fail;
     }

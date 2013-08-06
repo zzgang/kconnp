@@ -16,11 +16,10 @@ static int connpd_func(void *data);
 static int connpd_start(void);
 static void connpd_stop(void);
 
-static int shutdown_timeout_or_preconnect(void);
-static inline int connp_fds_events_or_timout(void);
-
 static void connpd_unused_fds_prefetch(void);
 static void connpd_unused_fds_put(void);
+
+static inline void connp_wait_sig_or_timeout(void);
 
 #define CLOSE_ALL 0
 #define CLOSE_TIMEOUT 1
@@ -85,13 +84,29 @@ static void do_close_files(int close_type)
 
 }
 
+/**
+ *Wait events of connpd fds or timeout.
+ */
+static inline void connp_wait_sig_or_timeout(void)
+{
+    int timeout = 1;//s
+    
+    //clear the previous signal 
+    if (signal_pending(current))
+        flush_signals(current);
+
+    wait_sig_or_timeout(timeout);
+}
+
+/**
+ *Wait events of connpd fds or timeout.
+ */
+/*
 struct pollfd_ex {
     struct pollfd pollfd;
     void *data;
 };
-/**
- *Wait events of connpd fds or timeout.
- */
+
 static inline int connp_fds_events_or_timout(void)
 {
     int nums;
@@ -141,21 +156,7 @@ poll:
 out:
     return 1;
 }
-
-/**
- * Shutdown sockets which are passive closed or expired or LRU replaced.
- */
-static int shutdown_timeout_or_preconnect()
-{
-    if (connp_fds_events_or_timout()) {
-
-        close_timeout_files();
-        scan_spare_conns_preconnect(); 
-
-    }
-    
-    return 0;
-}
+*/
 
 static int connpd_func(void *data)
 {
@@ -179,8 +180,13 @@ static int connpd_func(void *data)
         } else {
 
             conn_stats_info_dump();
+
+            close_timeout_files();
             connpd_unused_fds_prefetch();
-            shutdown_timeout_or_preconnect();
+
+            scan_spare_conns_preconnect(); 
+
+            connp_wait_sig_or_timeout();
 
         }
 

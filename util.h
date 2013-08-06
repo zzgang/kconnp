@@ -32,6 +32,8 @@
 #define SEND_FORCE (1)
 #define notify(tskp) send_sig(NOTIFY_SIG, (tskp), SEND_FORCE)
 
+#define wait_sig_or_timeout(timeout) schedule_timeout_interruptible(timeout)
+
 #define INVOKED_BY_TGROUP_LEADER() (current == current->group_leader)
 
 #define lkmalloc(size) kzalloc(size, GFP_ATOMIC)
@@ -51,7 +53,13 @@
     ((sock)->file->f_flags &= ~SOCK_CLIENT_TAG)
 
 #define SK_ESTABLISHED(sk)  \
-    (sk->sk_state == TCP_ESTABLISHED)
+    ((sk)->sk_state == TCP_ESTABLISHED)
+
+#define SK_ESTABLISHING(sk) \
+    (((sk)->sk_state == TCP_SYN_SENT) || SK_ESTABLISHED(sk))
+
+#define SOCK_ESTABLISHING(sock) \
+    ((sock)->sk && SK_ESTABLISHING((sock)->sk))
 
 #define SOCK_ESTABLISHED(sock) \
     ((sock)->sk && SK_ESTABLISHED((sock)->sk))
