@@ -83,6 +83,8 @@ static int inline do_poll(struct pollfd *pfd, poll_table *pwait)
     mask = 0;
     if (fd >= 0) {
         struct file * file;
+        struct pollfd_ex_t *pfdt;
+        struct socket_bucket *sb;
 
         file = lkm_get_file(fd); /*Needn't add f_count*/
 
@@ -99,7 +101,16 @@ static int inline do_poll(struct pollfd *pfd, poll_table *pwait)
                 if (pwait)
                     set_pt_key(pwait, events);
 #endif
-                mask = file->f_op->poll(file, pwait);
+
+                pfdt = container_of(pfd, struct pollfd_ex_t, pollfd); 
+
+                sb = (struct socket_bucket *)(pfdt->data);
+
+                spin_lock(&sb->s_lock);
+                if (sb->sock->sk)
+                    mask = file->f_op->poll(file, pwait);
+                spin_unlock(&sb->s_lock);
+
             }
 
             /* Mask out unneeded events. */
@@ -160,7 +171,7 @@ static struct poll_table_entry *poll_get_entry(struct poll_wqueues *p)
     if (!table || POLL_TABLE_FULL(table)) {
         struct poll_table_page *new_table;
 
-        new_table = (struct poll_table_page *) __get_free_page(GFP_KERNEL);
+        new_table = (struct poll_table_page *) __get_free_page(GFP_ATOMIC);
         if (!new_table) {
             p->error = -ENOMEM;
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 28)
@@ -202,6 +213,7 @@ static int pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
     return __pollwake(wait, mode, sync, key);
 }
 #endif
+
 /* Add a new entry */
 static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
         poll_table *p)
@@ -229,7 +241,7 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
     init_waitqueue_entry(&entry->wait, current);
 #endif
 
-    add_wait_queue(wait_address, &entry->wait);
+    __add_wait_queue(wait_address, &entry->wait);
 }
 
 int lkm_poll(array_t *list, int sec)
@@ -250,7 +262,7 @@ int lkm_poll(array_t *list, int sec)
 
 #else
 
-    long __timeout = sec * 1000/*miliseconds*/;
+    long __timeout = sec * HZ;
 
 #endif
 
@@ -264,9 +276,12 @@ int lkm_poll(array_t *list, int sec)
             goto ignore_poll;
 
         for (idx = 0; idx < (list)->elements; idx++) {
+            struct pollfd_ex_t *pfdt;
             struct pollfd *pfd;
 
-            pfd = (struct pollfd *)(list)->get(list, idx);
+            pfdt = (struct pollfd_ex_t *)(list)->get(list, idx);
+
+            pfd = (struct pollfd *)&pfdt->pollfd;
 
             pfd->revents = do_poll(pfd, pt);
 

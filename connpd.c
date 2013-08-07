@@ -16,10 +16,10 @@ static int connpd_func(void *data);
 static int connpd_start(void);
 static void connpd_stop(void);
 
+static void connp_wait_events_or_timout(void);
+
 static void connpd_unused_fds_prefetch(void);
 static void connpd_unused_fds_put(void);
-
-static inline void connp_wait_events_or_timeout(void);
 
 #define CLOSE_ALL 0
 #define CLOSE_TIMEOUT 1
@@ -85,18 +85,58 @@ static void do_close_files(int close_type)
 }
 
 /**
- *Wait events of connpd fds or timeout.
+ *Wait events or timeout.
  */
-static inline void connp_wait_events_or_timeout(void)
+static void connp_wait_events_or_timout(void)
 {
-    int timeout = 1;//s
+    int nums;
+    struct socket_bucket **sb;
+    struct pollfd_ex_t pfd;
+    struct array_t *pollfd_array;
+    int count = 0;
+    int idx = 0;
+    int timeout = 1;
+
+    nums = sockp_sbs_check_list->elements;
+
+    if (!array_init(&pollfd_array, nums, sizeof(struct pollfd_ex_t)))
+        goto poll;
     
+    while ((sb = (struct socket_bucket **)sockp_sbs_check_list_out())) {
 
-    wait_sig_or_timeout(timeout);
+        pfd.pollfd.fd = (*sb)->connpd_fd;
+        pfd.pollfd.events = POLLRDHUP;
+        pfd.pollfd.revents = 0;
+        pfd.data = (*sb);
 
-    //clear the previous signal 
-    if (signal_pending(current))
-        flush_signals(current);
+        pollfd_array->set(pollfd_array, &pfd, idx++);
+
+    }
+
+poll:
+    count = lkm_poll(pollfd_array, timeout);
+
+    if (!pollfd_array || count <= 0)
+        return;
+    
+    {
+        struct pollfd_ex_t *pfdp;
+        
+        for(idx = 0; idx < pollfd_array->elements; idx++) {
+
+            pfdp = (struct pollfd_ex_t *)pollfd_array->get(pollfd_array, idx);
+
+            if (pfdp && (pfdp->pollfd.revents & (POLLRDHUP|E_EVENTS))) {
+                struct socket *sock;
+
+                sock = ((struct socket_bucket *)pfdp->data)->sock;
+                set_sock_close_now(sock, 1);
+            }
+
+        }
+    }
+
+    pollfd_array->destroy(&pollfd_array);
 }
 
 static int connpd_func(void *data)
@@ -119,15 +159,16 @@ static int connpd_func(void *data)
             break;
 
         } else {
-
-            conn_stats_info_dump();
-
+            //scan and shutdown
             close_timeout_files();
+
             connpd_unused_fds_prefetch();
 
             scan_spare_conns_preconnect(); 
+            
+            conn_stats_info_dump();
 
-            connp_wait_events_or_timeout();
+            connp_wait_events_or_timout();
 
         }
 

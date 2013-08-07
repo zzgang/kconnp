@@ -53,7 +53,16 @@ struct socket_bucket {
     struct socket_bucket *sb_free_prev;
     struct socket_bucket *sb_free_next;
     int connpd_fd;
+    spinlock_t s_lock; //lock for poll
 };
+
+extern struct stack_t *sockp_sbs_check_list;
+
+#define sockp_sbs_check_list_in(sb) \
+    sockp_sbs_check_list->in(sockp_sbs_check_list, sb)
+
+#define sockp_sbs_check_list_out(sb) \
+    sockp_sbs_check_list->out(sockp_sbs_check_list)
 
 #define SOCK_SET_ATTR_DEFINE(sock, attr) \
     void set_##attr(struct socket *sock, typeof(((struct socket_bucket *)NULL)->attr) attr)
