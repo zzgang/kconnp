@@ -170,7 +170,7 @@ break_unlock:                                                           \
 #define SOCK_IS_PRECONNECT(sb) ((sb)->sock_create_way == SOCK_PRECONNECT)
 #define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowd(&(sb)->address) && SOCK_IS_PRECONNECT(sb))
 
-#if DEBUG_ON
+#if SOCKP_DEBUG
 
 static unsigned int loop_count = 0;
 #define LOOP_COUNT_SAFE_CHECK(ptr) do { \

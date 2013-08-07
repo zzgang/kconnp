@@ -11,7 +11,7 @@
 #include <net/tcp_states.h>
 #include "stack.h"
 
-#define DEBUG_ON 1
+#define SOCKP_DEBUG 1
 
 #define NR_SOCKET_BUCKET_LIMIT 1024
 #define connpd_poll_pending_fds_init()
