@@ -465,12 +465,10 @@ static struct socket_bucket *get_empty_slot(void)
 
         ht.sb_free_p = lru->sb_free_next;
 
-        if (IN_HLIST(HASH(&lru->address), lru))
-            REMOVE_FROM_HLIST(HASH(&lru->address), lru);
-        if (IN_SHLIST(SHASH(lru->sk), lru))
-            REMOVE_FROM_SHLIST(SHASH(lru->sk), lru);
-        if (IN_TLIST(lru))
-            REMOVE_FROM_TLIST(lru);
+        //It is safe because it is in every list already.
+        REMOVE_FROM_HLIST(HASH(&lru->address), lru);
+        REMOVE_FROM_SHLIST(SHASH(lru->sk), lru);
+        REMOVE_FROM_TLIST(lru);
 
         return lru;
 
