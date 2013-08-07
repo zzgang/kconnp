@@ -95,7 +95,7 @@ static void connp_wait_events_or_timout(void)
     struct array_t *pollfd_array;
     int count = 0;
     int idx = 0;
-    int timeout = 1;
+    int timeout = 1;//sec
 
     nums = sockp_sbs_check_list->elements;
 

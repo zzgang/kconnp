@@ -241,7 +241,7 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
     init_waitqueue_entry(&entry->wait, current);
 #endif
 
-    __add_wait_queue(wait_address, &entry->wait);
+    add_wait_queue(wait_address, &entry->wait);
 }
 
 int lkm_poll(array_t *list, int sec)
