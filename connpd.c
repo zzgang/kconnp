@@ -16,6 +16,7 @@ static int connpd_func(void *data);
 static int connpd_start(void);
 static void connpd_stop(void);
 
+static int connpd_do_poll(void *data, poll_table *pt);
 static void connp_wait_events_or_timout(void);
 
 static void connpd_unused_fds_prefetch(void);
@@ -84,6 +85,23 @@ static void do_close_files(int close_type)
 
 }
 
+static int connpd_do_poll(void *data, poll_table *pt)
+{
+    struct socket_bucket *sb;
+    struct file *file;
+    int mask = 0;
+
+    sb = (struct socket_bucket *)data;
+    file = lkm_get_file(sb->connpd_fd);
+    
+    spin_lock(&sb->s_lock);
+    if (sb->sock->sk)
+        mask = file->f_op->poll(file, pt);
+    spin_unlock(&sb->s_lock);
+
+    return mask;
+}
+
 /**
  *Wait events or timeout.
  */
@@ -91,7 +109,7 @@ static void connp_wait_events_or_timout(void)
 {
     int nums;
     struct socket_bucket **sb;
-    struct pollfd_ex_t pfd;
+    struct pollfd_ex_t pfdt;
     struct array_t *pollfd_array;
     int count = 0;
     int idx = 0;
@@ -104,12 +122,13 @@ static void connp_wait_events_or_timout(void)
     
     while ((sb = (struct socket_bucket **)sockp_sbs_check_list_out())) {
 
-        pfd.pollfd.fd = (*sb)->connpd_fd;
-        pfd.pollfd.events = POLLRDHUP;
-        pfd.pollfd.revents = 0;
-        pfd.data = (*sb);
+        pfdt.pollfd.fd = (*sb)->connpd_fd;
+        pfdt.pollfd.events = POLLRDHUP;
+        pfdt.pollfd.revents = 0;
+        pfdt.data = (*sb);
+        pfdt.do_poll = connpd_do_poll;
 
-        pollfd_array->set(pollfd_array, &pfd, idx++);
+        pollfd_array->set(pollfd_array, &pfdt, idx++);
 
     }
 

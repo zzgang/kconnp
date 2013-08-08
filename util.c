@@ -4,7 +4,6 @@
 #include "sys_call.h"
 #include "util.h"
 #include "array.h"
-#include "sockp.h"
 
 /**Poll start**/
 struct poll_table_page {
@@ -62,21 +61,17 @@ static inline void set_pt_key(poll_table *pt, int events)
 
 #endif
 
-#define lkm_get_file(fd)            \
-    ({ struct file * __file;    \
-     rcu_read_lock();       \
-     __file = fcheck_files(TASK_FILES(current), fd); \
-     rcu_read_unlock(); \
-     __file;})
-
 #undef DEFAULT_POLLMASK
 #define DEFAULT_POLLMASK (POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM)
 
-static int inline do_poll(struct pollfd *pfd, poll_table *pwait)
+static int inline do_poll(struct pollfd_ex_t *pfdt, poll_table *pwait)
 {
     unsigned int mask;
     int events;
     int fd;
+    struct pollfd *pfd;
+
+    pfd = &pfdt->pollfd;
 
     fd = pfd->fd;
     events = pfd->events;
@@ -84,7 +79,6 @@ static int inline do_poll(struct pollfd *pfd, poll_table *pwait)
     if (fd >= 0) {
         struct file * file;
         struct pollfd_ex_t *pfdt;
-        struct socket_bucket *sb;
 
         file = lkm_get_file(fd); /*Needn't add f_count*/
 
@@ -104,13 +98,10 @@ static int inline do_poll(struct pollfd *pfd, poll_table *pwait)
 
                 pfdt = container_of(pfd, struct pollfd_ex_t, pollfd); 
 
-                sb = (struct socket_bucket *)(pfdt->data);
-
-                spin_lock(&sb->s_lock);
-                if (sb->sock->sk)
+                if (pfdt->data && pfdt->do_poll)
+                    mask = pfdt->do_poll(pfdt->data, pwait);
+                else 
                     mask = file->f_op->poll(file, pwait);
-                spin_unlock(&sb->s_lock);
-
             }
 
             /* Mask out unneeded events. */
@@ -244,7 +235,7 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
     add_wait_queue(wait_address, &entry->wait);
 }
 
-int lkm_poll(array_t *list, int sec)
+int lkm_poll(array_t *pfdt_list, int sec)
 {
     struct poll_wqueues table;
     poll_table *pt;
@@ -262,7 +253,7 @@ int lkm_poll(array_t *list, int sec)
 
 #else
 
-    long __timeout = sec * HZ;
+    long __timeout = sec;
 
 #endif
 
@@ -272,18 +263,18 @@ int lkm_poll(array_t *list, int sec)
     for (;;) {
         int idx;
 
-        if (!(list))
+        if (!(pfdt_list))
             goto ignore_poll;
 
-        for (idx = 0; idx < (list)->elements; idx++) {
+        for (idx = 0; idx < (pfdt_list)->elements; idx++) {
             struct pollfd_ex_t *pfdt;
             struct pollfd *pfd;
 
-            pfdt = (struct pollfd_ex_t *)(list)->get(list, idx);
+            pfdt = (struct pollfd_ex_t *)(pfdt_list)->get(pfdt_list, idx);
 
             pfd = (struct pollfd *)&pfdt->pollfd;
 
-            pfd->revents = do_poll(pfd, pt);
+            pfd->revents = do_poll(pfdt, pt);
 
             if (pfd->revents) {
 
@@ -313,7 +304,7 @@ ignore_poll:
                     &expire, 0))
             timed_out = 1;
 #else
-        __timeout = schedule_timeout_interruptible(__timeout);
+        __timeout = wait_for_sig_or_timeout(__timeout);
         if (!__timeout)
             timed_out = 1;
 #endif

@@ -24,9 +24,13 @@
 #include <linux/list.h>
 #include <linux/poll.h>
 
+#define wait_for_sig_or_timeout(sec) schedule_timeout_interruptible((sec) * HZ)
+#define wait_for_timeout(sec) schedule_timeout_uninterruptible((sec) * HZ)
+
 struct pollfd_ex_t {
     struct pollfd pollfd;
     void *data;
+    int (*do_poll)(void *data, poll_table *pt);
 };
 
 #define E_EVENTS (POLLERR|POLLHUP|POLLNVAL)
@@ -69,6 +73,14 @@ struct pollfd_ex_t {
 #define lkm_atomic_add(v, a) atomic_add_return(a, (atomic_t *)v)
 #define lkm_atomic_sub(v, a) atomic_sub_return(a, (atomic_t *)v)
 #define lkm_atomic_set(v, a) atomic_set((atomic_t *)v, a) 
+
+
+#define lkm_get_file(fd)            \
+    ({ struct file * __file;    \
+     rcu_read_lock();       \
+     __file = fcheck_files(TASK_FILES(current), fd); \
+     rcu_read_unlock(); \
+     __file;})
 
 #define TASK_FILES(tsk) (tsk)->files
 

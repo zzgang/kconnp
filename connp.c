@@ -22,6 +22,8 @@ static inline int insert_socket_to_connp(struct sockaddr *, struct socket *);
 static inline int insert_into_connp(struct sockaddr *, struct socket *);
 static inline void sk_attach_sock(struct sock *, struct socket *);
 
+static inline void deferred_destroy(void);
+
 static int conn_close_flag; 
 static void do_conn_spec_check_close_flag(void *data)
 {
@@ -249,6 +251,13 @@ void connp_sys_exit_prepare()
     } 
 }
 
+static inline void deferred_destroy(void) 
+{
+    int time_going = 1;//s
+
+    wait_for_timeout(time_going);
+}
+
 int connp_init()
 {
     connp_rwlock_init();
@@ -282,10 +291,12 @@ int connp_init()
     return 1;
 }
 
+
 void connp_destroy()
 {
     restore_syscalls();
     connpd_destroy();
     sockp_destroy();
     cfg_destroy();
+    deferred_destroy();//make sure all threads exit the kconnp routines.
 }
