@@ -5,6 +5,10 @@
 #include <linux/sched.h>
 #include "sockp.h"
 
+#define CONN_BLOCK 1
+#define CONN_NONBLOCK 2
+#define CONN_IS_NONBLOCK(filp) ((filp)->f_flags & O_NONBLOCK)
+
 typedef enum {
     CLOSE_POSITIVE = 0,
     CLOSE_PASSIVE

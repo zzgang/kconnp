@@ -6,6 +6,16 @@
 #include "array.h"
 
 /**Poll start**/
+struct poll_wqueues_alias {
+    poll_table pt;
+    struct poll_table_page *table;
+    struct task_struct *polling_task;
+    int triggered;
+    int error;
+    int inline_index;
+    struct poll_table_entry inline_entries[N_INLINE_POLL_ENTRIES];
+};
+
 struct poll_table_page {
     struct poll_table_page * next;
     struct poll_table_entry * entry;
@@ -17,36 +27,6 @@ struct poll_table_page {
 
 static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
         poll_table *p);
-
-/*
- * Add two timespec values and do a safety check for overflow.
- * It's assumed that both values are valid (>= 0)
- */
-
-#undef TIME_T_MAX
-#define TIME_T_MAX (time_t)((1UL << ((sizeof(time_t) << 3) - 1)) - 1)
-static inline struct timespec lkm_timespec_add_safe(const struct timespec lhs,
-        const struct timespec rhs)
-{
-    struct timespec res;
-
-    set_normalized_timespec(&res, lhs.tv_sec + rhs.tv_sec,
-            lhs.tv_nsec + rhs.tv_nsec);
-
-    if (res.tv_sec < lhs.tv_sec || res.tv_sec < rhs.tv_sec)
-        res.tv_sec = TIME_T_MAX;
-
-    return res;
-}
-
-static inline void set_pt_qproc(poll_table *pt, void *v)
-{
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 2, 45)
-    pt = NULL;
-#else
-    pt->_qproc = v;
-#endif
-}
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
 
@@ -91,10 +71,8 @@ static int inline do_poll(struct pollfd_ex_t *pfdt, poll_table *pwait)
 
             if (file->f_op && file->f_op->poll) {
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
                 if (pwait)
                     set_pt_key(pwait, events);
-#endif
 
                 pfdt = container_of(pfd, struct pollfd_ex_t, pollfd); 
 
@@ -112,16 +90,14 @@ static int inline do_poll(struct pollfd_ex_t *pfdt, poll_table *pwait)
     return mask;
 }
 
-static void lkm_poll_initwait(struct poll_wqueues *pwq)
+static void lkm_poll_initwait(struct poll_wqueues_alias *pwq)
 {
     init_poll_funcptr(&pwq->pt, __pollwait);
     pwq->error = 0;
     pwq->table = NULL;
     pwq->inline_index = 0;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 28)
     pwq->polling_task = current;
     pwq->triggered = 0;
-#endif
 }
 
 static inline void free_poll_entry(struct poll_table_entry *entry)
@@ -129,7 +105,7 @@ static inline void free_poll_entry(struct poll_table_entry *entry)
     remove_wait_queue(entry->wait_address, &entry->wait);
 }
 
-static void lkm_poll_freewait(struct poll_wqueues *pwq)
+static void lkm_poll_freewait(struct poll_wqueues_alias *pwq)
 {
     struct poll_table_page * p = pwq->table;
     int i;
@@ -152,7 +128,7 @@ static void lkm_poll_freewait(struct poll_wqueues *pwq)
     }
 }
 
-static struct poll_table_entry *poll_get_entry(struct poll_wqueues *p)
+static struct poll_table_entry *poll_get_entry(struct poll_wqueues_alias *p)
 {
     struct poll_table_page *table = p->table;
 
@@ -165,9 +141,6 @@ static struct poll_table_entry *poll_get_entry(struct poll_wqueues *p)
         new_table = (struct poll_table_page *) __get_free_page(GFP_ATOMIC);
         if (!new_table) {
             p->error = -ENOMEM;
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 28)
-            __set_current_state(TASK_RUNNING);
-#endif
             return NULL;
         }
         new_table->entry = new_table->entries;
@@ -179,10 +152,9 @@ static struct poll_table_entry *poll_get_entry(struct poll_wqueues *p)
     return table->entry++;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)
 static int __pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 {
-    struct poll_wqueues *pwq = wait->private;
+    struct poll_wqueues_alias *pwq = wait->private;
     DECLARE_WAITQUEUE(dummy_wait, pwq->polling_task);
 
     smp_wmb();
@@ -193,23 +165,20 @@ static int __pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 
 static int pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
     struct poll_table_entry *entry;
 
     entry = container_of(wait, struct poll_table_entry, wait);
     if (key && !((unsigned long)key & entry->key))
         return 0;
-#endif
 
     return __pollwake(wait, mode, sync, key);
 }
-#endif
 
 /* Add a new entry */
 static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
         poll_table *p)
 {
-    struct poll_wqueues *pwq = container_of(p, struct poll_wqueues, pt);
+    struct poll_wqueues_alias *pwq = container_of(p, struct poll_wqueues_alias, pt);
     struct poll_table_entry *entry = poll_get_entry(pwq);
 
     if (!entry)
@@ -225,41 +194,22 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
 #endif
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)
     init_waitqueue_func_entry(&entry->wait, pollwake);
     entry->wait.private = pwq;
-#else 
-    init_waitqueue_entry(&entry->wait, current);
-#endif
 
     add_wait_queue(wait_address, &entry->wait);
 }
 
 int lkm_poll(array_t *pfdt_list, int sec)
 {
-    struct poll_wqueues table;
+    struct poll_wqueues_alias table;
     poll_table *pt;
     int count = 0;
     int timed_out = 0;
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 28)
-
-    ktime_t expire;
-    struct timespec end_time, time_out = {.tv_sec = sec/*second*/, .tv_nsec = 0};
-
-    ktime_get_ts(&end_time);
-    end_time = lkm_timespec_add_safe(end_time, time_out);
-    expire = timespec_to_ktime(end_time);
-
-#else
-
     long __timeout = sec;
-
-#endif
 
     lkm_poll_initwait(&table);
     pt = &(&table)->pt;
-
     for (;;) {
         int idx;
 
@@ -279,7 +229,7 @@ int lkm_poll(array_t *pfdt_list, int sec)
             if (pfd->revents) {
 
                 count++;
-                set_pt_qproc(pt, NULL);
+                pt = NULL;
 
             }
 
@@ -287,7 +237,7 @@ int lkm_poll(array_t *pfdt_list, int sec)
 
 ignore_poll:
 
-        set_pt_qproc(pt, NULL); 
+        pt = NULL;
 
         if (!count) {
             if (signal_pending(current)) {
@@ -299,15 +249,9 @@ ignore_poll:
         if (count || timed_out)
             break;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 28)
-        if (!poll_schedule_timeout(&table, TASK_INTERRUPTIBLE/*Receive signals*/, 
-                    &expire, 0))
-            timed_out = 1;
-#else
         __timeout = wait_for_sig_or_timeout(__timeout);
         if (!__timeout)
             timed_out = 1;
-#endif
     }
 
     lkm_poll_freewait(&table); 

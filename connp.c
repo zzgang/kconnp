@@ -230,7 +230,11 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     if ((sk = apply_sk_from_sockp(address))) {
         sk_attach_sock(sk, sock);
         SET_SOCK_STATE(sock, SS_CONNECTED);
-        ret = 1;
+        if (CONN_IS_NONBLOCK(sock->file)) {
+            sk->sk_state_change(sk);
+            ret = CONN_NONBLOCK;
+        } else
+            ret = CONN_BLOCK;
     }
 
     SET_CLIENT_FLAG(sock);

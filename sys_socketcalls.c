@@ -64,8 +64,12 @@ asmlinkage long connp_sys_connect(int fd, struct sockaddr __user * uservaddr,
     if (err < 0)
         return -EFAULT;
     
-    if (fetch_conn_from_connp(fd, (struct sockaddr *)&address))
-        return 0;
+    if ((err = fetch_conn_from_connp(fd, (struct sockaddr *)&address))) {
+        if (err == CONN_BLOCK)
+            return 0;
+        else
+            return -EINPROGRESS;
+    }
 
     return orig_sys_connect(fd, uservaddr, addrlen);
 }
