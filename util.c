@@ -6,6 +6,13 @@
 #include "array.h"
 
 /**Poll start**/
+struct poll_table_entry_alias {
+    struct file *filp;
+    unsigned long key;
+    wait_queue_t wait;
+    wait_queue_head_t *wait_address;
+};
+
 struct poll_wqueues_alias {
     poll_table pt;
     struct poll_table_page *table;
@@ -13,13 +20,13 @@ struct poll_wqueues_alias {
     int triggered;
     int error;
     int inline_index;
-    struct poll_table_entry inline_entries[N_INLINE_POLL_ENTRIES];
+    struct poll_table_entry_alias inline_entries[N_INLINE_POLL_ENTRIES];
 };
 
 struct poll_table_page {
     struct poll_table_page * next;
-    struct poll_table_entry * entry;
-    struct poll_table_entry entries[0];
+    struct poll_table_entry_alias * entry;
+    struct poll_table_entry_alias entries[0];
 };
 
 #define POLL_TABLE_FULL(table) \
@@ -71,8 +78,10 @@ static int inline do_poll(struct pollfd_ex_t *pfdt, poll_table *pwait)
 
             if (file->f_op && file->f_op->poll) {
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
                 if (pwait)
                     set_pt_key(pwait, events);
+#endif
 
                 pfdt = container_of(pfd, struct pollfd_ex_t, pollfd); 
 
@@ -100,7 +109,7 @@ static void lkm_poll_initwait(struct poll_wqueues_alias *pwq)
     pwq->triggered = 0;
 }
 
-static inline void free_poll_entry(struct poll_table_entry *entry)
+static inline void free_poll_entry(struct poll_table_entry_alias *entry)
 {
     remove_wait_queue(entry->wait_address, &entry->wait);
 }
@@ -114,7 +123,7 @@ static void lkm_poll_freewait(struct poll_wqueues_alias *pwq)
         free_poll_entry(pwq->inline_entries + i);
 
     while (p) {
-        struct poll_table_entry * entry;
+        struct poll_table_entry_alias * entry;
         struct poll_table_page *old;
 
         entry = p->entry;
@@ -128,7 +137,7 @@ static void lkm_poll_freewait(struct poll_wqueues_alias *pwq)
     }
 }
 
-static struct poll_table_entry *poll_get_entry(struct poll_wqueues_alias *p)
+static struct poll_table_entry_alias *poll_get_entry(struct poll_wqueues_alias *p)
 {
     struct poll_table_page *table = p->table;
 
@@ -165,9 +174,9 @@ static int __pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 
 static int pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 {
-    struct poll_table_entry *entry;
+    struct poll_table_entry_alias *entry;
 
-    entry = container_of(wait, struct poll_table_entry, wait);
+    entry = container_of(wait, struct poll_table_entry_alias, wait);
     if (key && !((unsigned long)key & entry->key))
         return 0;
 
@@ -179,7 +188,7 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
         poll_table *p)
 {
     struct poll_wqueues_alias *pwq = container_of(p, struct poll_wqueues_alias, pt);
-    struct poll_table_entry *entry = poll_get_entry(pwq);
+    struct poll_table_entry_alias *entry = poll_get_entry(pwq);
 
     if (!entry)
         return;
