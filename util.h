@@ -62,6 +62,9 @@ struct pollfd_ex_t {
 #define SK_ESTABLISHED(sk)  \
     (sk->sk_state == TCP_ESTABLISHED)
 
+#define SET_SOCK_STATE(sock, STATE)    \
+    ((sock)->state = STATE)
+
 #define SOCK_ESTABLISHED(sock) \
     ((sock)->sk && SK_ESTABLISHED((sock)->sk))
 
