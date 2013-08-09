@@ -16,6 +16,7 @@ typedef enum {
 
 struct conn_attr_t {
     conn_close_way_t close_way;
+    u64 keep_alive;
     int close_now;
     struct {
         unsigned int all_count;

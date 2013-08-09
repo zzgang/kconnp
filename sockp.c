@@ -3,7 +3,6 @@
  *Author Zhigang Zhang <zzgang2008@gmail.com>
  */
 #include <linux/string.h>
-#include <linux/jiffies.h>
 #include <net/sock.h>
 #include <linux/spinlock.h> 
 #include "sys_call.h"
@@ -124,22 +123,23 @@
 
 #define INIT_SB(sb, s, fd, way)   \
     do {    \
-        sb->sb_in_use = 1;  \
-        sb->sock_in_use = 0;    \
-        sb->sock_close_now = 0; \
-        sb->sock = s;    \
-        sb->sk = s->sk;      \
-        sb->sock_create_way = way; \
-        sb->last_used_jiffies = jiffies;    \
-        sb->connpd_fd = fd; \
-        sb->uc = 0; \
-        sb->sb_prev = NULL; \
-        sb->sb_next = NULL; \
-        sb->sb_sprev = NULL; \
-        sb->sb_snext = NULL; \
-        sb->sb_trav_prev = NULL; \
-        sb->sb_trav_next = NULL; \
-        spin_lock_init(&sb->s_lock); \
+        (sb)->sb_in_use = 1;  \
+        (sb)->sock_in_use = 0;    \
+        (sb)->sock_close_now = 0; \
+        (sb)->sock = s;    \
+        (sb)->sk = (s)->sk;      \
+        (sb)->sock_create_way = way; \
+        (sb)->sock_create_jiffies = lkm_jiffies; \
+        (sb)->last_used_jiffies = lkm_jiffies;    \
+        (sb)->connpd_fd = fd; \
+        (sb)->uc = 0; \
+        (sb)->sb_prev = NULL; \
+        (sb)->sb_next = NULL; \
+        (sb)->sb_sprev = NULL; \
+        (sb)->sb_snext = NULL; \
+        (sb)->sb_trav_prev = NULL; \
+        (sb)->sb_trav_next = NULL; \
+        spin_lock_init(&(sb)->s_lock); \
     } while(0)
 
 #define ATOMIC_SET_SOCK_ATTR(sock, attr)                                \
@@ -164,11 +164,22 @@ break_unlock:                                                           \
                                                                         \
 } while(0)
 
+#define SOCK_MIN_LEFT_LIFETIME 10 //jiffies
+
 #define SOCK_IS_RECLAIM(sb) ((sb)->sock_create_way == SOCK_RECLAIM)
 #define SOCK_IS_RECLAIM_PASSIVE(sb) (SOCK_IS_RECLAIM(sb) && !cfg_conn_is_positive(&(sb)->address))
 
 #define SOCK_IS_PRECONNECT(sb) ((sb)->sock_create_way == SOCK_PRECONNECT)
 #define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowd(&(sb)->address) && SOCK_IS_PRECONNECT(sb))
+
+#define sockp_sbs_check_list_init(num) \
+    stack_init(&sockp_sbs_check_list, num, sizeof(struct socket_bucket *))
+
+#define sockp_sbs_check_list_destroy() \
+    do {  \
+        if (sockp_sbs_check_list)                    \
+        sockp_sbs_check_list->destroy(&sockp_sbs_check_list);  \
+    } while(0)
 
 #if SOCKP_DEBUG
 
@@ -202,15 +213,6 @@ static unsigned int loop_count = 0;
 
 #endif
 
-#if LRU
-static struct socket_bucket *get_empty_slot(struct sockaddr *);
-#else
-static struct socket_bucket *get_empty_slot(void);
-#endif
-
-static inline unsigned int _hashfn(struct sockaddr_in *);
-static inline unsigned int _shashfn(struct sock *);
-
 static struct {
     struct socket_bucket *hash_table[NR_HASH];
     struct socket_bucket *shash_table[NR_SHASH]; //for sock addr hash table.
@@ -224,6 +226,38 @@ static struct socket_bucket SB[NR_SOCKET_BUCKET];
 
 struct stack_t *sockp_sbs_check_list;
 
+#if LRU
+static struct socket_bucket *get_empty_slot(struct sockaddr *);
+#else
+static struct socket_bucket *get_empty_slot(void);
+#endif
+
+#define sock_is_not_available(sb) (!sock_is_available(sb))
+static inline int sock_is_available(struct socket_bucket *);
+
+static inline unsigned int _hashfn(struct sockaddr_in *);
+static inline unsigned int _shashfn(struct sock *);
+
+static inline int sock_is_available(struct socket_bucket *sb)
+{
+    u64 sock_keep_alive;
+    u64 sock_age;
+    u64 sock_left_lifetime;
+
+    if (!SOCK_ESTABLISHED(sb->sock))
+        return 0;
+
+    cfg_conn_get_keep_alive(&sb->address, &sock_keep_alive);
+    sock_age = lkm_jiffies - sb->sock_create_jiffies;
+    sock_left_lifetime = sock_keep_alive - sock_age;
+
+    //In case the peer is closing the socket.
+    if (sock_left_lifetime <= SOCK_MIN_LEFT_LIFETIME)
+        return 0;
+
+    return 1;
+}
+
 static inline unsigned int _hashfn(struct sockaddr_in *address)
 {
     return (unsigned)((*address).sin_port ^ (*address).sin_addr.s_addr) % NR_HASH;
@@ -233,15 +267,6 @@ static inline unsigned int _shashfn(struct sock *sk)
 {
     return (unsigned long)sk % NR_SHASH;
 }
-
-#define sockp_sbs_check_list_init(num) \
-    stack_init(&sockp_sbs_check_list, num, sizeof(struct socket_bucket *))
-
-#define sockp_sbs_check_list_destroy() \
-    do {  \
-        if (sockp_sbs_check_list)                    \
-        sockp_sbs_check_list->destroy(&sockp_sbs_check_list);  \
-    } while(0)
 
 SOCK_SET_ATTR_DEFINE(sock, sock_close_now)
 {
@@ -268,7 +293,7 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
         if (KEY_MATCH(address, &p->address)) {
 
             if (p->sock_in_use 
-                    || !SOCK_ESTABLISHED(p->sock) 
+                    || sock_is_not_available(p) 
                     || SOCK_IS_RECLAIM_PASSIVE(p))
                 continue;
 
@@ -319,17 +344,25 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
             goto shutdown;
 
         if (p->sock_close_now) {
+           if (!p->uc) {
+               u64 keep_alive;
+               keep_alive = lkm_jiffies - p->sock_create_jiffies;
+               cfg_conn_set_keep_alive(&p->address, &keep_alive);
+           }
            cfg_conn_set_passive(&p->address); //may be passive socket 
            goto shutdown;
         }
 
+        if (sock_is_not_available(p))
+            goto shutdown;
+
         if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p)
                 || SOCK_IS_RECLAIM_PASSIVE(p) 
                 || (SOCK_IS_RECLAIM(p)
-                    && (jiffies - p->last_used_jiffies > TIMEOUT * HZ))
+                    && (lkm_jiffies - p->last_used_jiffies > TIMEOUT * HZ))
                 || (SOCK_IS_PRECONNECT(p) 
                     && p->sock_in_use 
-                    && (jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
+                    && (lkm_jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
             goto shutdown;
 
         //Luckly, selected as idle conn.
@@ -393,7 +426,7 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
             }
 
             p->sock_in_use = 0; //clear "in use" tag.
-            p->last_used_jiffies = jiffies;
+            p->last_used_jiffies = lkm_jiffies;
 
             INSERT_INTO_HLIST(HASH(&p->address), p);
 
@@ -425,7 +458,7 @@ static struct socket_bucket *get_empty_slot(void)
     struct socket_bucket *p; 
 #if LRU
     struct socket_bucket *lru = NULL;
-    unsigned int uc = ~0;
+    u64 uc = (~0ULL);
 #endif
 
     p = ht.sb_free_p;

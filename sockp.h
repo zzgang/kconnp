@@ -1,6 +1,6 @@
 /**
  *Header for sockp.c
- *Version 0.0.1 05/27/2012
+ *Date 05/27/2012
  *Author Zhigang Zhang <zzgang2008@gmail.com>
  */
 #ifndef _SOCKP_H
@@ -42,8 +42,9 @@ struct socket_bucket {
     unsigned char sb_in_use;
     unsigned char sock_in_use; /*tag: wether it is in use*/
     unsigned char sock_close_now; /*tag: wether be closed at once*/
-    unsigned long last_used_jiffies; /*the last used jiffies*/
-    unsigned long uc; /*used count*/
+    u64 sock_create_jiffies; /*the jiffies to be inserted*/
+    u64 last_used_jiffies; /*the last used jiffies*/
+    u64 uc; /*used count*/
     struct socket_bucket *sb_prev;
     struct socket_bucket *sb_next; /*for hash table*/
     struct socket_bucket *sb_sprev;

@@ -96,7 +96,6 @@
             (iport_pos)->port_end - (iport_pos)->port_start + 1,    \
             line)
 
-
 /*iports list cfg funcs*/
 static int ip_aton(const char *, struct in_addr *); //For IPV4
 static int iport_line_scan(struct cfg_entry *, int *, int *, struct iport_pos_t *);
@@ -986,6 +985,9 @@ static int cfg_white_list_entity_init(struct cfg_entry *ce)
         struct conn_node_t conn_node; 
 
         memset(&conn_node, 0, sizeof(struct conn_node_t));
+        
+        //Special
+        conn_node.conn_keep_alive = ULLONG_MAX;
 
         iport_node = (struct iport_t *)hash_value(pos);
         
@@ -1068,7 +1070,7 @@ void cfg_destroy()
     remove_proc_entry(CFG_BASE_DIR_NAME, NULL);
 }
  
-int cfg_conn_op(struct sockaddr *addr, int op_type)
+int cfg_conn_op(struct sockaddr *addr, int op_type, void *val)
 {
     struct conn_node_t *conn_node;
     int ret = 1;
@@ -1098,6 +1100,12 @@ int cfg_conn_op(struct sockaddr *addr, int op_type)
             break;
         case PASSIVE_SET:
             conn_node->conn_close_way = CLOSE_PASSIVE;
+            break;
+        case KEEP_ALIVE_SET:
+            conn_node->conn_keep_alive = *((typeof(conn_node->conn_keep_alive)*)val);
+            break;
+        case KEEP_ALIVE_GET:
+            *((typeof(conn_node->conn_keep_alive)*)val) = conn_node->conn_keep_alive;
             break;
         default:
             ret = 0;

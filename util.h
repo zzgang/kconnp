@@ -23,6 +23,7 @@
 #include <linux/rcupdate.h>
 #include <linux/list.h>
 #include <linux/poll.h>
+#include <linux/jiffies.h>
 
 #define wait_for_sig_or_timeout(sec) schedule_timeout_interruptible((sec) * HZ)
 #define wait_for_timeout(sec) schedule_timeout_uninterruptible((sec) * HZ)
@@ -118,6 +119,8 @@ struct pollfd_ex_t {
 
 typedef struct array_t array_t;
 extern int lkm_poll(array_t *, int timeout);
+
+#define lkm_jiffies jiffies
 
 static inline int file_count_read(struct file *filp)
 {

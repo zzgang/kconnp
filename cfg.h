@@ -17,7 +17,6 @@ struct cfg_entry {
     time_t mtime;
     rwlock_t cfg_rwlock;
 
-
     /*proc r/w funcs*/
     int (*proc_read)(char *buffer,
                     char **buffer_location,
@@ -45,6 +44,7 @@ struct conn_node_t {
 #define conn_port iport_node.port
     struct conn_attr_t conn_attrs;
 #define conn_close_way conn_attrs.close_way
+#define conn_keep_alive conn_attrs.keep_alive
 #define conn_close_now conn_attrs.close_now
 #define conn_all_count conn_attrs.stats.all_count
 #define conn_idle_count conn_attrs.stats.idle_count
@@ -71,16 +71,21 @@ struct iport_pos_t {
     int port_end;
 };
 
-#define ACL_CHECK 0x0
-#define ACL_SPEC_CHECK 0x1
-#define POSITIVE_CHECK 0x2
-#define PASSIVE_SET 0x3
+#define ACL_CHECK               0x0
+#define ACL_SPEC_CHECK          0x1
+#define POSITIVE_CHECK          0x2
+#define PASSIVE_SET             0x3
+#define KEEP_ALIVE_SET          0x4
+#define KEEP_ALIVE_GET          0x5
 
-#define cfg_conn_acl_allowd(addr) cfg_conn_op(addr, ACL_CHECK)
-#define cfg_conn_acl_spec_allowd(addr) cfg_conn_op(addr, ACL_SPEC_CHECK)
-#define cfg_conn_is_positive(addr) cfg_conn_op(addr, POSITIVE_CHECK)
-#define cfg_conn_set_passive(addr) cfg_conn_op(addr, PASSIVE_SET)
-extern int cfg_conn_op(struct sockaddr *addr, int op_type);
+#define cfg_conn_acl_allowd(addr) cfg_conn_op(addr, ACL_CHECK, NULL)
+#define cfg_conn_acl_spec_allowd(addr) cfg_conn_op(addr, ACL_SPEC_CHECK, NULL)
+#define cfg_conn_is_positive(addr) cfg_conn_op(addr, POSITIVE_CHECK, NULL)
+#define cfg_conn_set_passive(addr) cfg_conn_op(addr, PASSIVE_SET, NULL)
+#define cfg_conn_set_keep_alive(addr, val) cfg_conn_op(addr, KEEP_ALIVE_SET, val)
+#define cfg_conn_get_keep_alive(addr, val) cfg_conn_op(addr, KEEP_ALIVE_GET, val)
+
+extern int cfg_conn_op(struct sockaddr *addr, int op_type, void *val);
 
 extern void cfg_allowed_entries_for_each_call(void (*call_func)(void *data));
 
