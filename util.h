@@ -25,8 +25,8 @@
 #include <linux/poll.h>
 #include <linux/jiffies.h>
 
-#define wait_for_sig_or_timeout(sec) schedule_timeout_interruptible((sec) * HZ)
-#define wait_for_timeout(sec) schedule_timeout_uninterruptible((sec) * HZ)
+#define wait_for_sig_or_timeout(timeout) schedule_timeout_interruptible(timeout)
+#define wait_for_timeout(timeout) schedule_timeout_uninterruptible(timeout)
 
 struct pollfd_ex_t {
     struct pollfd pollfd;

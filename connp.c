@@ -258,7 +258,7 @@ void connp_sys_exit_prepare()
 
 static inline void deferred_destroy(void) 
 {
-    int time_going = 1;//s
+    int time_going = 1 * HZ;//1s
 
     wait_for_timeout(time_going);
 }

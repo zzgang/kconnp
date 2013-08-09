@@ -209,13 +209,13 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
     add_wait_queue(wait_address, &entry->wait);
 }
 
-int lkm_poll(array_t *pfdt_list, int sec)
+int lkm_poll(array_t *pfdt_list, int timeo)
 {
     struct poll_wqueues_alias table;
     poll_table *pt;
     int count = 0;
     int timed_out = 0;
-    long __timeout = sec;
+    long __timeout = timeo * HZ;
 
     lkm_poll_initwait(&table);
     pt = &(&table)->pt;
