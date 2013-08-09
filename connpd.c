@@ -126,7 +126,7 @@ static void connp_wait_events_or_timout(void)
         pfdt.pollfd.events = POLLRDHUP;
         pfdt.pollfd.revents = 0;
         pfdt.data = (*sb);
-        pfdt.do_poll = connpd_do_poll;
+        pfdt.poll_func = connpd_do_poll;
 
         pollfd_array->set(pollfd_array, &pfdt, idx++);
 

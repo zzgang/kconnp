@@ -85,8 +85,8 @@ static int inline do_poll(struct pollfd_ex_t *pfdt, poll_table *pwait)
 
                 pfdt = container_of(pfd, struct pollfd_ex_t, pollfd); 
 
-                if (pfdt->data && pfdt->do_poll)
-                    mask = pfdt->do_poll(pfdt->data, pwait);
+                if (pfdt->data && pfdt->poll_func)
+                    mask = pfdt->poll_func(pfdt->data, pwait);
                 else 
                     mask = file->f_op->poll(file, pwait);
             }

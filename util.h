@@ -30,7 +30,7 @@
 struct pollfd_ex_t {
     struct pollfd pollfd;
     void *data;
-    int (*do_poll)(void *data, poll_table *pt);
+    int (*poll_func)(void *data, poll_table *pt);
 };
 
 #define E_EVENTS (POLLERR|POLLHUP|POLLNVAL)
