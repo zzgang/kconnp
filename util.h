@@ -72,6 +72,8 @@ struct pollfd_ex_t {
 #define IS_TCP_SOCK(sock) \
     ((sock)->type == SOCK_STREAM)
 
+#define IS_UNCONNECTED_SOCK(sock) \
+    ((sock)->type == SS_UNCONNECTED)
 
 #define lkm_atomic_read(v) atomic_read((atomic_t *)v) 
 #define lkm_atomic_add(v, a) atomic_add_return(a, (atomic_t *)v)

@@ -222,7 +222,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     }
    
     sock = getsock(fd);
-    if (!sock || !IS_TCP_SOCK(sock)) {
+    if (!sock || !IS_TCP_SOCK(sock) || !IS_UNCONNECTED_SOCK(sock)) {
         ret = 0;
         goto ret_unlock;
     }
