@@ -164,7 +164,7 @@ break_unlock:                                                           \
                                                                         \
 } while(0)
 
-#define SOCK_MIN_LEFT_LIFETIME 10 //jiffies
+#define MIN_LFET_LIFETIME_THRESHOLD (HZ) //1s
 
 #define SOCK_IS_RECLAIM(sb) ((sb)->sock_create_way == SOCK_RECLAIM)
 #define SOCK_IS_RECLAIM_PASSIVE(sb) (SOCK_IS_RECLAIM(sb) && !cfg_conn_is_positive(&(sb)->address))
@@ -234,9 +234,18 @@ static struct socket_bucket *get_empty_slot(void);
 
 #define sock_is_not_available(sb) (!sock_is_available(sb))
 static inline int sock_is_available(struct socket_bucket *);
+static inline u64 estimate_min_left_lifetime(u64 est_time);
 
 static inline unsigned int _hashfn(struct sockaddr_in *);
 static inline unsigned int _shashfn(struct sock *);
+
+static inline u64 estimate_min_left_lifetime(u64 timev)
+{
+    u64 estimate_time = timev / 2;
+
+    return (estimate_time > MIN_LFET_LIFETIME_THRESHOLD)
+        ? MIN_LFET_LIFETIME_THRESHOLD : estimate_time; 
+}
 
 static inline int sock_is_available(struct socket_bucket *sb)
 {
@@ -252,7 +261,7 @@ static inline int sock_is_available(struct socket_bucket *sb)
     sock_left_lifetime = sock_keep_alive - sock_age;
 
     //In case the peer is closing the socket.
-    if (sock_left_lifetime <= SOCK_MIN_LEFT_LIFETIME)
+    if (sock_left_lifetime < estimate_min_left_lifetime(sock_keep_alive))
         return 0;
 
     return 1;
