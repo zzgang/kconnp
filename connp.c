@@ -209,25 +209,30 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         goto ret_unlock;
     }
 
-    if (address->sa_family != AF_INET 
-          /*|| IN_LOOPBACK(ntohl(((struct sockaddr_in *)address)->sin_addr.s_addr))*/ 
-            || !cfg_conn_acl_allowd(address)) {
-        ret = 0;
-        goto ret_unlock;
-    }
-
     if (!is_sock_fd(fd)) {
         ret = 0;
         goto ret_unlock;
     }
    
     sock = getsock(fd);
-    if (!sock || !IS_TCP_SOCK(sock) || !IS_UNCONNECTED_SOCK(sock)) {
+    if (!sock 
+            || !IS_TCP_SOCK(sock) 
+            || !IS_UNCONNECTED_SOCK(sock)) {
         ret = 0;
         goto ret_unlock;
     }
 
+    if (address->sa_family != AF_INET 
+            || !cfg_conn_acl_allowd(address)) {
+        ret = 0;
+        goto ret_unlock;
+    }
+
+    conn_add_connected_all_count(address);
+
     if ((sk = apply_sk_from_sockp(address))) {
+
+        conn_add_connected_hit_count(address); 
 
         sk_attach_sock(sk, sock);
 

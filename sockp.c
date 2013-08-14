@@ -292,8 +292,6 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
 
     SOCKP_LOCK();
 
-    conn_add_connected_all_count(address);
-
     p = HASH(address);
     for (; p; p = p->sb_next) { 
 
@@ -315,8 +313,6 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
             spin_unlock(&p->s_lock);
 
             REMOVE_FROM_HLIST(HASH(address), p);
-            
-            conn_add_connected_hit_count(address);
             
             LOOP_COUNT_RESET();
            
