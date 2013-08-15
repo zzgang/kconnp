@@ -541,7 +541,7 @@ static int iport_line_scan(struct cfg_entry *ce, int *pos, int *line,
                 iport_pos->ip_start = *pos - 1;
             if (after_colon && iport_pos->ip_end < 0)
                 iport_pos->ip_end = *pos - 3; 
-            if (after_colon && ((c < '0' || c > '9') && c != '*')) //Port str
+            if (after_colon && (c < '0' || c > '9')) //Port str
                 goto out_fail;
             if (after_colon && iport_pos->port_start < 0)
                 iport_pos->port_start = *pos - 1;
@@ -551,7 +551,7 @@ static int iport_line_scan(struct cfg_entry *ce, int *pos, int *line,
             success = ((iport_pos->ip_end - iport_pos->ip_start) >= 0) 
                 && ((iport_pos->port_end - iport_pos->port_start) >= 0);
 
-        }else
+        } else
             goto out_fail;
     }
     
@@ -918,8 +918,8 @@ static inline void *iport_in_list_check_or_call(
         struct cfg_entry *ce, 
         void (*call_func)(void *data))
 {
-    struct iport_t zip_port, ip_zport, ip_port, **p;
-    struct iport_t *iport_list[] = {&ip_port, &ip_zport, &zip_port, NULL}; 
+    struct iport_t zip_port, ip_port, **p;
+    struct iport_t *iport_list[] = {&ip_port, &zip_port, NULL}; 
     struct hash_table_t *ht_ptr;
 
     ht_ptr = (struct hash_table_t *)ce->cfg_ptr;
@@ -932,9 +932,6 @@ static inline void *iport_in_list_check_or_call(
 
     zip_port.ip = 0;
     zip_port.port = port;
-
-    ip_zport.ip = ip;
-    ip_zport.port = 0;
 
     ip_port.ip = ip;
     ip_port.port = port;
