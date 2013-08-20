@@ -32,40 +32,55 @@
             p->func_name(p);   \
     } while (0)
 
-#define RESET_IPORT_POS(iport_pos)        \
-    do {                                \
-        (iport_pos)->ip_start = -1;     \
-        (iport_pos)->ip_end = -1;       \
-        (iport_pos)->port_start = -1;   \
-        (iport_pos)->port_end = -1;     \
+#define INIT_IPORT_POS(iport_pos)           \
+    do {                                    \
+        (iport_pos)->ip_start = -1;         \
+        (iport_pos)->ip_end = -1;           \
+        (iport_pos)->port_start = -1;       \
+        (iport_pos)->port_end = -1;         \
+        (iport_pos)->flags_start = -1;      \
+        (iport_pos)->flags_end = -1;        \
     } while (0)
 
 
-#define NEW_IPORT_STR_NODE(iport_str, ip_strlen, port_strlen)   \
+#define NEW_IPORT_STR_NODE(iport_str, ip_strlen, port_strlen, flags_strlen) \
     do {                                                        \
         iport_str = lkmalloc(sizeof(struct iport_str_t));       \
         if (!iport_str)                                         \
             return 0;                                           \
-        iport_str->ip_str = lkmalloc(ip_strlen);                \
-        if (!iport_str->ip_str) {                               \
+        (iport_str)->ip_str = lkmalloc(ip_strlen);              \
+        if (!(iport_str)->ip_str) {                             \
             lkmfree(iport_str);                                 \
             return 0;                                           \
         }                                                       \
-        iport_str->port_str = lkmalloc(port_strlen);            \
-        if (!iport_str->port_str) {                             \
-            lkmfree(iport_str->ip_str);                         \
+        (iport_str)->port_str = lkmalloc(port_strlen);          \
+        if (!(iport_str)->port_str) {                           \
+            lkmfree((iport_str)->ip_str);                       \
             lkmfree(iport_str);                                 \
             return 0;                                           \
+        }                                                       \
+        if (flags_strlen) {                                     \
+            (iport_str)->flags_str = lkmalloc(flags_strlen);    \
+            if (!(iport_str)->flags_str) {                      \
+                lkmfree((iport_str)->port_str);                 \
+                lkmfree((iport_str)->ip_str);                   \
+                lkmfree(iport_str);                             \
+                return 0;                                       \
+            }                                                   \
         }                                                       \
     } while (0)  
 
-#define INIT_IPORT_STR_NODE(iport_str, ip_str_pass, ip_strlen,      \
-        port_str_pass, port_strlen,                                 \
-        line_pass)                                                  \
-    do {                                                            \
-        memcpy((iport_str)->ip_str, ip_str_pass, ip_strlen);        \
-        memcpy((iport_str)->port_str, port_str_pass, port_strlen);  \
-        (iport_str)->line = line_pass;                              \
+#define INIT_IPORT_STR_NODE(iport_str,                                  \
+        ip_str_pass, ip_strlen,                                         \
+        port_str_pass, port_strlen,                                     \
+        flags_str_pass, flags_strlen,                                   \
+        line_pass)                                                      \
+    do {                                                                \
+        memcpy((iport_str)->ip_str, ip_str_pass, ip_strlen);            \
+        memcpy((iport_str)->port_str, port_str_pass, port_strlen);      \
+        if ((iport_str)->flags_str && flags_strlen)                     \
+        memcpy((iport_str)->flags_str, flags_str_pass, flags_strlen);   \
+        (iport_str)->line = line_pass;                                  \
     } while (0)
 
 #define DESTROY_IPORT_STR_NODE(iport_str)   \
@@ -79,14 +94,17 @@
     do {                                                            \
         if ((iports_scan_list)->list)                               \
             (iport_str)->next = (iports_scan_list)->list;           \
-        iports_scan_list->list = iport_str;                     \
+        iports_scan_list->list = iport_str;                         \
         (iports_scan_list)->count++;                                \
     } while (0)
 
 
-#define NEW_IPORT_STR_SCAN_NODE(iport_str, iport_pos)                               \
-    NEW_IPORT_STR_NODE(iport_str, (iport_pos)->ip_end - (iport_pos)->ip_start + 2,  \
-            (iport_pos)->port_end - (iport_pos)->port_start + 2/*one for \0*/)
+#define NEW_IPORT_STR_SCAN_NODE(iport_str, iport_pos)                       \
+    NEW_IPORT_STR_NODE(iport_str,                                           \
+            (iport_pos)->ip_end - (iport_pos)->ip_start + 2, /*'\0'*/       \
+            (iport_pos)->port_end - (iport_pos)->port_start + 2,            \
+            ((iport_pos)->flags_end >= 0 && (iport_pos)->flags_start >= 0)  \
+            ? ((iport_pos)->flags_end - (iport_pos)->flags_start + 2) : 0)  
 
 #define INIT_IPORT_STR_SCAN_NODE(iport_str, ce, iport_pos, line)    \
     INIT_IPORT_STR_NODE(iport_str,                                  \
@@ -94,12 +112,16 @@
             (iport_pos)->ip_end - (iport_pos)->ip_start + 1,        \
             (ce)->raw_ptr + (iport_pos)->port_start,                \
             (iport_pos)->port_end - (iport_pos)->port_start + 1,    \
+            (ce)->raw_ptr + (iport_pos)->flags_start,               \
+            (iport_pos)->flags_end - (iport_pos)->flags_start + 1,  \
             line)
 
 /*iports list cfg funcs*/
 static int ip_aton(const char *, struct in_addr *); //For IPV4
 static int iport_line_scan(struct cfg_entry *, int *, int *, struct iport_pos_t *);
-static int iport_node_parse(struct iport_str_t *, char *, char *, int *, int *);
+static int iport_line_parse(struct iport_str_t *, 
+        char *flags_str, char *port_str, char *ip_or_prefix, 
+        int *ip_range_start, int *ip_range_end);
 static void iports_str_list_free(struct iports_str_list_t *);
 static int cfg_iports_data_scan(struct cfg_entry *, struct iports_str_list_t *);
 static int cfg_iports_data_parse(struct cfg_entry *, struct iports_str_list_t *, 
@@ -497,12 +519,13 @@ static int ip_aton(const char *ip_str, struct in_addr *iaddr)
  * 3.the current line to scan.
  * 4.store the iport pos.
  *
- *Allowed iport characters: 0-9 . * : [] -
+ *Allowed iport characters: 0-9 . * : [] - () A-Z |
  *
  *Returns:
  * -1: line scan error, 0: line scan done, 1: line scan success.
  */
-static int iport_line_scan(struct cfg_entry *ce, int *pos, int *line, 
+static int iport_line_scan(struct cfg_entry *ce, 
+        int *pos, int *line, 
         struct iport_pos_t *iport_pos)
 {
     char c;
@@ -510,24 +533,27 @@ static int iport_line_scan(struct cfg_entry *ce, int *pos, int *line,
     int valid_char_count = 0;
     int success = 0;
     int after_colon = 0;
+    int flags_start = 0;
 
     (*line)++;
 
     while (*pos < ce->raw_len /*the last line*/
             && (c = ce->raw_ptr[(*pos)++]) != '\n') {
 
+        if (c == ' ' || c == '\t') {//strip blank char.
+            continue;
+        }
+
         if (comment_line_start || c == '#') {/*strip comment by '#'*/
             comment_line_start = 1; 
             continue;
         }
 
-        if (c == ' ' || c == '\t') {//strip blank char.
-            continue;
-        }
-
-        if ((c >= '0' && c <= '9') || c == '.'  //valid char
-                || c == '*' || c == ':'
-                || c == '[' || c == ']' || c == '-') {
+        if ((c >= '0' && c <= '9')  //valid char
+                || c == '.' || c == '*' || c == ':'
+                || c == '[' || c == ']' || c == '-'
+                || (c >= 'A' && c <= 'Z')
+                || c == '(' || c == ')' || c == '|') {
 
             valid_char_count++;
 
@@ -536,26 +562,44 @@ static int iport_line_scan(struct cfg_entry *ce, int *pos, int *line,
                 continue;
             }
 
+            if (c == '(') { //flags start tag.
+                flags_start = 1;
+                continue;
+            }
+
             /*Get iport pos*/
             if (!after_colon && iport_pos->ip_start < 0)
                 iport_pos->ip_start = *pos - 1;
             if (after_colon && iport_pos->ip_end < 0)
                 iport_pos->ip_end = *pos - 3; 
-            if (after_colon && (c < '0' || c > '9')) //Port str
-                goto out_fail;
+
             if (after_colon && iport_pos->port_start < 0)
                 iport_pos->port_start = *pos - 1;
-            if (after_colon) //Default is port_end pos.
+            if (after_colon && !flags_start)  //port part
                 iport_pos->port_end = *pos - 1;
 
-            success = ((iport_pos->ip_end - iport_pos->ip_start) >= 0) 
-                && ((iport_pos->port_end - iport_pos->port_start) >= 0);
-
+            if (flags_start && iport_pos->flags_start < 0)
+                iport_pos->flags_start = *pos - 1;
+            if (flags_start && c == ')') //flags end tag.
+                iport_pos->flags_end = *pos - 2; 
+            else  //make sure the last valid char is ')'
+                iport_pos->flags_end = -1;
         } else
             goto out_fail;
     }
+
+    if (!valid_char_count)
+        return 0;
     
-    if (!success && valid_char_count > 0) //May not be blank line or comment line.
+    success = iport_pos->ip_end >= 0 && iport_pos->ip_start >= 0 
+        && iport_pos->port_end >= 0 && iport_pos->port_start >= 0
+        && (flags_start ? 
+                (iport_pos->flags_end >= 0 && iport_pos->flags_start >= 0) : 1)
+        && (iport_pos->ip_end - iport_pos->ip_start) >= 0
+        && (iport_pos->port_end - iport_pos->port_start) >= 0
+        && (iport_pos->flags_end - iport_pos->flags_start) >= 0;
+
+    if (!success)
         goto out_fail;
     return success;
 
@@ -579,12 +623,14 @@ static int cfg_iports_data_scan(struct cfg_entry *ce,
     struct iport_str_t *iport_str;
 
     while (pos < ce->raw_len) {
-        RESET_IPORT_POS(&iport_pos);
+        INIT_IPORT_POS(&iport_pos);
+
         res = iport_line_scan(ce, &pos, &line, &iport_pos);
         if (res < 0) //Scan error.
             return -1;
         if (!res) // Line scan done but needn't.
             continue;
+
         NEW_IPORT_STR_SCAN_NODE(iport_str, &iport_pos);
         INIT_IPORT_STR_SCAN_NODE(iport_str, ce, &iport_pos, line);
         INSERT_INTO_IPORTS_STR_LIST(iports_str_scanning_list, iport_str);
@@ -594,35 +640,66 @@ static int cfg_iports_data_scan(struct cfg_entry *ce,
 }
 
 /**
- *Simple iport node parser.
+ *Simple iport line parser.
  *
  *Returns:
  *0: node parse error, 1: node parse success.
  *
  */
-static int iport_node_parse(struct iport_str_t *iport_str, 
-        char *port_str, char *ip_str_or_prefix,
+static int iport_line_parse(struct iport_str_t *iport_str, 
+        char *flags_str, char *port_str, char *ip_str_or_prefix,
         int *ip_range_start, int *ip_range_end)
 {
     char *c;
-    int ip_strlen, port_strlen;
+    int ip_strlen, port_strlen, flags_strlen;
     char ip_range_str[2][4] = {{0, }, {0, }};
     char ip_fourth_str[4] = {0, };
-    int i = 0, j = 0, k = 0, n = 0, dot_count = 0;
+    int i = 0, j = 0, k = 0, n = 0, dot_count = 0, flags_sum = 0;
     int range_start = 0, range_end = 0, range_dash = 0;
     
     ip_strlen = strlen(iport_str->ip_str);
     port_strlen = strlen(iport_str->port_str);
+    flags_strlen = iport_str->flags_str ? strlen(iport_str->flags_str) : 0;
 
+    /*Parse flags str*/
+    if (!flags_strlen)
+        goto parse_going;
+   
+    c = iport_str->flags_str; 
+    for (; c && *c; c++) {
+        
+        if (*c == ' ' || *c == '\t') //strip blank char
+            continue;
+    
+        if (*c != '|' && (*c < 'A' || *c > 'Z')) //valid flags: A|B|C|D...
+            return 0;
+        
+        if (*c == '|')
+            flags_sum -= 1;
+        else 
+            flags_sum += 1;
+    
+        if (flags_sum < 0)
+            return 0;
+    }
+
+    if (flags_sum <= 0)
+        return 0;
+    
+    strcpy(flags_str, iport_str->flags_str);
+
+parse_going:
     /*Parse port str*/
-    for (c = iport_str->port_str; *c; c++) { //Parse port.
-        if ((*c == '*' && port_strlen != 1) || (*c < '0' || *c > '9'))
+    c = iport_str->port_str;
+    for (; c && *c; c++) { //Parse port.
+        if (*c < '0' || *c > '9')
             return 0; //error
     }
     strcpy(port_str, iport_str->port_str);
 
     /*Parse ip str*/ 
-    for (c = iport_str->ip_str; *c; c++) {
+    c = iport_str->ip_str;
+    for (; c && *c; c++) {
         if (*c == '*' && ip_strlen != 1)
             return 0;
  
@@ -722,14 +799,17 @@ static int cfg_iports_data_parse(struct cfg_entry *ce,
 {
     struct iport_str_t *p, *iport_str;
     char *ip_str_or_prefix, *port_str;
+    char *flags_str;
     int ip_range_start, ip_range_end; //For parsing []
     int res;
 
-    for (p = iports_str_scanning_list->list; p; p = p->next) {
-        int ip_strlen, port_strlen;
+    p = iports_str_scanning_list->list;
+    for (; p; p = p->next) {
+        int ip_strlen, port_strlen, flags_strlen;
 
         ip_strlen = strlen(p->ip_str);
         port_strlen = strlen(p->port_str);
+        flags_strlen = p->flags_str ? strlen(p->flags_str) : 0;
 
         ip_str_or_prefix = lkmalloc(ip_strlen + 1); 
         if (!ip_str_or_prefix)
@@ -741,34 +821,64 @@ static int cfg_iports_data_parse(struct cfg_entry *ce,
             return -1;
         }
 
+        if (flags_strlen) {
+            flags_str = lkmalloc(flags_strlen + 1);
+            if (!flags_str) {
+                lkmfree(port_str);
+                lkmfree(ip_str_or_prefix);
+                return -1;
+            }
+        } else
+            flags_str = NULL;
+
         ip_range_start = ip_range_end = 0;
-        res = iport_node_parse(p, port_str, ip_str_or_prefix, 
+        res = iport_line_parse(p, 
+                flags_str, port_str, ip_str_or_prefix, 
                 &ip_range_start, &ip_range_end);
         if (!res)  //Parse node error.
             goto out_free;
 
         if (ip_range_end == 0) {
-            NEW_IPORT_STR_NODE(iport_str, strlen(ip_str_or_prefix) + 1, 
-                    strlen(port_str) + 1);
+            
+            NEW_IPORT_STR_NODE(iport_str, 
+                    strlen(ip_str_or_prefix) + 1, 
+                    strlen(port_str) + 1,
+                    flags_strlen ? flags_strlen + 1 : 0);
+
             INIT_IPORT_STR_NODE(iport_str, 
                     ip_str_or_prefix, strlen(ip_str_or_prefix), 
-                    port_str, strlen(port_str), p->line);
+                    port_str, strlen(port_str),
+                    flags_str, flags_strlen,
+                    p->line);
+
             INSERT_INTO_IPORTS_STR_LIST(iports_str_parsing_list, iport_str); 
+
         } else if (ip_range_end > 0) { //For parsing []
             char ip_range_str[4] = {0, };
             int ip_num;
             char *ip_str_tmp;
 
             for (ip_num = ip_range_start; ip_num <= ip_range_end; ip_num++) {
+
                 sprintf(ip_range_str, "%d", ip_num);
+
                 ip_str_tmp = lkmalloc(ip_strlen + 1);
                 strcpy(ip_str_tmp, ip_str_or_prefix);
                 strcat(ip_str_tmp, ip_range_str);
-                NEW_IPORT_STR_NODE(iport_str, strlen(ip_str_tmp) + 1, 
-                        strlen(port_str) + 1);
-                INIT_IPORT_STR_NODE(iport_str, ip_str_tmp, strlen(ip_str_tmp), 
-                        port_str, strlen(port_str), p->line);
+
+                NEW_IPORT_STR_NODE(iport_str, 
+                        strlen(ip_str_tmp) + 1, 
+                        strlen(port_str) + 1,
+                        flags_strlen ? flags_strlen + 1 : 0);
+
+                INIT_IPORT_STR_NODE(iport_str, 
+                        ip_str_tmp, strlen(ip_str_tmp), 
+                        port_str, strlen(port_str), 
+                        flags_str, flags_strlen,
+                        p->line);
+
                 INSERT_INTO_IPORTS_STR_LIST(iports_str_parsing_list, iport_str); 
+
                 lkmfree(ip_str_tmp);
             }
         }
@@ -776,6 +886,8 @@ static int cfg_iports_data_parse(struct cfg_entry *ce,
 out_free:
         lkmfree(ip_str_or_prefix);
         lkmfree(port_str);
+        if (flags_str)
+            lkmfree(flags_str);
 
         if (!res){
             printk(KERN_ERR
@@ -840,11 +952,14 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
         goto out_free;
     }
     
-    for (p = iports_str_parsing_list->list; p; p = p->next) {
+    p = iports_str_parsing_list->list;
+    for (; p; p = p->next) {
         struct in_addr iaddr;
+        char *flag;
         
         memset(&iport_node, 0, sizeof(struct iport_t)); 
 
+        //ip init
         if (strcmp(p->ip_str, "*") == 0) //Wildcard
             iport_node.ip = 0;
         else {
@@ -859,10 +974,21 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
             iport_node.ip = (unsigned int)iaddr.s_addr;
         }
 
-        if (strcmp(p->port_str, "*") == 0) //Wildcard
-            iport_node.port = 0;
-        else
-            iport_node.port = htons(simple_strtol(p->port_str, NULL, 10));
+        //port init
+        iport_node.port = htons(simple_strtol(p->port_str, NULL, 10));
+
+        //flags init
+        for (flag = p->flags_str; flag && *flag; flag++) {
+
+            switch(*flag) {
+                case 'S':
+                    iport_node.flags |= CONN_STATEFUL;
+                    break;
+                default:
+                    break;
+            }
+
+        }
 
         if (!hash_set((struct hash_table_t *)ce->cfg_ptr, 
                     (const char *)&iport_node, sizeof(struct iport_t), 
@@ -918,8 +1044,8 @@ static inline void *iport_in_list_check_or_call(
         struct cfg_entry *ce, 
         void (*call_func)(void *data))
 {
-    struct iport_t zip_port, ip_port, **p;
-    struct iport_t *iport_list[] = {&ip_port, &zip_port, NULL}; 
+    struct iport_raw_t zip_port, ip_port, **p;
+    struct iport_raw_t *iport_list[] = {&ip_port, &zip_port, NULL}; 
     struct hash_table_t *ht_ptr;
 
     ht_ptr = (struct hash_table_t *)ce->cfg_ptr;
@@ -928,7 +1054,7 @@ static inline void *iport_in_list_check_or_call(
         return NULL;
         
     for (p = &iport_list[0]; *p; p++) 
-        memset(*p, 0, sizeof(struct iport_t));
+        memset(*p, 0, sizeof(struct iport_raw_t));
 
     zip_port.ip = 0;
     zip_port.port = port;
@@ -940,7 +1066,7 @@ static inline void *iport_in_list_check_or_call(
         void *tmp;
 
         if (hash_find(ht_ptr, 
-                    (const char *)*p, sizeof(struct iport_t), (void **)&tmp)) {
+                    (const char *)*p, sizeof(struct iport_raw_t), (void **)&tmp)) {
             if (call_func)
                 call_func(tmp);
             else 
@@ -998,9 +1124,14 @@ static int cfg_white_list_entity_init(struct cfg_entry *ce)
         
         conn_node.conn_ip = iport_node->ip;
         conn_node.conn_port = iport_node->port;
+        conn_node.conn_flags = iport_node->flags;
+        
+        //We regard stateful connection as passive socket to use it only once.
+        if (conn_node.conn_flags & CONN_STATEFUL)
+            conn_node.conn_close_way = CLOSE_PASSIVE; 
 
         if (!hash_set((struct hash_table_t *)wl->cfg_ptr, 
-                    (const char *)iport_node, sizeof(struct iport_t), 
+                    (const char *)iport_node, sizeof(struct iport_raw_t), 
                     &conn_node, sizeof(struct conn_node_t))) {
             hash_destroy((struct hash_table_t **)&wl->cfg_ptr);
             read_unlock(&cfg->al_rwlock);
@@ -1146,7 +1277,8 @@ void cfg_allowd_iport_node_for_each_call(unsigned int ip, unsigned short int por
 
 void conn_stats_info_dump(void)
 {
-    const char *conn_stat_str_fmt = "%s:%u, Mode: %s, Hits: %lu(%u.0%), Misses: %lu(%u.0%)\n";
+    const char *conn_stat_str_fmt = 
+        "%s:%u, Mode: %s, Hits: %lu(%u.0%), Misses: %lu(%u.0%)\n";
     struct hash_bucket_t *pos;
     int offset = 0;
 

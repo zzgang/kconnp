@@ -9,12 +9,16 @@
 #define CONN_NONBLOCK 2
 #define CONN_IS_NONBLOCK(filp) ((filp)->f_flags & O_NONBLOCK)
 
+//cfg flags
+#define CONN_STATEFUL (1<<0) //stateful connection
+
 typedef enum {
     CLOSE_POSITIVE = 0,
     CLOSE_PASSIVE
 } conn_close_way_t;
 
 struct conn_attr_t {
+    int flags;
     conn_close_way_t close_way;
     u64 keep_alive;
     int close_now;

@@ -127,7 +127,7 @@ int connp_set_syscall(int flag)
     for (p = syscall_func; p->name; p++) {
         if (flag & SYSCALL_REPLACE) { //Replace
             xchg(&sys_call_table[p->nr], (unsigned long)*p->new_sys_func);
-            printk(KERN_ALERT "nr_%s:%d\n", p->name, p->nr);
+            printk(KERN_INFO "nr_%s:%d\n", p->name, p->nr);
         } else if (flag & SYSCALL_RESTORE) { //Retore
             xchg(&sys_call_table[p->nr], (unsigned long)*p->orig_sys_func);
         }

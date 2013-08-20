@@ -34,15 +34,23 @@ struct cfg_entry {
 };
 
 struct iport_t {
+    //ip and port must be first elements
+    unsigned int ip;
+    unsigned short int port;
+    unsigned int flags;
+};
+
+struct iport_raw_t {
     unsigned int ip;
     unsigned short int port;
 };
 
 struct conn_node_t {
-    struct iport_t iport_node;
+    struct iport_raw_t iport_node;
 #define conn_ip iport_node.ip
 #define conn_port iport_node.port
     struct conn_attr_t conn_attrs;
+#define conn_flags conn_attrs.flags
 #define conn_close_way conn_attrs.close_way
 #define conn_keep_alive conn_attrs.keep_alive
 #define conn_close_now conn_attrs.close_now
@@ -54,8 +62,11 @@ struct conn_node_t {
 
 struct iport_str_t {
     int line; //the line NO! where the iport located of the cfg proc file.
+
     char *ip_str;
     char *port_str;
+    char *flags_str;
+
     struct iport_str_t *next;
 };
 
@@ -67,8 +78,12 @@ struct iports_str_list_t {
 struct iport_pos_t {
     int ip_start;
     int ip_end;
+
     int port_start;
     int port_end;
+
+    int flags_start;
+    int flags_end;
 };
 
 #define ACL_CHECK               0x0

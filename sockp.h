@@ -11,7 +11,7 @@
 #include <net/tcp_states.h>
 #include "stack.h"
 
-#define SOCKP_DEBUG 1
+#define SOCKP_DEBUG 0
 
 #define NR_SOCKET_BUCKET_LIMIT 1024
 #define connpd_poll_pending_fds_init()
@@ -19,7 +19,7 @@
 #define NR_HASH (NR_SOCKET_BUCKET/2 + 1)
 #define NR_SHASH (NR_SOCKET_BUCKET)
 #define TIMEOUT 30 //seconds
-#define LRU 0 //LRU replace algorithm
+#define LRU 1 //LRU replace algorithm
 
 #define shutdown_all_sock_list() shutdown_sock_list(SHUTDOWN_ALL)
 #define shutdown_timeout_sock_list() shutdown_sock_list(SHUTDOWN_IDLE)
