@@ -13,10 +13,10 @@
 rwlock_t connp_rwlock; //global connp read/write lock;
 
 static void do_conn_spec_check_close_flag(void *data);
-static void do_conn_add_all_count(void *data);
-static void do_conn_add_idle_count(void *data);
-static void do_conn_add_connected_all_count(void *data);
-static void do_conn_add_connected_hit_count(void *data);
+static void do_conn_inc_all_count(void *data);
+static void do_conn_inc_idle_count(void *data);
+static void do_conn_inc_connected_all_count(void *data);
+static void do_conn_inc_connected_hit_count(void *data);
 
 static inline int insert_socket_to_connp(struct sockaddr *, struct socket *);
 static inline int insert_into_connp(struct sockaddr *, struct socket *);
@@ -50,53 +50,53 @@ int conn_spec_check_close_flag(struct sockaddr *address)
    return conn_close_flag;
 }
 
-static void do_conn_add_all_count(void *data)
+static void do_conn_inc_all_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
 
     ++conn_node->conn_all_count;
 }
 
-static void do_conn_add_idle_count(void *data)
+static void do_conn_inc_idle_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
     
     ++conn_node->conn_idle_count;
 }
 
-static void do_conn_add_connected_all_count(void *data)
+static void do_conn_inc_connected_all_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
     
     lkm_atomic_add(&conn_node->conn_connected_all_count, 1);
 }
 
-static void do_conn_add_connected_hit_count(void *data)
+static void do_conn_inc_connected_hit_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
 
     lkm_atomic_add(&conn_node->conn_connected_hit_count, 1);
 }
 
-int conn_add_count(struct sockaddr *addr, int count_type)
+int conn_inc_count(struct sockaddr *addr, int count_type)
 {
    unsigned int ip;
    unsigned short int port;
-   void (*conn_add_count_func)(void *data) = NULL;
+   void (*conn_inc_count_func)(void *data) = NULL;
 
    ip = ((struct sockaddr_in *)addr)->sin_addr.s_addr;
    port = ((struct sockaddr_in *)addr)->sin_port;
 
    if (count_type == ALL_COUNT)
-       conn_add_count_func = do_conn_add_all_count;
+       conn_inc_count_func = do_conn_inc_all_count;
    else if (count_type == IDLE_COUNT)
-       conn_add_count_func = do_conn_add_idle_count;
+       conn_inc_count_func = do_conn_inc_idle_count;
    else if (count_type == CONNECTED_ALL_COUNT)
-       conn_add_count_func = do_conn_add_connected_all_count;
+       conn_inc_count_func = do_conn_inc_connected_all_count;
    else if (count_type == CONNECTED_HIT_COUNT)
-       conn_add_count_func = do_conn_add_connected_hit_count;
+       conn_inc_count_func = do_conn_inc_connected_hit_count;
 
-   cfg_allowd_iport_node_for_each_call(ip, port, conn_add_count_func); 
+   cfg_allowd_iport_node_for_each_call(ip, port, conn_inc_count_func); 
 
    return 1;
 }
@@ -228,11 +228,11 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         goto ret_unlock;
     }
 
-    conn_add_connected_all_count(address);
+    conn_inc_connected_all_count(address);
 
     if ((sk = apply_sk_from_sockp(address))) {
 
-        conn_add_connected_hit_count(address); 
+        conn_inc_connected_hit_count(address); 
 
         sk_attach_sock(sk, sock);
 

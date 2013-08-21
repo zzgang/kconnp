@@ -1278,7 +1278,11 @@ void cfg_allowd_iport_node_for_each_call(unsigned int ip, unsigned short int por
 void conn_stats_info_dump(void)
 {
     const char *conn_stat_str_fmt = 
-        "%s:%u, Mode: %s, Hits: %lu(%u.0%), Misses: %lu(%u.0%)\n";
+#if BITS_PER_LONG < 64
+        "%s:%u, Mode: %s, Hits: %d(%u.0%), Misses: %d(%u.0%)\n";
+#else
+        "%s:%u, Mode: %s, Hits: %l(%u.0%), Misses: %l(%u.0%)\n";
+#endif
     struct hash_bucket_t *pos;
     int offset = 0;
 
@@ -1302,7 +1306,11 @@ void conn_stats_info_dump(void)
         struct conn_node_t *conn_node;
         unsigned int ip;
         unsigned short int port;
-        unsigned long all_count, misses_count, hits_count;
+#if BITS_PER_LONG < 64
+        s32 all_count, misses_count, hits_count;
+#else
+        s64 all_count, misses_count, hits_count;
+#endif
         unsigned int misses_percent, hits_percent; 
         char *ip_ptr, ip_str[16] = {0, };
         char mode[16] = {0, };
@@ -1324,7 +1332,7 @@ void conn_stats_info_dump(void)
             ip_ptr = ip_ntoa(ip);
            
         port = ntohs(conn_node->conn_port);
-        
+       
         all_count = lkm_atomic_read(&conn_node->conn_connected_all_count);
         hits_count = lkm_atomic_read(&conn_node->conn_connected_hit_count);
         misses_count = all_count - hits_count;

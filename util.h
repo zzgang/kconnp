@@ -75,11 +75,33 @@ struct pollfd_ex_t {
 #define IS_UNCONNECTED_SOCK(sock) \
     ((sock)->type == SS_UNCONNECTED)
 
-#define lkm_atomic_read(v) atomic_read((atomic_t *)v) 
-#define lkm_atomic_add(v, a) atomic_add_return(a, (atomic_t *)v)
-#define lkm_atomic_sub(v, a) atomic_sub_return(a, (atomic_t *)v)
-#define lkm_atomic_set(v, a) atomic_set((atomic_t *)v, a) 
+#define lkm_atomic32_read(v) atomic_read((atomic_t *)v) 
+#define lkm_atomic32_add(v, a) atomic_add_return(a, (atomic_t *)v)
+#define lkm_atomic32_sub(v, a) atomic_sub_return(a, (atomic_t *)v)
+#define lkm_atomic32_set(v, a) atomic_set((atomic_t *)v, a) 
 
+#define lkm_atomic64_read(v) atomic64_read((atomic64_t *)v) 
+#define lkm_atomic64_add(v, a) atomic64_add_return(a, (atomic64_t *)v)
+#define lkm_atomic64_sub(v, a) atomic64_sub_return(a, (atomic64_t *)v)
+#define lkm_atomic64_set(v, a) atomic64_set((atomic64_t *)v, a) 
+
+#if BITS_PER_LONG < 64 //32 bits
+
+typedef atomic_t lkm_atomic_t;
+#define lkm_atomic_read(v) lkm_atomic32_read(v)
+#define lkm_atomic_add(v, a) lkm_atomic32_add(v, a)
+#define lkm_atomic_sub(v, a) lkm_atomic32_sub(v, a)
+#define lkm_atomic_set(v, a) lkm_atomic32_set(v, a)
+
+#else //64bits
+
+typedef atomic64_t lkm_atomic_t;
+#define lkm_atomic_read(v) lkm_atomic64_read(v)
+#define lkm_atomic_add(v, a) lkm_atomic64_add(v, a)
+#define lkm_atomic_sub(v, a) lkm_atomic64_sub(v, a)
+#define lkm_atomic_set(v, a) lkm_atomic64_set(v, a)
+
+#endif
 
 #define lkm_get_file(fd)            \
     ({ struct file * __file;    \
@@ -126,22 +148,22 @@ extern int lkm_poll(array_t *, int timeout);
 
 static inline int file_count_read(struct file *filp)
 {
-    return lkm_atomic_read(&filp->f_count);
+    return lkm_atomic32_read(&filp->f_count);
 }
 
 static inline int file_count_inc(struct file *filp)
 {
-    return lkm_atomic_add(&filp->f_count, 1);
+    return lkm_atomic32_add(&filp->f_count, 1);
 }
 
 static inline int file_count_dec(struct file *filp)
 {
-    return lkm_atomic_sub(&filp->f_count, 1);
+    return lkm_atomic32_sub(&filp->f_count, 1);
 }
 
 static inline void file_count_set(struct file *filp, int c)
 {
-    lkm_atomic_set(&filp->f_count, c);
+    lkm_atomic32_set(&filp->f_count, c);
 }
 
 struct fd_entry {

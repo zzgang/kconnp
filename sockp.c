@@ -378,9 +378,9 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
             goto shutdown;
 
         if (!p->sock_in_use)
-            conn_add_idle_count(&p->address);
+            conn_inc_idle_count(&p->address);
 
-        conn_add_all_count(&p->address);
+        conn_inc_all_count(&p->address);
 
         sockp_sbs_check_list_in(&p);
 

@@ -25,8 +25,8 @@ struct conn_attr_t {
     struct {
         unsigned int all_count;
         unsigned int idle_count;
-        atomic_t connected_all_count;
-        atomic_t connected_hit_count;
+        lkm_atomic_t connected_all_count;
+        lkm_atomic_t connected_hit_count;
     } stats;
 };
 
@@ -42,11 +42,11 @@ extern void connp_destroy(void);
 #define IDLE_COUNT 1
 #define CONNECTED_ALL_COUNT 2
 #define CONNECTED_HIT_COUNT 3
-#define conn_add_all_count(addr) conn_add_count(addr, ALL_COUNT)
-#define conn_add_idle_count(addr) conn_add_count(addr, IDLE_COUNT)
-#define conn_add_connected_all_count(addr) conn_add_count(addr, CONNECTED_ALL_COUNT)
-#define conn_add_connected_hit_count(addr) conn_add_count(addr, CONNECTED_HIT_COUNT)
-extern int conn_add_count(struct sockaddr *, int count_type);
+#define conn_inc_all_count(addr) conn_inc_count(addr, ALL_COUNT)
+#define conn_inc_idle_count(addr) conn_inc_count(addr, IDLE_COUNT)
+#define conn_inc_connected_all_count(addr) conn_inc_count(addr, CONNECTED_ALL_COUNT)
+#define conn_inc_connected_hit_count(addr) conn_inc_count(addr, CONNECTED_HIT_COUNT)
+extern int conn_inc_count(struct sockaddr *, int count_type);
 
 extern int conn_spec_check_close_flag(struct sockaddr *);
 
