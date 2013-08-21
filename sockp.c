@@ -216,9 +216,12 @@ static unsigned int loop_count = 0;
 static struct {
     struct socket_bucket *hash_table[NR_HASH];
     struct socket_bucket *shash_table[NR_SHASH]; //for sock addr hash table.
+
     struct socket_bucket *sb_free_p;
+
     struct socket_bucket *sb_trav_head;
     struct socket_bucket *sb_trav_tail;
+
     SOCKP_LOCK_T ht_lock;
 } ht;
 

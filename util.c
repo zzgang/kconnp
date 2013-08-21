@@ -5,7 +5,7 @@
 #include "util.h"
 #include "array.h"
 
-/**Poll start**/
+/* Poll funcs start */
 struct poll_table_entry_alias {
     struct file *filp;
     unsigned long key;
@@ -267,7 +267,7 @@ ignore_poll:
 
     return count;
 }
-/**Poll END**/
+/* Poll funcs END */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 10)
 static int sock_map_fd(struct socket *sock, int flags)

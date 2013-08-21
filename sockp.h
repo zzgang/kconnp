@@ -14,11 +14,14 @@
 #define SOCKP_DEBUG 0
 
 #define NR_SOCKET_BUCKET_LIMIT 1024
-#define connpd_poll_pending_fds_init()
+
 #define NR_SOCKET_BUCKET 200
+
 #define NR_HASH (NR_SOCKET_BUCKET/2 + 1)
 #define NR_SHASH (NR_SOCKET_BUCKET)
+
 #define TIMEOUT 30 //seconds
+
 #define LRU 1 //LRU replace algorithm
 
 #define shutdown_all_sock_list() shutdown_sock_list(SHUTDOWN_ALL)
@@ -36,25 +39,37 @@ typedef enum {
 
 struct socket_bucket {
     struct sockaddr address;
+
     struct socket *sock;
     struct sock *sk;
+
     sock_create_way_t sock_create_way;
+
     unsigned char sb_in_use;
     unsigned char sock_in_use; /*tag: wether it is in use*/
+
     unsigned char sock_close_now; /*tag: wether be closed at once*/
+
     u64 sock_create_jiffies; /*the jiffies to be inserted*/
     u64 last_used_jiffies; /*the last used jiffies*/
+
     u64 uc; /*used count*/
+
     struct socket_bucket *sb_prev;
     struct socket_bucket *sb_next; /*for hash table*/
+
     struct socket_bucket *sb_sprev;
     struct socket_bucket *sb_snext; /*for with sk addr hash table*/
+
     struct socket_bucket *sb_trav_prev; /*traverse all used buckets*/
     struct socket_bucket *sb_trav_next;
-    struct socket_bucket *sb_free_prev;
+
+    struct socket_bucket *sb_free_prev; /*free bucket indicator*/
     struct socket_bucket *sb_free_next;
-    int connpd_fd;
-    spinlock_t s_lock; //lock for poll
+
+    int connpd_fd; /*attached fd of the connpd*/
+
+    spinlock_t s_lock; //sb spin lock
 };
 
 extern struct stack_t *sockp_sbs_check_list;

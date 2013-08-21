@@ -6,9 +6,9 @@
 #include "hash.h"
 #include "cfg.h"
 
-#define CFG_ALLOWD_IPORTS_FILE "iports.allow"
-#define CFG_DENIED_IPORTS_FILE "iports.deny"
-#define CFG_CONN_STATS_INFO_FILE "stats.info"
+#define CFG_ALLOWD_IPORTS_FILE      "iports.allow"
+#define CFG_DENIED_IPORTS_FILE      "iports.deny"
+#define CFG_CONN_STATS_INFO_FILE    "stats.info"
 
 #define DUMP_INTERVAL 1 //Unit: second
 

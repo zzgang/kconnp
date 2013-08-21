@@ -34,7 +34,7 @@ struct cfg_entry {
 };
 
 struct iport_t {
-    //ip and port must be first elements
+    //Ip and port must be first elements
     unsigned int ip;
     unsigned short int port;
     unsigned int flags;
@@ -49,6 +49,7 @@ struct conn_node_t {
     struct iport_raw_t iport_node;
 #define conn_ip iport_node.ip
 #define conn_port iport_node.port
+
     struct conn_attr_t conn_attrs;
 #define conn_flags conn_attrs.flags
 #define conn_close_way conn_attrs.close_way
