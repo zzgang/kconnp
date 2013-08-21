@@ -1281,7 +1281,7 @@ void conn_stats_info_dump(void)
 #if BITS_PER_LONG < 64
         "%s:%u, Mode: %s, Hits: %d(%u.0%), Misses: %d(%u.0%)\n";
 #else
-        "%s:%u, Mode: %s, Hits: %l(%u.0%), Misses: %l(%u.0%)\n";
+        "%s:%u, Mode: %s, Hits: %ld(%u.0%), Misses: %ld(%u.0%)\n";
 #endif
     struct hash_bucket_t *pos;
     int offset = 0;
@@ -1302,14 +1302,13 @@ void conn_stats_info_dump(void)
         goto unlock_ret;
     
     hash_for_each((struct hash_table_t *)wl->cfg_ptr, pos) {
-
         struct conn_node_t *conn_node;
         unsigned int ip;
         unsigned short int port;
 #if BITS_PER_LONG < 64
-        s32 all_count, misses_count, hits_count;
+        int all_count, misses_count, hits_count;
 #else
-        s64 all_count, misses_count, hits_count;
+        long all_count, misses_count, hits_count;
 #endif
         unsigned int misses_percent, hits_percent; 
         char *ip_ptr, ip_str[16] = {0, };
