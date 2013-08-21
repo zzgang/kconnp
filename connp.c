@@ -130,13 +130,17 @@ static inline int insert_into_connp(struct sockaddr *servaddr, struct socket *so
         return 0;
 
     //To free
+    printk(KERN_ERR "free start\n");
     if (free_sk_to_sockp(sock->sk)) {
         sock->sk = NULL; //Remove reference to avoid to destroy the sk.
+    printk(KERN_ERR "free end\n");
         return 1;
     }
     
     //To insert
+    printk(KERN_ERR "insert1\n");
     if (insert_socket_to_connp(servaddr, sock))
+        printk(KERN_ERR "insert2");
         return 1;
 
     return 0;
@@ -177,14 +181,15 @@ int insert_into_connp_if_permitted(int fd)
         goto ret_fail;
     }
 
+    printk(KERN_ERR "insert start\n");
     err = insert_into_connp(&address, sock);
+    printk(KERN_ERR "insert end\n");
     
     connp_runlock();
     return err;
 
 ret_fail:
     connp_runlock();
-
     return 0;
 }
 
@@ -230,9 +235,12 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
 
     conn_inc_connected_all_count(address);
 
+    printk(KERN_ERR "apply before\n");
     if ((sk = apply_sk_from_sockp(address))) {
 
         conn_inc_connected_hit_count(address); 
+    
+        printk(KERN_ERR "apply end\n");
 
         sk_attach_sock(sk, sock);
 
