@@ -147,7 +147,6 @@ int insert_into_connp_if_permitted(int fd)
     struct socket *sock;
     struct sockaddr address;
     int err;
-    return 0;
 
     connp_rlock();
 
@@ -203,7 +202,6 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     struct sock *sk;
     int ret = 0; 
 
-    return 0;
     connp_rlock(); 
 
     if (!CONNP_DAEMON_EXISTS()) {
