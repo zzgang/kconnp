@@ -148,6 +148,7 @@ int insert_into_connp_if_permitted(int fd)
     struct sockaddr address;
     int err;
 
+    printk(KERN_ERR "Connect start\n");
     connp_rlock();
 
     if (!CONNP_DAEMON_EXISTS() || INVOKED_BY_CONNP_DAEMON())
@@ -184,6 +185,8 @@ int insert_into_connp_if_permitted(int fd)
 
 ret_fail:
     connp_runlock();
+
+    printk(KERN_ERR "Connected end!\n");
 
     return 0;
 }

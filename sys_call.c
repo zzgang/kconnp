@@ -139,5 +139,7 @@ int connp_set_syscall(int flag)
     enable_page_protection();
 #endif
 
+    printk(KERN_ERR "Install or unload kconnp successful\n");
+
     return 1;
 }
