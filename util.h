@@ -313,8 +313,8 @@ static inline void disable_page_protection(void)
 
     asm volatile("mov %%cr0,%0" : "=r" (value));
 
-    if (value & 0x00010000) {
-        value &= ~0x00010000;
+    if (value & 0x10000UL) {
+        value &= ~0x10000UL;
         asm volatile("mov %0,%%cr0": : "r" (value));
     }
 }
@@ -325,8 +325,8 @@ static inline void enable_page_protection(void)
 
     asm volatile("mov %%cr0,%0" : "=r" (value));
 
-    if (!(value & 0x00010000)) {
-        value |= 0x00010000;
+    if (!(value & 0x10000UL)) {
+        value |= 0x10000UL;
         asm volatile("mov %0,%%cr0": : "r" (value));
     }
 }
