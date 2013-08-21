@@ -1,5 +1,5 @@
 /*
- * The codes of this file is brought from kernel, and changed it to appreciate the lkm
+ * Most of the codes for this file is brought from kernel source code.
  * 
  */
 
