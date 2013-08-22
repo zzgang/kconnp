@@ -130,13 +130,17 @@ static inline int insert_into_connp(struct sockaddr *servaddr, struct socket *so
         return 0;
 
     //To free
+    printk(KERN_ERR "do insert1 \n");
     if (free_sk_to_sockp(sock->sk)) {
+        printk(KERN_ERR "do insert2 \n");
         sock->sk = NULL; //Remove reference to avoid to destroy the sk.
         return 1;
     }
     
     //To insert
+    printk(KERN_ERR "do insert3 \n");
     if (insert_socket_to_connp(servaddr, sock))
+    printk(KERN_ERR "do insert4 \n");
         return 1;
 
     return 0;
@@ -156,9 +160,12 @@ int insert_into_connp_if_permitted(int fd)
     if (!is_sock_fd(fd))
         goto ret_fail;
 
+    printk(KERN_ERR "permitted 1\n");
     sock = getsock(fd);
     if (!sock || !IS_TCP_SOCK(sock) || !IS_CLIENT_SOCK(sock))
         goto ret_fail;
+    
+    printk(KERN_ERR "permitted 2\n");
 
     err = getsockservaddr(sock, &address);
     if (err)
@@ -167,10 +174,12 @@ int insert_into_connp_if_permitted(int fd)
     if (address.sa_family != AF_INET)
         goto ret_fail;
 
+    printk(KERN_ERR "permitted 3\n");
     if (!cfg_conn_acl_allowd(&address))
         goto ret_fail;
  
     if (!SOCK_ESTABLISHED(sock)) {
+        printk(KERN_ERR "permitted 3-0\n");
         cfg_conn_set_passive(&address); //may be passive sock.
         set_sock_close_now(sock, 1);
         notify(CONNP_DAEMON_TSKP); //wake up connpd to nonconnection collection.
@@ -181,10 +190,9 @@ int insert_into_connp_if_permitted(int fd)
     
     connp_runlock();
     return err;
-
 ret_fail:
+    printk(KERN_ERR "permitted 4\n");
     connp_runlock();
-
     return 0;
 }
 
@@ -201,11 +209,6 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     struct socket *sock;
     struct sock *sk;
     int ret = 0; 
-
-    connp_rlock(); 
-    connp_runlock(); 
-
-    return 0;
 
     if (!CONNP_DAEMON_EXISTS()) {
         ret = 0;
@@ -250,7 +253,6 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         else
             ret = CONN_BLOCK;
         printk(KERN_ERR "fetch 2-2\n");
-        goto ret_unlock;
     }
 
     printk(KERN_ERR "fetch 2-3\n");
