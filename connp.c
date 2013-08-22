@@ -258,7 +258,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     }
 
     printk(KERN_ERR "fetch 2-3\n");
-    SET_CLIENT_FLAG(sock);
+    //SET_CLIENT_FLAG(sock);
     printk(KERN_ERR "fetch 2-4\n");
 
 ret_unlock:

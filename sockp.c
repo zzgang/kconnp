@@ -297,6 +297,7 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
     printk(KERN_ERR "apply 1\n");
     p = HASH(address);
     for (; p; p = p->sb_next) { 
+    printk(KERN_ERR "apply 1-0\n");
 
         LOOP_COUNT_SAFE_CHECK(p);
 
@@ -431,7 +432,9 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
     SOCKP_LOCK();
 printk(KERN_ERR "free 1\n");
     p = SHASH(sk);
+printk(KERN_ERR "free 1-0\n");
     for (; p; p = p->sb_snext) {
+printk(KERN_ERR "free 1-1\n");
 
         LOOP_COUNT_SAFE_CHECK(p);
         
@@ -571,8 +574,8 @@ int sockp_init()
 {
     struct socket_bucket *sb_tmp;
 
-    memset((void *)SB, 0, sizeof(SB));
-    memset((void *)&ht, 0, sizeof(ht));
+    memset((char *)SB, 0, sizeof(SB));
+    memset((char *)&ht, 0, sizeof(ht));
 
     //init sockp freelist.
     ht.sb_free_p = sb_tmp = SB;
