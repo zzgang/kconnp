@@ -237,20 +237,26 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
 
         printk(KERN_ERR "fetch 2\n");
         sk_attach_sock(sk, sock);
+        printk(KERN_ERR "fetch 2-0\n");
 
         SET_SOCK_STATE(sock, SS_CONNECTED);
+        printk(KERN_ERR "fetch 2-1\n");
 
         if (CONN_IS_NONBLOCK(sock->file)) 
             ret = CONN_NONBLOCK;
         else
             ret = CONN_BLOCK;
+        printk(KERN_ERR "fetch 2-2\n");
     }
 
+    printk(KERN_ERR "fetch 2-3\n");
     SET_CLIENT_FLAG(sock);
+    printk(KERN_ERR "fetch 2-4\n");
 
 ret_unlock:
+    printk(KERN_ERR "fetch 3-0\n");
     connp_runlock();
-    printk(KERN_ERR "fetch 3\n");
+    printk(KERN_ERR "fetch 3-1\n");
     return ret;
 }
 
