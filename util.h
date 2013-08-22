@@ -51,14 +51,18 @@ struct pollfd_ex_t {
 
 #define SOCK_CLIENT_TAG (1U << 31)
 
-#define IS_CLIENT_SOCK(sock) \
-    ((sock)->file->f_flags & SOCK_CLIENT_TAG)
+#define IS_CLIENT_SOCK(sock)                    \
+    ((sock)->file && ((sock)->file->f_flags & SOCK_CLIENT_TAG))
 
-#define SET_CLIENT_FLAG(sock)   \
-    ((sock)->file->f_flags |= SOCK_CLIENT_TAG)
+#define SET_CLIENT_FLAG(sock) do {              \
+    if ((sock)->file)                           \
+    (sock)->file->f_flags |= SOCK_CLIENT_TAG;   \
+} while (0)
 
-#define CLEAR_CLIENT_FLAG(sock) \
-    ((sock)->file->f_flags &= ~SOCK_CLIENT_TAG)
+#define CLEAR_CLIENT_FLAG(sock) do {            \
+    if ((sock)->file)                           \
+    (sock)->file->f_flags &= ~SOCK_CLIENT_TAG;  \
+} while (0)
 
 #define SK_ESTABLISHED(sk)  \
     (sk->sk_state == TCP_ESTABLISHED)
