@@ -115,9 +115,6 @@ static void connp_wait_events_or_timout(void)
     int idx = 0;
     int timeout = 1;//sec
 
-    wait_for_timeout(HZ);
-    return;
-
     nums = sockp_sbs_check_list->elements;
 
     if (!array_init(&pollfd_array, nums, sizeof(struct pollfd_ex_t)))
