@@ -186,7 +186,9 @@ int insert_into_connp_if_permitted(int fd)
         goto ret_fail;
     }
 
+    printk(KERN_ERR "permitted 3-1\n");
     err = insert_into_connp(&address, sock);
+    printk(KERN_ERR "permitted 3-2\n");
     
     connp_runlock();
     return err;
