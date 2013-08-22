@@ -203,6 +203,9 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     int ret = 0; 
 
     connp_rlock(); 
+    connp_runlock(); 
+
+    return 0;
 
     if (!CONNP_DAEMON_EXISTS()) {
         ret = 0;
@@ -247,6 +250,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         else
             ret = CONN_BLOCK;
         printk(KERN_ERR "fetch 2-2\n");
+        goto ret_unlock;
     }
 
     printk(KERN_ERR "fetch 2-3\n");
