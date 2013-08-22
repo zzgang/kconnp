@@ -250,6 +250,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
 
 ret_unlock:
     connp_runlock();
+    printk(KERN_ERR "fetch 3\n");
     return ret;
 }
 
