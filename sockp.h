@@ -11,7 +11,7 @@
 #include <net/tcp_states.h>
 #include "stack.h"
 
-#define SOCKP_DEBUG 0
+#define SOCKP_DEBUG 1
 
 #define NR_SOCKET_BUCKET_LIMIT 1024
 

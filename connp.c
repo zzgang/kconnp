@@ -228,12 +228,14 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         goto ret_unlock;
     }
 
+    printk(KERN_ERR "fetch 1\n");
     conn_inc_connected_all_count(address);
 
     if ((sk = apply_sk_from_sockp(address))) {
 
         conn_inc_connected_hit_count(address); 
 
+        printk(KERN_ERR "fetch 2\n");
         sk_attach_sock(sk, sock);
 
         SET_SOCK_STATE(sock, SS_CONNECTED);
@@ -257,10 +259,12 @@ void connp_sys_exit_prepare()
 
     LIST_HEAD(fds_list);
     TASK_GET_FDS(current, &fds_list);
+    printk(KERN_ERR "prepare 1\n");
     list_for_each_entry_safe(pos, tmp, &fds_list, siblings) {
         insert_into_connp_if_permitted(pos->fd);
         lkmfree(pos);
     } 
+    printk(KERN_ERR "prepare 2\n");
 }
 
 static inline void deferred_destroy(void) 
