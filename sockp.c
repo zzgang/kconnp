@@ -451,6 +451,8 @@ printk(KERN_ERR "free 1\n");
 
             sb = p;
             
+            printk(KERN_ERR "free 2\n");
+            
             break;
         }
 
@@ -458,7 +460,7 @@ printk(KERN_ERR "free 1\n");
 
     LOOP_COUNT_RESET();
 
-    printk(KERN_ERR "free 2\n");
+    printk(KERN_ERR "free 3\n");
     SOCKP_UNLOCK();
 
     return sb;

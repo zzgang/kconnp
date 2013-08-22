@@ -71,7 +71,13 @@ asmlinkage long connp_sys_connect(int fd, struct sockaddr __user * uservaddr,
             return -EINPROGRESS;
     }
 
-    return orig_sys_connect(fd, uservaddr, addrlen);
+    printk(KERN_ERR "origin connect\n");
+
+    err = orig_sys_connect(fd, uservaddr, addrlen);
+    
+    printk(KERN_ERR "origin connect\n");
+    
+    return err;
 }
 
 asmlinkage long connp_sys_shutdown(int fd, int way)
