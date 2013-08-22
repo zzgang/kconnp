@@ -294,10 +294,9 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
     struct sock *sk;
 
     SOCKP_LOCK();
-    printk(KERN_ERR "apply 1\n");
+
     p = HASH(address);
     for (; p; p = p->sb_next) { 
-    printk(KERN_ERR "apply 1-0\n");
 
         LOOP_COUNT_SAFE_CHECK(p);
 
@@ -319,8 +318,6 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
             REMOVE_FROM_HLIST(HASH(address), p);
             
             LOOP_COUNT_RESET();
-        
-            printk(KERN_ERR "apply 2\n");
            
             SOCKP_UNLOCK();
 
@@ -329,8 +326,6 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
     }
 
     LOOP_COUNT_RESET();
-            
-    printk(KERN_ERR "apply 3\n");
     
     SOCKP_UNLOCK();
 
@@ -348,7 +343,6 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
 
     SOCKP_LOCK();
     
-   printk(KERN_ERR "shutdown 1\n"); 
     p = ht.sb_trav_head;
     for (; p; p = p->sb_trav_next) {
 
@@ -398,8 +392,6 @@ shutdown:
             LOOP_COUNT_SAVE(local_loop_count);
 
             LOOP_COUNT_RESET();
-            
-            printk(KERN_ERR "shutdown 2\n"); 
 
             if (IN_HLIST(HASH(&p->address), p))
                 REMOVE_FROM_HLIST(HASH(&p->address), p);
@@ -416,8 +408,6 @@ shutdown:
     }
 
     LOOP_COUNT_RESET();
-            
-    printk(KERN_ERR "shutdown 3\n"); 
     
     SOCKP_UNLOCK();
 }
@@ -430,11 +420,9 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
     struct socket_bucket *p, *sb = NULL;
 
     SOCKP_LOCK();
-printk(KERN_ERR "free 1\n");
+
     p = SHASH(sk);
-printk(KERN_ERR "free 1-0\n");
     for (; p; p = p->sb_snext) {
-printk(KERN_ERR "free 1-1\n");
 
         LOOP_COUNT_SAFE_CHECK(p);
         
@@ -454,8 +442,6 @@ printk(KERN_ERR "free 1-1\n");
 
             sb = p;
             
-            printk(KERN_ERR "free 2\n");
-            
             break;
         }
 
@@ -463,7 +449,6 @@ printk(KERN_ERR "free 1-1\n");
 
     LOOP_COUNT_RESET();
 
-    printk(KERN_ERR "free 3\n");
     SOCKP_UNLOCK();
 
     return sb;
@@ -544,7 +529,6 @@ struct socket_bucket *insert_sock_to_sockp(struct sockaddr *address,
 
     SOCKP_LOCK();
 
-    printk(KERN_ERR "insert 1\n");
 #if LRU
     if (!(empty = get_empty_slot(address))) 
         goto unlock_ret;
@@ -560,13 +544,10 @@ struct socket_bucket *insert_sock_to_sockp(struct sockaddr *address,
     INSERT_INTO_HLIST(HASH(&empty->address), empty);
     INSERT_INTO_SHLIST(SHASH(empty->sk), empty);
     INSERT_INTO_TLIST(empty);
-    
-    printk(KERN_ERR "insert 2\n");
 
 unlock_ret:
     SOCKP_UNLOCK();
 
-    printk(KERN_ERR "insert 3\n");
     return empty;
 }
 

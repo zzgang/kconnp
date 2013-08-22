@@ -130,17 +130,13 @@ static inline int insert_into_connp(struct sockaddr *servaddr, struct socket *so
         return 0;
 
     //To free
-    printk(KERN_ERR "do insert1 \n");
     if (free_sk_to_sockp(sock->sk)) {
-        printk(KERN_ERR "do insert2 \n");
         sock->sk = NULL; //Remove reference to avoid to destroy the sk.
         return 1;
     }
     
     //To insert
-    printk(KERN_ERR "do insert3 \n");
     if (insert_socket_to_connp(servaddr, sock))
-    printk(KERN_ERR "do insert4 \n");
         return 1;
 
     return 0;
@@ -160,12 +156,9 @@ int insert_into_connp_if_permitted(int fd)
     if (!is_sock_fd(fd))
         goto ret_fail;
 
-    printk(KERN_ERR "permitted 1\n");
     sock = getsock(fd);
     if (!sock || !IS_TCP_SOCK(sock) || !IS_CLIENT_SOCK(sock))
         goto ret_fail;
-    
-    printk(KERN_ERR "permitted 2\n");
 
     err = getsockservaddr(sock, &address);
     if (err)
@@ -174,27 +167,24 @@ int insert_into_connp_if_permitted(int fd)
     if (address.sa_family != AF_INET)
         goto ret_fail;
 
-    printk(KERN_ERR "permitted 3\n");
     if (!cfg_conn_acl_allowd(&address))
         goto ret_fail;
  
     if (!SOCK_ESTABLISHED(sock)) {
-        printk(KERN_ERR "permitted 3-0\n");
         cfg_conn_set_passive(&address); //may be passive sock.
         set_sock_close_now(sock, 1);
         notify(CONNP_DAEMON_TSKP); //wake up connpd to nonconnection collection.
         goto ret_fail;
     }
 
-    printk(KERN_ERR "permitted 3-1\n");
     err = insert_into_connp(&address, sock);
-    printk(KERN_ERR "permitted 3-2\n");
     
     connp_runlock();
     return err;
+
 ret_fail:
-    printk(KERN_ERR "permitted 4\n");
     connp_runlock();
+
     return 0;
 }
 
@@ -211,6 +201,8 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     struct socket *sock;
     struct sock *sk;
     int ret = 0; 
+
+    connp_rlock(); 
 
     if (!CONNP_DAEMON_EXISTS()) {
         ret = 0;
@@ -236,35 +228,26 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         goto ret_unlock;
     }
 
-    printk(KERN_ERR "fetch 1\n");
     conn_inc_connected_all_count(address);
 
     if ((sk = apply_sk_from_sockp(address))) {
 
         conn_inc_connected_hit_count(address); 
 
-        printk(KERN_ERR "fetch 2\n");
         sk_attach_sock(sk, sock);
-        printk(KERN_ERR "fetch 2-0\n");
 
         SET_SOCK_STATE(sock, SS_CONNECTED);
-        printk(KERN_ERR "fetch 2-1\n");
 
         if (CONN_IS_NONBLOCK(sock->file)) 
             ret = CONN_NONBLOCK;
         else
             ret = CONN_BLOCK;
-        printk(KERN_ERR "fetch 2-2\n");
     }
 
-    printk(KERN_ERR "fetch 2-3\n");
-    //SET_CLIENT_FLAG(sock);
-    printk(KERN_ERR "fetch 2-4\n");
+    SET_CLIENT_FLAG(sock);
 
 ret_unlock:
-    printk(KERN_ERR "fetch 3-0\n");
     connp_runlock();
-    printk(KERN_ERR "fetch 3-1\n");
     return ret;
 }
 
@@ -274,12 +257,10 @@ void connp_sys_exit_prepare()
 
     LIST_HEAD(fds_list);
     TASK_GET_FDS(current, &fds_list);
-    printk(KERN_ERR "prepare 1\n");
     list_for_each_entry_safe(pos, tmp, &fds_list, siblings) {
         insert_into_connp_if_permitted(pos->fd);
         lkmfree(pos);
     } 
-    printk(KERN_ERR "prepare 2\n");
 }
 
 static inline void deferred_destroy(void) 
