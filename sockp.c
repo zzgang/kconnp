@@ -139,7 +139,6 @@
         (sb)->sb_snext = NULL; \
         (sb)->sb_trav_prev = NULL; \
         (sb)->sb_trav_next = NULL; \
-        spin_lock_init(&(sb)->s_lock); \
     } while(0)
 
 #define ATOMIC_SET_SOCK_ATTR(sock, attr)                                \
@@ -569,8 +568,12 @@ int sockp_init()
     while (sb_tmp < SB + NR_SOCKET_BUCKET) {
         sb_tmp->sb_free_prev = sb_tmp - 1;
         sb_tmp->sb_free_next = sb_tmp + 1;
+
+        spin_lock_init(&(sb_tmp)->s_lock);
+
         sb_tmp++;
     }
+        
 
     sb_tmp--;
     SB[0].sb_free_prev = sb_tmp;
