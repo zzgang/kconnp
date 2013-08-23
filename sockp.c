@@ -296,7 +296,7 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
 
     p = HASH(address);
     for (; p; p = p->sb_next) { 
-        printk(KERN_ERR "p: %p\n", p);
+        //printk(KERN_ERR "p: %p\n", p);
 
         LOOP_COUNT_SAFE_CHECK(p);
 
@@ -310,12 +310,13 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
             p->uc++; //inc used count
             p->sock_in_use = 1; //set "in use" tag.
             sk = p->sock->sk;
-
+            /*
             spin_lock(&p->s_lock);
             p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
             spin_unlock(&p->s_lock);
-            
             goto ret_unlock;
+            */
+            
 
             REMOVE_FROM_HLIST(HASH(address), p);
             
@@ -528,7 +529,7 @@ struct socket_bucket *insert_sock_to_sockp(struct sockaddr *address,
 {
     struct socket_bucket *empty = NULL;
 
-    printk(KERN_ERR "Insert\n");
+    //printk(KERN_ERR "Insert\n");
     SOCKP_LOCK();
 
 
