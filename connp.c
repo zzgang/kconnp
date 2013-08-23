@@ -184,7 +184,6 @@ int insert_into_connp_if_permitted(int fd)
 
 ret_fail:
     connp_runlock();
-
     return 0;
 }
 
@@ -221,6 +220,8 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         ret = 0;
         goto ret_unlock;
     }
+
+    goto ret_unlock;
 
     if (address->sa_family != AF_INET 
             || !cfg_conn_acl_allowd(address)) {
