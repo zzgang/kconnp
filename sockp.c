@@ -309,7 +309,13 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
             
             p->uc++; //inc used count
             p->sock_in_use = 1; //set "in use" tag.
-            sk = p->sock->sk;
+           
+            if (p->sk != p->sock->sk) {
+                printk(KERN_ERR "The sk of socket changed!\n");
+                continue;
+            }
+
+            sk = p->sk;
             
             spin_lock(&p->s_lock);
             p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
