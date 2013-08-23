@@ -290,13 +290,11 @@ SOCK_SET_ATTR_DEFINE(sock, sock_close_now)
 struct sock *apply_sk_from_sockp(struct sockaddr *address)
 {
     struct socket_bucket *p;
-    struct sock *sk;
 
     SOCKP_LOCK();
 
     p = HASH(address);
     for (; p; p = p->sb_next) {
-        //printk(KERN_ERR "p: %p\n", p);
 
         LOOP_COUNT_SAFE_CHECK(p);
 
@@ -315,8 +313,6 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
                 continue;
             }
 
-            sk = p->sk;
-            
             spin_lock(&p->s_lock);
             p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
             spin_unlock(&p->s_lock);
@@ -327,7 +323,7 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
             LOOP_COUNT_RESET();
            
             SOCKP_UNLOCK();
-            return sk;
+            return p->sk;
         }
     }
 
