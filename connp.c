@@ -228,9 +228,10 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         goto ret_unlock;
     }
     
-    goto ret_unlock;
 
     conn_inc_connected_all_count(address);
+    
+    goto ret_unlock;
 
     if ((sk = apply_sk_from_sockp(address))) {
 
