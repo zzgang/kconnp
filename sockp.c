@@ -322,7 +322,6 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
             LOOP_COUNT_RESET();
            
             SOCKP_UNLOCK();
-
             return sk;
         }
     }
@@ -559,8 +558,8 @@ int sockp_init()
 {
     struct socket_bucket *sb_tmp;
 
-    memset((char *)SB, 0, sizeof(SB));
-    memset((char *)&ht, 0, sizeof(ht));
+    memset(SB, 0, sizeof(SB));
+    memset(&ht, 0, sizeof(ht));
 
     //init sockp freelist.
     ht.sb_free_p = sb_tmp = SB;
