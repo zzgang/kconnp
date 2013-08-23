@@ -242,6 +242,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         else
             ret = CONN_BLOCK;
     }
+    goto ret_unlock;
 
     SET_CLIENT_FLAG(sock);
 
