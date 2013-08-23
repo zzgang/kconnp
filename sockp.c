@@ -302,6 +302,7 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
 
         if (KEY_MATCH(address, &p->address)) {
 
+            goto ret_unlock;
             if (p->sock_in_use 
                     || sock_is_not_available(p) 
                     || SOCK_IS_RECLAIM_PASSIVE(p))
@@ -321,7 +322,7 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
            
             SOCKP_UNLOCK();
 
-            return NULL;
+            return sk;
         }
     }
 
