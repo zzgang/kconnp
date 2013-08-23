@@ -221,13 +221,14 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         goto ret_unlock;
     }
 
-    goto ret_unlock;
 
     if (address->sa_family != AF_INET 
             || !cfg_conn_acl_allowd(address)) {
         ret = 0;
         goto ret_unlock;
     }
+    
+    goto ret_unlock;
 
     conn_inc_connected_all_count(address);
 
