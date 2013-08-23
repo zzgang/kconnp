@@ -310,11 +310,12 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
             p->uc++; //inc used count
             p->sock_in_use = 1; //set "in use" tag.
             sk = p->sock->sk;
+            
+            p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
+
             /*
             spin_lock(&p->s_lock);
-            p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
             spin_unlock(&p->s_lock);
-            goto ret_unlock;
             */
             
 
@@ -329,7 +330,6 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
 
     LOOP_COUNT_RESET();
 
-//ret_unlock:
     SOCKP_UNLOCK();
     return NULL;
 }
