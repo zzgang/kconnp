@@ -94,12 +94,10 @@ static int connpd_do_poll(void *data, poll_table *pt)
     sb = (struct socket_bucket *)data;
     file = lkm_get_file(sb->connpd_fd);
     
-    printk(KERN_ERR "poll 1\n");
     spin_lock(&sb->s_lock);
     if (sb->sock->sk)
         mask = file->f_op->poll(file, pt);
     spin_unlock(&sb->s_lock);
-    printk(KERN_ERR "poll 2\n");
 
     return mask;
 }
@@ -116,9 +114,6 @@ static void connp_wait_events_or_timout(void)
     int count = 0;
     int idx = 0;
     int timeout = 1;//sec
-
-    wait_for_timeout(HZ);
-    return;
 
     nums = sockp_sbs_check_list->elements;
 
