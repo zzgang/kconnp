@@ -296,6 +296,7 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
     SOCKP_LOCK();
 
     p = HASH(address);
+    goto ret_unlock;
     for (; p; p = p->sb_next) { 
 
         LOOP_COUNT_SAFE_CHECK(p);
@@ -326,9 +327,9 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
     }
 
     LOOP_COUNT_RESET();
-    
-    SOCKP_UNLOCK();
 
+ret_unlock:
+    SOCKP_UNLOCK();
     return NULL;
 }
 
