@@ -212,6 +212,8 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         ret = 0;
         goto ret_unlock;
     }
+
+    goto ret_unlock;
    
     sock = getsock(fd);
     if (!sock 
