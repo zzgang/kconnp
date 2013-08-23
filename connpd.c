@@ -94,10 +94,12 @@ static int connpd_do_poll(void *data, poll_table *pt)
     sb = (struct socket_bucket *)data;
     file = lkm_get_file(sb->connpd_fd);
     
+    printk(KERN_ERR "poll 1\n");
     spin_lock(&sb->s_lock);
     if (sb->sock->sk)
         mask = file->f_op->poll(file, pt);
     spin_unlock(&sb->s_lock);
+    printk(KERN_ERR "poll 2\n");
 
     return mask;
 }
