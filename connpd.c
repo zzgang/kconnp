@@ -179,23 +179,15 @@ static int connpd_func(void *data)
 
         } else {
             //scan and shutdown
-            printk(KERN_ERR "close 1\n");
             close_timeout_files();
-            printk(KERN_ERR "close 2\n");
 
             connpd_unused_fds_prefetch();
             
-            printk(KERN_ERR "preconnect 1\n");
-
             scan_spare_conns_preconnect(); 
             
-            printk(KERN_ERR "dump 1\n");
             conn_stats_info_dump();
-            
-            printk(KERN_ERR "timeout 1\n");
 
             connp_wait_events_or_timout();
-            printk(KERN_ERR "timeout 2\n");
 
         }
 

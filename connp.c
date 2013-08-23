@@ -188,7 +188,7 @@ ret_fail:
 }
 
 /**
- *Destory the new alloc socket and map the sockd's socket.
+ *Graft the sk to the sock.
  */
 static inline void sk_attach_sock(struct sock *sk, struct socket *sock)
 {
