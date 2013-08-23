@@ -302,11 +302,12 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
 
         if (KEY_MATCH(address, &p->address)) {
 
-            goto ret_unlock;
             if (p->sock_in_use 
                     || sock_is_not_available(p) 
                     || SOCK_IS_RECLAIM_PASSIVE(p))
                 continue;
+            
+            goto ret_unlock;
 
             p->uc++; //inc used count
             p->sock_in_use = 1; //set "in use" tag.
