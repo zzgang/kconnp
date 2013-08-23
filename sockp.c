@@ -529,7 +529,9 @@ struct socket_bucket *insert_sock_to_sockp(struct sockaddr *address,
 {
     struct socket_bucket *empty = NULL;
 
+    printk(KERN_ERR "Insert %d\n");
     SOCKP_LOCK();
+
 
 #if LRU
     if (!(empty = get_empty_slot(address))) 
