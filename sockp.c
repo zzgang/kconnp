@@ -307,8 +307,6 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
                     || SOCK_IS_RECLAIM_PASSIVE(p))
                 continue;
             
-            goto ret_unlock;
-
             p->uc++; //inc used count
             p->sock_in_use = 1; //set "in use" tag.
             sk = p->sock->sk;
@@ -316,6 +314,8 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
             spin_lock(&p->s_lock);
             p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
             spin_unlock(&p->s_lock);
+
+            goto ret_unlock;
 
             REMOVE_FROM_HLIST(HASH(address), p);
             
