@@ -20,7 +20,6 @@ static void do_conn_inc_connected_hit_count(void *data);
 
 static inline int insert_socket_to_connp(struct sockaddr *, struct socket *);
 static inline int insert_into_connp(struct sockaddr *, struct socket *);
-static inline void sk_attach_sock(struct sock *, struct socket *);
 
 static inline void deferred_destroy(void);
 
@@ -187,14 +186,6 @@ ret_fail:
     return 0;
 }
 
-/**
- *Graft the sk to the sock.
- */
-static inline void sk_attach_sock(struct sock *sk, struct socket *sock)
-{
-    sock_graft(sk, sock);
-}
-
 int fetch_conn_from_connp(int fd, struct sockaddr *address)
 {
     struct socket *sock;
@@ -229,12 +220,10 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     
     conn_inc_connected_all_count(address);
 
-    if ((sk = apply_sk_from_sockp(address))) {
+    if ((sk = apply_sk_from_sockp(address, sock))) {
         
         conn_inc_connected_hit_count(address); 
         
-        sk_attach_sock(sk, sock);
-
         SET_SOCK_STATE(sock, SS_CONNECTED);
 
         if (CONN_IS_NONBLOCK(sock->file)) 

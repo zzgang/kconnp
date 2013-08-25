@@ -284,10 +284,7 @@ SOCK_SET_ATTR_DEFINE(sock, sock_close_now)
     ATOMIC_SET_SOCK_ATTR(sock, sock_close_now);
 }
 
-/**
- *Apply a unused sock->sk from socket pool.
- */
-struct sock *apply_sk_from_sockp(struct sockaddr *address)
+struct sock *apply_sk_from_sockp(struct sockaddr *address, struct socket *newsock)
 {
     struct socket_bucket *p;
 
@@ -312,6 +309,8 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
                 printk(KERN_ERR "The sk of socket changed!\n");
                 continue;
             }
+
+            sock_graft(p->sk, newsock);
 
             spin_lock(&p->s_lock);
             p->sock->sk = NULL; //remove reference to avoid to destroy the sk.

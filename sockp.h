@@ -88,7 +88,7 @@ extern void set_sock_close_now(struct socket *sock, typeof(((struct socket_bucke
 /**
  *Apply a existed socket from socket pool.
  */
-extern struct sock *apply_sk_from_sockp(struct sockaddr *);
+extern struct sock *apply_sk_from_sockp(struct sockaddr *, struct socket *);
 
 /**
  *Free a socket which is returned by 'apply_socket_from_sockp', return the bucket of this socket.
