@@ -284,7 +284,7 @@ SOCK_SET_ATTR_DEFINE(sock, sock_close_now)
     ATOMIC_SET_SOCK_ATTR(sock, sock_close_now);
 }
 
-struct sock *apply_sk_from_sockp(struct sockaddr *address, struct socket *newsock)
+struct sock *apply_sk_from_sockp(struct sockaddr *address)
 {
     struct socket_bucket *p;
 
@@ -310,10 +310,8 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address, struct socket *newsoc
                 continue;
             }
 
-            sock_graft(p->sk, newsock);
-
             spin_lock(&p->s_lock);
-            //p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
+            p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
             spin_unlock(&p->s_lock);
             
             REMOVE_FROM_HLIST(HASH(address), p);

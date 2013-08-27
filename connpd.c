@@ -115,6 +115,7 @@ static void connp_wait_events_or_timout(void)
     int idx = 0;
     int timeout = 1;//sec
 
+
     nums = sockp_sbs_check_list->elements;
 
     if (!array_init(&pollfd_array, nums, sizeof(struct pollfd_ex_t)))
@@ -135,9 +136,12 @@ static void connp_wait_events_or_timout(void)
 poll:
     count = lkm_poll(pollfd_array, timeout);
 
-    if (!pollfd_array || count <= 0)
+    if (!pollfd_array)
         return;
-    
+
+    if (count <= 0)
+        goto out_free;
+
     {
         struct pollfd_ex_t *pfdp;
         
@@ -155,6 +159,7 @@ poll:
         }
     }
 
+out_free:
     pollfd_array->destroy(&pollfd_array);
 }
 

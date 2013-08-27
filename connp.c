@@ -222,16 +222,18 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     
     conn_inc_connected_all_count(address);
 
-    if ((sk = apply_sk_from_sockp(address, sock))) {
+    if ((sk = apply_sk_from_sockp(address))) {
         
-        conn_inc_connected_hit_count(address); 
-        
+        sock_graft(sk, sock);
+
         SET_SOCK_STATE(sock, SS_CONNECTED);
 
         if (CONN_IS_NONBLOCK(sock->file)) 
             ret = CONN_NONBLOCK;
         else
             ret = CONN_BLOCK;
+        
+        conn_inc_connected_hit_count(address); 
     }
 
     SET_CLIENT_FLAG(sock);
