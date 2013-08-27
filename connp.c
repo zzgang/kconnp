@@ -166,8 +166,10 @@ int insert_into_connp_if_permitted(int fd)
     if (address.sa_family != AF_INET)
         goto ret_fail;
 
-    if (!cfg_conn_acl_allowd(&address))
+    if (!cfg_conn_is_positive(&address)) {
+        set_sock_close_now(sock, 1);
         goto ret_fail;
+    }
  
     if (!SOCK_ESTABLISHED(sock)) {
         cfg_conn_set_passive(&address); //may be passive sock.
