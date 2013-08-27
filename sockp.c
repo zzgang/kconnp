@@ -313,10 +313,9 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address, struct socket *newsoc
             sock_graft(p->sk, newsock);
 
             spin_lock(&p->s_lock);
-            p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
+            //p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
             spin_unlock(&p->s_lock);
             
-
             REMOVE_FROM_HLIST(HASH(address), p);
             
             LOOP_COUNT_RESET();
