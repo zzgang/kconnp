@@ -310,11 +310,12 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
                 continue;
             }
 
-            goto ret_unlock;
 
             spin_lock(&p->s_lock);
-            p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
+            //p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
             spin_unlock(&p->s_lock);
+            
+            goto ret_unlock;
             
             REMOVE_FROM_HLIST(HASH(address), p);
             
