@@ -223,9 +223,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     conn_inc_connected_all_count(address);
 
     if ((sk = apply_sk_from_sockp(address))) {
-       
-        goto ret_unlock;
-
+        
         sock_graft(sk, sock);
 
         SET_SOCK_STATE(sock, SS_CONNECTED);
