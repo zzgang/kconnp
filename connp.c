@@ -166,22 +166,22 @@ int insert_into_connp_if_permitted(int fd)
     if (address.sa_family != AF_INET)
         goto ret_fail;
 
-    if (!cfg_conn_is_positive(&address)) {
-        set_sock_close_now(sock, 1);
-        goto ret_fail;
-    }
- 
+    if (!cfg_conn_is_positive(&address))
+        goto sock_close;
+
     if (!SOCK_ESTABLISHED(sock)) {
         cfg_conn_set_passive(&address); //may be passive sock.
-        set_sock_close_now(sock, 1);
-        notify(CONNP_DAEMON_TSKP); //wake up connpd to nonconnection collection.
-        goto ret_fail;
+        goto sock_close;
     }
 
     err = insert_into_connp(&address, sock);
     
     connp_runlock();
     return err;
+
+sock_close:
+    set_sock_close_now(sock, 1);
+    notify(CONNP_DAEMON_TSKP); //wake up connpd to nonconnection collection.
 
 ret_fail:
     connp_runlock();
