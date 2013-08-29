@@ -255,7 +255,7 @@ static inline int sock_is_available(struct socket_bucket *sb)
     u64 sock_age;
     u64 sock_left_lifetime;
 
-    if (!SOCK_ESTABLISHED(sb->sock))
+    if (!SK_ESTABLISHED(sb->sk))
         return 0;
 
     cfg_conn_get_keep_alive(&sb->address, &sock_keep_alive);

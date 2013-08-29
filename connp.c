@@ -234,7 +234,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         sock_graft(sb->sock->sk, sock);
 
         spin_lock(&sb->s_lock);
-        //sb->sock->sk = NULL; //remove reference to avoid to destroy the sk in sockp.
+        sb->sock->sk = NULL; //remove reference to avoid to destroy the sk in sockp.
         spin_unlock(&sb->s_lock);
 
         SET_SOCK_STATE(sock, SS_CONNECTED);
