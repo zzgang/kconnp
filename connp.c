@@ -198,7 +198,7 @@ ret_fail:
 int fetch_conn_from_connp(int fd, struct sockaddr *address)
 {
     struct socket *sock;
-    struct sock *sk;
+    struct socket_bucket *sb;
     int ret = 0; 
 
     connp_rlock(); 
@@ -229,9 +229,13 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     
     conn_inc_connected_all_count(address);
 
-    if ((sk = apply_sk_from_sockp(address))) {
+    if ((sb = apply_sk_from_sockp(address))) {
         
-        sock_graft(sk, sock);
+        sock_graft(sb->sock->sk, sock);
+
+        spin_lock(&sb->s_lock);
+        sb->sock->sk = NULL; //remove reference to avoid to destroy the sk in sockp.
+        spin_unlock(&sb->s_lock);
 
         SET_SOCK_STATE(sock, SS_CONNECTED);
 

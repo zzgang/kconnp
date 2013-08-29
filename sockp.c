@@ -284,7 +284,7 @@ SOCK_SET_ATTR_DEFINE(sock, sock_close_now)
     ATOMIC_SET_SOCK_ATTR(sock, sock_close_now);
 }
 
-struct sock *apply_sk_from_sockp(struct sockaddr *address)
+struct socket_bucket *apply_sk_from_sockp(struct sockaddr *address)
 {
     struct socket_bucket *p;
 
@@ -310,16 +310,12 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
                 continue;
             }
 
-            spin_lock(&p->s_lock);
-            p->sock->sk = NULL; //remove reference to avoid to destroy the sk.
-            spin_unlock(&p->s_lock);
-
             REMOVE_FROM_HLIST(HASH(address), p);
             
             LOOP_COUNT_RESET();
            
             SOCKP_UNLOCK();
-            return p->sk;
+            return p;
         }
     }
 
@@ -410,7 +406,7 @@ shutdown:
 }
 
 /**
- *Free a socket which is returned by 'apply_sk_from_sockp'
+ *Free a socket which is applyed from sockp
  */
 struct socket_bucket *free_sk_to_sockp(struct sock *sk)
 {
