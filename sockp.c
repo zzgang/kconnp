@@ -305,11 +305,6 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *address)
             p->uc++; //inc used count
             p->sock_in_use = 1; //set "in use" tag.
            
-            if (p->sk != p->sock->sk) {
-                printk(KERN_ERR "The sk of socket changed!\n");
-                continue;
-            }
-
             REMOVE_FROM_HLIST(HASH(address), p);
             
             LOOP_COUNT_RESET();

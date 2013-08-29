@@ -231,7 +231,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
 
     if ((sb = apply_sk_from_sockp(address))) {
         
-        sock_graft(sb->sock->sk, sock);
+        sock_graft(sb->sk, sock);
 
         spin_lock(&sb->s_lock);
         sb->sock->sk = NULL; //remove reference to avoid to destroy the sk in sockp.
