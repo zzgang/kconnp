@@ -323,7 +323,6 @@ struct sock *apply_sk_from_sockp(struct sockaddr *address)
         }
     }
 
-ret_unlock:
     LOOP_COUNT_RESET();
 
     SOCKP_UNLOCK();
@@ -436,8 +435,6 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
 
             INSERT_INTO_HLIST(HASH(&p->address), p);
 
-            sock_graft(sk, p->sock);
-
             sb = p;
             
             break;
@@ -527,7 +524,6 @@ struct socket_bucket *insert_sock_to_sockp(struct sockaddr *address,
 
     //printk(KERN_ERR "Insert\n");
     SOCKP_LOCK();
-
 
 #if LRU
     if (!(empty = get_empty_slot(address))) 
