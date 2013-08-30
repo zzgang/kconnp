@@ -279,6 +279,12 @@ static inline int is_sock_fd(int fd)
     return S_ISSOCK(statbuf.mode);
 }
 
+static inline void sock_destroy(struct sock *sk)
+{
+    sock_orphan(sk);
+    sk_free(sk);
+}
+
 static inline time_t get_fmtime(char *fname)
 {
     struct kstat statbuf;

@@ -219,11 +219,14 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         ret = 0;
         goto ret_unlock;
     }
-    
+
     conn_inc_connected_all_count(address);
 
     if ((sb = apply_sk_from_sockp(address))) {
-        
+       
+        //Destroy the pre-create sk 
+        sock_destroy(sock->sk);
+
         sock_graft(sb->sk, sock);
 
         SET_SOCK_STATE(sock, SS_CONNECTED);
