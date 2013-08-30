@@ -123,22 +123,15 @@ static inline int insert_socket_to_connp(struct sockaddr *servaddr,
 static inline int insert_into_connp(struct sockaddr *servaddr, struct socket *sock)
 {
     int fc;
-    struct socket_bucket *sb;
 
     fc = file_count_read(sock->file);
     if (fc != 1)
         return 0;
 
     //To free
-    if ((sb = free_sk_to_sockp(sock->sk))) {
-
-        //Grafted to sock of sockp
-        sock_graft(sock->sk, sb->sock);
-
+    if (free_sk_to_sockp(sock->sk)) {
         sock->sk = NULL; //Remove reference to avoid to destroy the sk.
-
         return 1;
-        
     }
     
     //To insert
@@ -232,10 +225,6 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
     if ((sb = apply_sk_from_sockp(address))) {
         
         sock_graft(sb->sk, sock);
-
-        spin_lock(&sb->s_lock);
-        sb->sock->sk = NULL; //remove reference to avoid to destroy the sk in sockp.
-        spin_unlock(&sb->s_lock);
 
         SET_SOCK_STATE(sock, SS_CONNECTED);
 

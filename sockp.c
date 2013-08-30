@@ -301,12 +301,22 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *address)
                     || sock_is_not_available(p) 
                     || SOCK_IS_RECLAIM_PASSIVE(p))
                 continue;
-            
+
+            if (p->sk != p->sock->sk) {
+                printk(KERN_ERR "SK of sock changed!\n");
+                continue;
+            }
+                
             p->uc++; //inc used count
             p->sock_in_use = 1; //set "in use" tag.
-           
+
+            //Remove reference to avoid to destroy the sk in sockp.
+            spin_lock(&p->s_lock);
+            p->sock->sk = NULL;
+            spin_unlock(&p->s_lock);
+ 
             REMOVE_FROM_HLIST(HASH(address), p);
-            
+
             LOOP_COUNT_RESET();
            
             SOCKP_UNLOCK();
@@ -425,6 +435,9 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
             p->last_used_jiffies = lkm_jiffies;
 
             INSERT_INTO_HLIST(HASH(&p->address), p);
+
+            //Grafted to sock of sockp
+            sock_graft(sk, p->sock);
 
             sb = p;
             
