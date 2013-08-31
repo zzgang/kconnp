@@ -57,8 +57,8 @@ struct conn_node_t {
 #define conn_close_now conn_attrs.close_now
 #define conn_all_count conn_attrs.stats.all_count
 #define conn_idle_count conn_attrs.stats.idle_count
-#define conn_connected_all_count conn_attrs.stats.connected_all_count
 #define conn_connected_hit_count conn_attrs.stats.connected_hit_count
+#define conn_connected_miss_count conn_attrs.stats.connected_miss_count
 };
 
 struct iport_str_t {

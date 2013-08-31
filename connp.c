@@ -15,7 +15,7 @@ rwlock_t connp_rwlock; //global connp read/write lock;
 static void do_conn_spec_check_close_flag(void *data);
 static void do_conn_inc_all_count(void *data);
 static void do_conn_inc_idle_count(void *data);
-static void do_conn_inc_connected_all_count(void *data);
+static void do_conn_inc_connected_miss_count(void *data);
 static void do_conn_inc_connected_hit_count(void *data);
 
 static inline int insert_socket_to_connp(struct sockaddr *, struct socket *);
@@ -63,11 +63,11 @@ static void do_conn_inc_idle_count(void *data)
     ++conn_node->conn_idle_count;
 }
 
-static void do_conn_inc_connected_all_count(void *data)
+static void do_conn_inc_connected_miss_count(void *data)
 {
     struct conn_node_t *conn_node = (typeof(conn_node))data;
     
-    lkm_atomic_add(&conn_node->conn_connected_all_count, 1);
+    lkm_atomic_add(&conn_node->conn_connected_miss_count, 1);
 }
 
 static void do_conn_inc_connected_hit_count(void *data)
@@ -90,10 +90,10 @@ int conn_inc_count(struct sockaddr *addr, int count_type)
        conn_inc_count_func = do_conn_inc_all_count;
    else if (count_type == IDLE_COUNT)
        conn_inc_count_func = do_conn_inc_idle_count;
-   else if (count_type == CONNECTED_ALL_COUNT)
-       conn_inc_count_func = do_conn_inc_connected_all_count;
    else if (count_type == CONNECTED_HIT_COUNT)
        conn_inc_count_func = do_conn_inc_connected_hit_count;
+   else if (count_type == CONNECTED_MISS_COUNT)
+       conn_inc_count_func = do_conn_inc_connected_miss_count;
 
    cfg_allowd_iport_node_for_each_call(ip, port, conn_inc_count_func); 
 
@@ -220,7 +220,6 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         goto ret_unlock;
     }
 
-    conn_inc_connected_all_count(address);
 
     if ((sb = apply_sk_from_sockp(address))) {
        
@@ -237,7 +236,8 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
             ret = CONN_BLOCK;
         
         conn_inc_connected_hit_count(address); 
-    }
+    } else
+        conn_inc_connected_miss_count(address);
 
     SET_CLIENT_FLAG(sock);
 

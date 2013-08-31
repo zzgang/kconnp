@@ -1332,9 +1332,9 @@ void conn_stats_info_dump(void)
            
         port = ntohs(conn_node->conn_port);
        
-        all_count = lkm_atomic_read(&conn_node->conn_connected_all_count);
         hits_count = lkm_atomic_read(&conn_node->conn_connected_hit_count);
-        misses_count = all_count - hits_count;
+        misses_count = lkm_atomic_read(&conn_node->conn_connected_miss_count);
+        all_count = hits_count + misses_count;
 
         if (all_count == 0) {
             misses_percent = 0;
