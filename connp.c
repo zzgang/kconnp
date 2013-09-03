@@ -156,11 +156,12 @@ int insert_into_connp_if_permitted(int fd)
         goto ret_fail;
 
     sock = getsock(fd);
-    if (!sock || !IS_TCP_SOCK(sock) || !IS_CLIENT_SOCK(sock))
+    if (!sock 
+            || !IS_TCP_SOCK(sock) 
+            || !IS_CLIENT_SOCK(sock))
         goto ret_fail;
 
-    err = getsockservaddr(sock, &address);
-    if (err)
+    if (!getsockservaddr(sock, &address))
         goto ret_fail;
 
     if (address.sa_family != AF_INET)
