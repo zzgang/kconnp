@@ -267,7 +267,7 @@ static inline int getsockservaddr(struct socket *sock, struct sockaddr *address)
     int len;
     int err;
 
-    if (!sock->sk) //has been removed by sockp.
+    if (!sock->sk)
         return 0;
 
     err = sock->ops->getname(sock, address, &len, 1);
