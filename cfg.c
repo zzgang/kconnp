@@ -1203,9 +1203,9 @@ void cfg_destroy()
 int cfg_conn_op(struct sockaddr *addr, int op_type, void *val)
 {
     struct conn_node_t *conn_node;
-    int ret = 1;
     unsigned int ip;
     unsigned short int port;
+    int ret = 1;
 
     ip = ((struct sockaddr_in *)addr)->sin_addr.s_addr;
     port = ((struct sockaddr_in *)addr)->sin_port;
@@ -1222,31 +1222,45 @@ int cfg_conn_op(struct sockaddr *addr, int op_type, void *val)
         case ACL_CHECK:
             ret = (conn_node ? 1 : 0);
             break;
+
         case ACL_SPEC_CHECK:
             ret = (conn_node->conn_ip != 0 && conn_node->conn_port != 0);
             break;
+
         case POSITIVE_CHECK:
             if ((ret = (conn_node->conn_close_way == CLOSE_POSITIVE))) 
                 break;
+
+            //Passive permanently check
+            if (conn_node->conn_close_way_last_set_jiffies == ULLONG_MAX) {
+                ret = 0;
+                break;
+            }
+
             //Passive timeout check, may be not a passive socket which was closed passively by accident. 
             if (lkm_jiffies_elapsed_from(conn_node->conn_close_way_last_set_jiffies)
                     > CONN_PASSIVE_TIMEOUT_JIFFIES_THRESHOLD) {
                conn_node->conn_close_way = CLOSE_POSITIVE;
                conn_node->conn_keep_alive = ULLONG_MAX; //reset pemanently.
                conn_node->conn_close_way_last_set_jiffies = lkm_jiffies;
+               ret = 1;
             }
             break;
+
         case PASSIVE_SET:
             conn_node->conn_close_way = CLOSE_PASSIVE;
             if (conn_node->conn_close_way_last_set_jiffies != ULLONG_MAX)
                 conn_node->conn_close_way_last_set_jiffies = lkm_jiffies;
             break;
+
         case KEEP_ALIVE_SET:
             conn_node->conn_keep_alive = *((typeof(conn_node->conn_keep_alive)*)val);
             break;
+
         case KEEP_ALIVE_GET:
             *((typeof(conn_node->conn_keep_alive)*)val) = conn_node->conn_keep_alive;
             break;
+
         default:
             ret = 0;
             break;
