@@ -12,6 +12,8 @@
 //cfg flags
 #define CONN_STATEFUL (1<<0) //stateful connection
 
+#define CONN_PASSIVE_TIMEOUT_JIFFIES_THRESHOLD (60 * HZ) /*1 minute*/
+
 typedef enum {
     CLOSE_POSITIVE = 0,
     CLOSE_PASSIVE
@@ -19,9 +21,15 @@ typedef enum {
 
 struct conn_attr_t {
     int flags;
-    conn_close_way_t close_way;
+
+    struct {
+        conn_close_way_t close_way;
+        u64 last_set_jiffies;
+    } close_way_attrs;
+
     u64 keep_alive;
     int close_now;
+
     struct {
         unsigned int all_count;
         unsigned int idle_count;

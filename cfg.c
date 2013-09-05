@@ -1127,8 +1127,10 @@ static int cfg_white_list_entity_init(struct cfg_entry *ce)
         conn_node.conn_flags = iport_node->flags;
         
         //We regard stateful connection as passive socket to use it only once.
-        if (conn_node.conn_flags & CONN_STATEFUL)
+        if (conn_node.conn_flags & CONN_STATEFUL) {
             conn_node.conn_close_way = CLOSE_PASSIVE; 
+            conn_node.conn_close_way_last_set_jiffies = ULLONG_MAX;
+        }
 
         if (!hash_set((struct hash_table_t *)wl->cfg_ptr, 
                     (const char *)iport_node, sizeof(struct iport_raw_t), 
@@ -1224,10 +1226,20 @@ int cfg_conn_op(struct sockaddr *addr, int op_type, void *val)
             ret = (conn_node->conn_ip != 0 && conn_node->conn_port != 0);
             break;
         case POSITIVE_CHECK:
-            ret = (conn_node->conn_close_way == CLOSE_POSITIVE);
+            if ((ret = (conn_node->conn_close_way == CLOSE_POSITIVE))) 
+                break;
+            //Passive timeout check, may be not a passive socket which was closed passively by accident. 
+            if (lkm_jiffies_elapsed_from(conn_node->conn_close_way_last_set_jiffies)
+                    > CONN_PASSIVE_TIMEOUT_JIFFIES_THRESHOLD) {
+               conn_node->conn_close_way = CLOSE_POSITIVE;
+               conn_node->conn_keep_alive = ULLONG_MAX; //reset pemanently.
+               conn_node->conn_close_way_last_set_jiffies = lkm_jiffies;
+            }
             break;
         case PASSIVE_SET:
             conn_node->conn_close_way = CLOSE_PASSIVE;
+            if (conn_node->conn_close_way_last_set_jiffies != ULLONG_MAX)
+                conn_node->conn_close_way_last_set_jiffies = lkm_jiffies;
             break;
         case KEEP_ALIVE_SET:
             conn_node->conn_keep_alive = *((typeof(conn_node->conn_keep_alive)*)val);

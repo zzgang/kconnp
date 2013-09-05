@@ -52,7 +52,8 @@ struct conn_node_t {
 
     struct conn_attr_t conn_attrs;
 #define conn_flags conn_attrs.flags
-#define conn_close_way conn_attrs.close_way
+#define conn_close_way conn_attrs.close_way_attrs.close_way
+#define conn_close_way_last_set_jiffies conn_attrs.close_way_attrs.last_set_jiffies
 #define conn_keep_alive conn_attrs.keep_alive
 #define conn_close_now conn_attrs.close_now
 #define conn_all_count conn_attrs.stats.all_count

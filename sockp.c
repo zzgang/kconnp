@@ -253,13 +253,13 @@ static inline int sock_is_available(struct socket_bucket *sb)
 {
     u64 sock_keep_alive;
     u64 sock_age;
-    u64 sock_left_lifetime;
+    s64 sock_left_lifetime;
 
     if (!SK_ESTABLISHED(sb->sk))
         return 0;
 
     cfg_conn_get_keep_alive(&sb->address, &sock_keep_alive);
-    sock_age = lkm_jiffies - sb->sock_create_jiffies;
+    sock_age = lkm_jiffies_elapsed_from(sb->sock_create_jiffies);
     sock_left_lifetime = sock_keep_alive - sock_age;
 
     //In case the peer is closing the socket.
@@ -352,7 +352,7 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
         if (p->sock_close_now) {
            if (!p->uc) {
                u64 keep_alive;
-               keep_alive = lkm_jiffies - p->sock_create_jiffies;
+               keep_alive = lkm_jiffies_elapsed_from(p->sock_create_jiffies);
                cfg_conn_set_keep_alive(&p->address, &keep_alive);
            }
            cfg_conn_set_passive(&p->address); //may be passive socket 
@@ -365,10 +365,10 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
         if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p)
                 || SOCK_IS_RECLAIM_PASSIVE(p) 
                 || (SOCK_IS_RECLAIM(p)
-                    && (lkm_jiffies - p->last_used_jiffies > TIMEOUT * HZ))
+                    && (lkm_jiffies_elapsed_from(p->last_used_jiffies) > TIMEOUT * HZ))
                 || (SOCK_IS_PRECONNECT(p) 
                     && p->sock_in_use 
-                    && (lkm_jiffies - p->last_used_jiffies > TIMEOUT * HZ))) 
+                    && (lkm_jiffies_elapsed_from(p->last_used_jiffies) > TIMEOUT * HZ))) 
             goto shutdown;
 
         //Luckly, selected as idle conn.

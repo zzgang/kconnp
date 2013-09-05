@@ -148,7 +148,15 @@ typedef atomic64_t lkm_atomic_t;
 typedef struct array_t array_t;
 extern int lkm_poll(array_t *, int timeout);
 
-#define lkm_jiffies jiffies
+#define lkm_jiffies (unsigned)jiffies
+
+//Compat for 32-bits jiffies
+static inline u64 lkm_jiffies_elapsed_from(u64 from)
+{
+    s64 elapsed_jiffies = lkm_jiffies - from;
+
+    return elapsed_jiffies >= 0 ? elapsed_jiffies : (elapsed_jiffies + ULONG_MAX);
+}
 
 static inline int file_count_read(struct file *filp)
 {
