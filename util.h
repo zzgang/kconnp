@@ -49,7 +49,7 @@ struct pollfd_ex_t {
 
 #define BYTES_ALIGN(size) (((size) + (sizeof(long) - 1)) & ~(sizeof(long) - 1))
 
-#define SOCK_CLIENT_TAG (1U << 31)
+#define SOCK_CLIENT_TAG (1U << 30)
 
 #define IS_CLIENT_SOCK(sock)                    \
     ((sock)->file && ((sock)->file->f_flags & SOCK_CLIENT_TAG))
