@@ -163,7 +163,7 @@ break_unlock:                                                           \
                                                                         \
 } while(0)
 
-#define MIN_LFET_LIFETIME_THRESHOLD (HZ) //1s
+#define LEFT_LIFETIME_THRESHOLD ((unsigned)(HZ)) //1s
 
 #define SOCK_IS_RECLAIM(sb) ((sb)->sock_create_way == SOCK_RECLAIM)
 #define SOCK_IS_RECLAIM_PASSIVE(sb) (SOCK_IS_RECLAIM(sb) && !cfg_conn_is_positive(&(sb)->address))
@@ -245,8 +245,7 @@ static inline u64 estimate_min_left_lifetime(u64 timev)
 {
     u64 estimate_time = timev / 2;
 
-    return (estimate_time > MIN_LFET_LIFETIME_THRESHOLD)
-        ? MIN_LFET_LIFETIME_THRESHOLD : estimate_time; 
+    return MIN(MAX(estimate_time, LEFT_LIFETIME_THRESHOLD), LEFT_LIFETIME_THRESHOLD);
 }
 
 static inline int sock_is_available(struct socket_bucket *sb)

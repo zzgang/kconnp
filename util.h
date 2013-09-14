@@ -34,6 +34,9 @@ struct pollfd_ex_t {
     int (*poll_func)(void *data, poll_table *pt);
 };
 
+#define MIN(arg1, arg2) (arg1 < arg2 ? arg1 : arg2)
+#define MAX(arg1, arg2) (arg1 > arg2 ? arg1 : arg2)
+
 #define E_EVENTS (POLLERR|POLLHUP|POLLNVAL)
 
 #define NOW_SECS (CURRENT_TIME_SEC.tv_sec)
