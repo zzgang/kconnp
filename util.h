@@ -67,6 +67,9 @@ struct pollfd_ex_t {
     (sock)->file->f_flags &= ~SOCK_CLIENT_TAG;  \
 } while (0)
 
+#define SK_ESTABLISHING(sk) \
+    (sk->sk_state == TCP_SYN_SENT)
+
 #define SK_ESTABLISHED(sk)  \
     (sk->sk_state == TCP_ESTABLISHED)
 

@@ -163,7 +163,7 @@ break_unlock:                                                           \
                                                                         \
 } while(0)
 
-#define LEFT_LIFETIME_THRESHOLD ((unsigned)(HZ)) //1s
+#define LEFT_LIFETIME_THRESHOLD ((unsigned)(HZ >> 1)) //500ms
 
 #define SOCK_IS_RECLAIM(sb) ((sb)->sock_create_way == SOCK_RECLAIM)
 #define SOCK_IS_RECLAIM_PASSIVE(sb) (SOCK_IS_RECLAIM(sb) && !cfg_conn_is_positive(&(sb)->address))
@@ -243,9 +243,9 @@ static inline unsigned int _shashfn(struct sock *);
 
 static inline u64 estimate_min_left_lifetime(u64 timev)
 {
-    u64 estimate_time = timev / 2;
+    u64 estimate_time = timev >> 1;
 
-    return MIN(MAX(estimate_time, LEFT_LIFETIME_THRESHOLD), LEFT_LIFETIME_THRESHOLD);
+    return MIN(estimate_time, LEFT_LIFETIME_THRESHOLD);
 }
 
 static inline int sock_is_available(struct socket_bucket *sb)
@@ -275,7 +275,7 @@ static inline unsigned int _hashfn(struct sockaddr_in *address)
 
 static inline unsigned int _shashfn(struct sock *sk)
 {
-    return (unsigned long)sk % NR_SHASH;
+    return (unsigned)sk % NR_SHASH;
 }
 
 SOCK_SET_ATTR_DEFINE(sock, sock_close_now)
@@ -358,7 +358,7 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
            goto shutdown;
         }
 
-        if (sock_is_not_available(p))
+        if (!SK_ESTABLISHING(p->sk) && sock_is_not_available(p))
             goto shutdown;
 
         if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p)
@@ -367,7 +367,7 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
                     && (lkm_jiffies_elapsed_from(p->last_used_jiffies) > TIMEOUT * HZ))
                 || (SOCK_IS_PRECONNECT(p) 
                     && p->sock_in_use 
-                    && (lkm_jiffies_elapsed_from(p->last_used_jiffies) > TIMEOUT * HZ))) 
+                    && (lkm_jiffies_elapsed_from(p->last_used_jiffies) > TIMEOUT * HZ)))
             goto shutdown;
 
         //Luckly, selected as idle conn.
