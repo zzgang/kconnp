@@ -275,7 +275,7 @@ static inline unsigned int _hashfn(struct sockaddr_in *address)
 
 static inline unsigned int _shashfn(struct sock *sk)
 {
-    return (unsigned)sk % NR_SHASH;
+    return (unsigned long)sk % NR_SHASH;
 }
 
 SOCK_SET_ATTR_DEFINE(sock, sock_close_now)
