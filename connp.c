@@ -209,6 +209,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
 
     sock = getsock(fd);
     if (!sock 
+            || !sock->sk
             || !IS_TCP_SOCK(sock) 
             || !IS_UNCONNECTED_SOCK(sock)) {
         ret = 0;
