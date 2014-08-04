@@ -45,17 +45,17 @@
         (p)->hval.vlen = vlen;              \
     } while (0)
 
-#define UPDATE_VAL(ht, p, v, vlen)            \
+#define UPDATE_VAL(ht, p, v, vlen)              \
     do {                                        \
-        if ((p)->hval.vlen)                     \
-        (ht)->dtor_func((p)->hval.val);         \
+        if ((ht)->dtor_func)  \
+            (ht)->dtor_func((p)->hval.val);     \
         if (vlen) {                             \
             (p)->hval.val = lkmalloc(vlen);     \
             if (!(p)->hval.val)                 \
                 return 0;                       \
-            memcpy((p)->hval.val, v, vlen);   \
+            memcpy((p)->hval.val, v, vlen);     \
         } else                                  \
-            (p)->hval.val = v;                \
+            (p)->hval.val = v;                  \
         (p)->hval.vlen = vlen;                  \
     } while (0)
 
@@ -204,7 +204,7 @@ int hash_destroy(struct hash_table_t **ht_ptr)
     while (p) {
         q = p->tnext;
         lkmfree(p->hkey.key);
-        if (p->hval.vlen) //If allocating mem for it.
+        if ((*ht_ptr)->dtor_func)
             (*ht_ptr)->dtor_func(p->hval.val);     
         lkmfree(p);
         p = q;

@@ -307,5 +307,5 @@ void connp_destroy()
     connpd_destroy();
     sockp_destroy();
     cfg_destroy();
-    deferred_destroy();//make sure all threads exit the kconnp routines.
+    deferred_destroy();//Make sure all threads exit the kconnp routines.
 }

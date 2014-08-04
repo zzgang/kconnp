@@ -4,6 +4,7 @@
 #include <linux/socket.h>
 #include <linux/proc_fs.h>
 #include "connp.h"
+#include "kconnp.h"
 
 #define CFG_BASE_DIR_NAME "kconnp"
 
@@ -28,9 +29,62 @@ struct cfg_entry {
     int (*init)(struct cfg_entry *); 
     void (*destroy)(struct cfg_entry *); 
 
+    int (*proc_file_init)(struct cfg_entry *); 
+    void (*proc_file_destroy)(struct cfg_entry *); 
+
     int (*entity_init)(struct cfg_entry *);
     void (*entity_destroy)(struct cfg_entry *);
     int (*entity_reload)(struct cfg_entry *); 
+};
+
+typedef struct pos { //start and end pos
+    int start;
+    int end;
+} pos_t;
+
+struct item_str_t {
+    int line; //the line NO! where the cfg item located in the global cfg proc file.
+
+    kconnp_str_t name;
+    kconnp_str_t value;
+
+    struct item_str_t *next;
+};
+
+struct items_str_list_t {
+    struct item_str_t *list;
+    int count;
+};
+
+struct item_pos_t {
+    pos_t name_pos;
+#define name_start name_pos.start
+#define name_end name_pos.end
+    pos_t value_pos;
+#define value_start value_pos.start
+#define value_end value_pos.end
+};
+
+enum var_type {
+    INTEGER=0,
+    STRING
+};
+#define VAR_IS_INTEGER(var) ((var)->type == INTEGER)
+#define VAR_IS_STRING(var) ((var)->type == STRING)
+
+struct item_node_t {
+    //Global conf item node
+   
+    kconnp_str_t name;
+    union {
+        long lval;
+        kconnp_str_t str;
+    }value;
+#define v_strlen value.str.len
+#define v_str value.str.data
+#define v_lval value.lval
+    
+    enum var_type type;
 };
 
 struct iport_t {
@@ -63,7 +117,7 @@ struct conn_node_t {
 };
 
 struct iport_str_t {
-    int line; //the line NO! where the iport located of the cfg proc file.
+    int line; //the line NO! where the iport located in the cfg proc file.
 
     char *ip_str;
     char *port_str;
@@ -78,14 +132,15 @@ struct iports_str_list_t {
 };
 
 struct iport_pos_t {
-    int ip_start;
-    int ip_end;
-
-    int port_start;
-    int port_end;
-
-    int flags_start;
-    int flags_end;
+    pos_t ip_pos;
+#define ip_start ip_pos.start
+#define ip_end ip_pos.end
+    pos_t port_pos;
+#define port_start port_pos.start
+#define port_end port_pos.end
+    pos_t flags_pos;
+#define flags_start flags_pos.start
+#define flags_end flags_pos.end
 };
 
 #define ACL_CHECK               0x0

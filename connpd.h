@@ -4,8 +4,10 @@
 #include <linux/spinlock.h>
 
 #include "stack.h"
+#include "cfg.h"
+#include "kconnp.h"
 
-#define NR_MAX_OPEN_FDS NR_SOCKET_BUCKET_LIMIT
+#define NR_MAX_OPEN_FDS CONNECTION_LIMIT
 
 #define CONNP_DAEMON_TSKP (connp_daemon)
 #define CONNP_DAEMON_EXISTS() CONNP_DAEMON_TSKP

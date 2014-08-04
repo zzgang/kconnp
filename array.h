@@ -6,7 +6,7 @@
 struct array_t {
     //attrs
     char *eles;
-    int ele_size; //one ele size
+    int ele_size; //one ele real size
     int ele_size_align; //one ele size after align
     int elements;
 

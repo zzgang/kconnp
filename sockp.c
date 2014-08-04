@@ -569,7 +569,6 @@ int sockp_init()
         sb_tmp++;
     }
         
-
     sb_tmp--;
     SB[0].sb_free_prev = sb_tmp;
     sb_tmp->sb_free_next = SB;

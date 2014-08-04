@@ -6,11 +6,12 @@
 #include "hash.h"
 #include "cfg.h"
 
-#define CFG_ALLOWD_IPORTS_FILE      "iports.allow"
+#define CFG_GLOBAL_FILE             "kconnp.conf"
+#define CFG_ALLOWED_IPORTS_FILE     "iports.allow"
 #define CFG_DENIED_IPORTS_FILE      "iports.deny"
 #define CFG_CONN_STATS_INFO_FILE    "stats.info"
 
-#define DUMP_INTERVAL 1 //Unit: second
+#define DUMP_INTERVAL 5 //Unit: second
 
 #define cfg_entries_walk_func_check(func_name)    \
     ({    \
@@ -32,6 +33,34 @@
             p->func_name(p);   \
     } while (0)
 
+#define NEW_ITEM_STR_NODE(item_str, item_pos)                                       \
+    do {                                                                            \
+        item_str = lkmalloc(sizeof(struct item_str_t));                             \
+        if (!(item_str))                                                            \
+            return 0;                                                               \
+        (item_str)->name.len = (item_pos)->name_end - (item_pos)->name_start + 1;   \
+        (item_str)->name.data = lkmalloc((item_str)->name.len + 1/*padding '\0'*/); \
+        if (!(item_str)->name.data)                                                 \
+            return 0;                                                               \
+        (item_str)->value.len = (item_pos)->value_end - (item_pos)->value_start + 1;\
+        (item_str)->value.data = lkmalloc((item_str)->value.len + 1);               \
+        if (!(item_str)->value.data) {                                              \
+            lkmfree((item_str)->name.data);                                         \
+            return 0;                                                               \
+        }                                                                           \
+    } while (0)                                                                 
+
+#define INIT_ITEM_STR_NODE(item_str, ce, item_pos, line_pass)       \
+    do {                                                            \
+        memcpy((item_str)->name.data,                               \
+                ce->raw_ptr + (item_pos)->name_start,               \
+                (item_str)->name.len);                              \
+        memcpy((item_str)->value.data,                              \
+                ce->raw_ptr + (item_pos)->value_start,              \
+                (item_str)->value.len);                             \
+        (item_str)->line = line_pass;                               \
+    } while (0)
+
 #define INIT_IPORT_POS(iport_pos)           \
     do {                                    \
         (iport_pos)->ip_start = -1;         \
@@ -41,7 +70,6 @@
         (iport_pos)->flags_start = -1;      \
         (iport_pos)->flags_end = -1;        \
     } while (0)
-
 
 #define NEW_IPORT_STR_NODE(iport_str, ip_strlen, port_strlen, flags_strlen) \
     do {                                                        \
@@ -79,7 +107,7 @@
         memcpy((iport_str)->ip_str, ip_str_pass, ip_strlen);            \
         memcpy((iport_str)->port_str, port_str_pass, port_strlen);      \
         if ((iport_str)->flags_str && flags_strlen)                     \
-        memcpy((iport_str)->flags_str, flags_str_pass, flags_strlen);   \
+            memcpy((iport_str)->flags_str, flags_str_pass, flags_strlen);   \
         (iport_str)->line = line_pass;                                  \
     } while (0)
 
@@ -90,20 +118,22 @@
         lkmfree(iport_str);                 \
     } while (0)
 
-#define INSERT_INTO_IPORTS_STR_LIST(iports_scan_list, iport_str)    \
-    do {                                                            \
-        if ((iports_scan_list)->list)                               \
-            (iport_str)->next = (iports_scan_list)->list;           \
-        iports_scan_list->list = iport_str;                         \
-        (iports_scan_list)->count++;                                \
+#define INSERT_INTO_ITEMS_LIST(items_list, item)    \
+    do {                                            \
+        if ((items_list)->list)                     \
+            (item)->next = (items_list)->list;      \
+        (items_list)->list = item;                  \
+        (items_list)->count++;                      \
     } while (0)
 
+#define INSERT_INTO_IPORTS_LIST(iports_list, iport) \
+    INSERT_INTO_ITEMS_LIST(iports_list, iport) 
 
-#define NEW_IPORT_STR_SCAN_NODE(iport_str, iport_pos)                       \
-    NEW_IPORT_STR_NODE(iport_str,                                           \
-            (iport_pos)->ip_end - (iport_pos)->ip_start + 2, /*'\0'*/       \
-            (iport_pos)->port_end - (iport_pos)->port_start + 2,            \
-            ((iport_pos)->flags_end >= 0 && (iport_pos)->flags_start >= 0)  \
+#define NEW_IPORT_STR_SCAN_NODE(iport_str, iport_pos)                           \
+    NEW_IPORT_STR_NODE(iport_str,                                               \
+            (iport_pos)->ip_end - (iport_pos)->ip_start + 2, /*padding '\0'*/   \
+            (iport_pos)->port_end - (iport_pos)->port_start + 2,                \
+            ((iport_pos)->flags_end >= 0 && (iport_pos)->flags_start >= 0)      \
             ? ((iport_pos)->flags_end - (iport_pos)->flags_start + 2) : 0)  
 
 #define INIT_IPORT_STR_SCAN_NODE(iport_str, ce, iport_pos, line)    \
@@ -116,9 +146,21 @@
             (iport_pos)->flags_end - (iport_pos)->flags_start + 1,  \
             line)
 
+
+/*Regular cfg funcs*/
+static int item_line_scan(struct cfg_entry *, int *pos, int *line, 
+        struct item_pos_t *);
+static int item_line_parse(struct item_str_t *, kconnp_str_t *name, 
+        kconnp_str_t *value);
+static void items_str_list_free(struct items_str_list_t *);
+static int cfg_items_data_scan(struct cfg_entry *, struct items_str_list_t *);
+static int cfg_items_data_parse(struct cfg_entry *, struct items_str_list_t *);
+
 /*iports list cfg funcs*/
 static int ip_aton(const char *, struct in_addr *); //For IPV4
-static int iport_line_scan(struct cfg_entry *, int *, int *, struct iport_pos_t *);
+static int iport_line_scan(struct cfg_entry *, 
+        int *pos, int *line, 
+        struct iport_pos_t *);
 static int iport_line_parse(struct iport_str_t *, 
         char *flags_str, char *port_str, char *ip_or_prefix, 
         int *ip_range_start, int *ip_range_end);
@@ -127,31 +169,32 @@ static int cfg_iports_data_scan(struct cfg_entry *, struct iports_str_list_t *);
 static int cfg_iports_data_parse(struct cfg_entry *, struct iports_str_list_t *, 
         struct iports_str_list_t *);
 
-static inline struct cfg_entry *get_ce(void *);
+static inline struct cfg_entry *cfg_get_ce(void *);
 
-static int cfg_proc_init(struct cfg_entry *);
-static void cfg_proc_destroy(struct cfg_entry *);
+static int cfg_entry_init(struct cfg_entry *);
+static void cfg_entry_destroy(struct cfg_entry *);
 
 static int cfg_proc_read(char *buffer, char **buffer_location, 
         off_t offset, int buffer_length, int *eof, void *data);
 static int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
         void *data);
 
-static int cfg_iports_list_init(struct cfg_entry *);
-static void cfg_iports_list_destroy(struct cfg_entry *);
+static int cfg_proc_file_init(struct cfg_entry *);
+static void cfg_proc_file_destroy(struct cfg_entry *);
+
+static int cfg_items_entity_init(struct cfg_entry *);
+static void cfg_items_entity_destroy(struct cfg_entry *);
+static int cfg_items_entity_reload(struct cfg_entry *);
 
 static int cfg_iports_entity_init(struct cfg_entry *);
 static void cfg_iports_entity_destroy(struct cfg_entry *);
 static int cfg_iports_entity_reload(struct cfg_entry *);
 
-static int cfg_stats_info_init(struct cfg_entry *);
-static void cfg_stats_info_destroy(struct cfg_entry *);
+static int cfg_white_list_init(struct cfg_entry *);
+static void cfg_white_list_destroy(struct cfg_entry *);
 
 static int cfg_stats_info_entity_init(struct cfg_entry *);
 static void cfg_stats_info_entity_destroy(struct cfg_entry *);
-
-static int cfg_white_list_init(struct cfg_entry *);
-static void cfg_white_list_destroy(struct cfg_entry *);
 
 static int cfg_white_list_entity_init(struct cfg_entry *);
 static void cfg_white_list_entity_destroy(struct cfg_entry *);
@@ -160,6 +203,10 @@ static int cfg_white_list_entity_reload(struct cfg_entry *);
 static inline void *iport_in_list_check_or_call(unsigned int ip, unsigned short int port,  struct cfg_entry *, void (*call_func)(void *data));
 
 struct cfg_dir {
+    struct cfg_entry global;
+#define g global
+#define g_ptr global.cfg_ptr
+#define g_rwlock global.cfg_rwlock
     struct cfg_entry allowed_list;
 #define al allowed_list
 #define al_ptr allowed_list.cfg_ptr
@@ -176,14 +223,33 @@ struct cfg_dir {
 };
 
 static struct cfg_dir cfg_dentry = { //initial the cfg directory.
+    { //global conf
+        .f_name = CFG_GLOBAL_FILE,
+        
+        .proc_read = cfg_proc_read,
+        .proc_write = cfg_proc_write,
+
+        .init = cfg_entry_init,
+        .destroy = cfg_entry_destroy,
+
+        .proc_file_init = cfg_proc_file_init,
+        .proc_file_destroy = cfg_proc_file_destroy,
+
+        .entity_init = cfg_items_entity_init,
+        .entity_destroy = cfg_items_entity_destroy,
+        .entity_reload = cfg_items_entity_reload
+    },
     { //allowed_list
-        .f_name = CFG_ALLOWD_IPORTS_FILE,
+        .f_name = CFG_ALLOWED_IPORTS_FILE,
 
         .proc_read = cfg_proc_read,
         .proc_write = cfg_proc_write,
 
-        .init = cfg_iports_list_init,
-        .destroy = cfg_iports_list_destroy,
+        .init = cfg_entry_init,
+        .destroy = cfg_entry_destroy,
+
+        .proc_file_init = cfg_proc_file_init,
+        .proc_file_destroy = cfg_proc_file_destroy,
 
         .entity_init = cfg_iports_entity_init,
         .entity_destroy = cfg_iports_entity_destroy,
@@ -195,8 +261,11 @@ static struct cfg_dir cfg_dentry = { //initial the cfg directory.
         .proc_read = cfg_proc_read,
         .proc_write = cfg_proc_write,
         
-        .init = cfg_iports_list_init,
-        .destroy = cfg_iports_list_destroy,
+        .init = cfg_entry_init,
+        .destroy = cfg_entry_destroy,
+
+        .proc_file_init = cfg_proc_file_init,
+        .proc_file_destroy = cfg_proc_file_destroy,
 
         .entity_init = cfg_iports_entity_init,
         .entity_destroy = cfg_iports_entity_destroy,
@@ -208,8 +277,11 @@ static struct cfg_dir cfg_dentry = { //initial the cfg directory.
         .proc_read = cfg_proc_read,
         .proc_write = NULL,
 
-        .init = cfg_stats_info_init,
-        .destroy = cfg_stats_info_destroy,
+        .init = cfg_entry_init,
+        .destroy = cfg_entry_destroy,
+
+        .proc_file_init = cfg_proc_file_init,
+        .proc_file_destroy = cfg_proc_file_destroy,
 
         .entity_init = cfg_stats_info_entity_init,
         .entity_destroy = cfg_stats_info_entity_destroy,
@@ -221,7 +293,7 @@ static struct cfg_dir *cfg = &cfg_dentry;
 static struct proc_dir_entry *cfg_base_dir;
 
 //white list.
-static struct cfg_entry white_list = { //final allowed list.
+static struct cfg_entry white_list = { //final ACL list.
     .init = cfg_white_list_init,
     .destroy = cfg_white_list_destroy,
 
@@ -230,6 +302,35 @@ static struct cfg_entry white_list = { //final allowed list.
     .entity_reload = cfg_white_list_entity_reload
 };
 static struct cfg_entry *wl = &white_list;
+
+static struct item_node_t cfg_global_items[] = {
+    {
+        .name = CONST_STRING("connection_wait_timeout"),
+        .v_lval = -1,
+        .type = INTEGER
+    },
+    {
+        .name = CONST_STRING("max_connections"),
+        .v_lval = -1,
+        .type = INTEGER
+    },
+    {
+        .name = CONST_STRING("max_requests_per_connection"),
+        .v_lval = -1,
+        .type = INTEGER
+    },
+    {
+        .name = CONST_STRING("min_spare_connections_per_iport"),
+        .v_lval = -1,
+        .type = INTEGER
+    },
+    {
+        .name = CONST_STRING("max_spare_connections_per_iport"),
+        .v_lval = -1,
+        .type = INTEGER
+    },
+    {CONST_STRING_NULL, }
+};
 
 /* Arguments
  * =========
@@ -256,7 +357,7 @@ static int cfg_proc_read(char *buffer, char **buffer_location,
     int read_count;
     struct cfg_entry *ce;
 
-    ce = get_ce(data);
+    ce = cfg_get_ce(data);
     if (!ce) 
         return 0;
 
@@ -292,7 +393,7 @@ static int cfg_proc_write(struct file *file, const char *buffer, unsigned long c
     if (!count) 
         return 0; 
 
-    ce = get_ce(data);
+    ce = cfg_get_ce(data);
     if (!ce)
         return 0;
     
@@ -335,13 +436,12 @@ static int cfg_proc_write(struct file *file, const char *buffer, unsigned long c
         lkmfree(old_raw_ptr);
     }
    
-    if (ce->entity_reload(ce)) //Reload proc cfg.
-        wl->entity_reload(wl);
+    ce->entity_reload(ce); //Reload proc cfg.
 
     return count;
 }
 
-static inline struct cfg_entry *get_ce(void *data)
+static inline struct cfg_entry *cfg_get_ce(void *data)
 {
     struct cfg_entry *p, *entry = (struct cfg_entry *)cfg;
 
@@ -354,7 +454,7 @@ static inline struct cfg_entry *get_ce(void *data)
     return NULL;
 }
 
-static int cfg_proc_init(struct cfg_entry *ce)
+static int cfg_proc_file_init(struct cfg_entry *ce)
 {
     ce->cfg_proc_file = create_proc_entry(ce->f_name, S_IFREG|S_IRUGO, 
             cfg_base_dir);
@@ -377,48 +477,161 @@ static int cfg_proc_init(struct cfg_entry *ce)
     return 1;
 }
 
-static void cfg_proc_destroy(struct cfg_entry *ce)
+static void cfg_proc_file_destroy(struct cfg_entry *ce)
 {
     if (ce->cfg_proc_file)
         remove_proc_entry(ce->f_name, cfg_base_dir);
 }
 
-static int cfg_iports_list_init(struct cfg_entry *ce)
+static int cfg_entry_init(struct cfg_entry *ce)
 {
-    if (!cfg_proc_init(ce))
+    if (!ce->proc_file_init(ce))
         return 0;
 
     if (!ce->entity_init(ce)) {
-        cfg_proc_destroy(ce);
+        ce->proc_file_destroy(ce);
         return 0;
     }
 
     return 1;
 }
 
-static void cfg_iports_list_destroy(struct cfg_entry *ce)
+static void cfg_entry_destroy(struct cfg_entry *ce)
 {
     ce->entity_destroy(ce);
-    cfg_proc_destroy(ce);
+    ce->proc_file_destroy(ce);
 }
 
-static int cfg_stats_info_init(struct cfg_entry *ce)
+static inline void item_dtor_func(void *data) 
 {
-    if (!cfg_proc_init(ce))
-        return 0;
+    struct item_node_t *item;
 
-    if (!ce->entity_init(ce)) {
-        cfg_proc_destroy(ce);
-        return 0;
+    item = (struct item_node_t *)data;
+    if (item->type == STRING) {
+        if (item->v_str)
+            lkmfree(item->v_str);
+    }
+}
+
+static int item_line_scan(struct cfg_entry *ce, int *pos, int *line,
+        struct item_pos_t *item_pos) 
+{
+
+}
+
+/**
+ *Simple iport scanner.
+ *
+ *Returns:
+ * -1: error, 0: no cfg entries, >0: success.
+ */
+static int cfg_items_data_scan(struct cfg_entry *ce, 
+        struct items_str_list_t *items_str_list)
+{
+    int pos = 0;
+    int line = 0;
+    int res;
+    struct item_str_t *item_str;
+    struct item_pos_t item_pos = {{-1, -1}, {-1, -1}};
+
+    while (pos < ce->raw_len) {
+        
+        res = item_line_scan(ce, &pos, &line, &item_pos);
+        if (res < 0) //Scan error.
+            return -1;
+        if (!res) //Line scan done but needn't.
+            continue;
+
+        NEW_ITEM_STR_NODE(item_str, &item_pos);
+        INIT_ITEM_STR_NODE(item_str, ce, &item_pos, line);
+        INSERT_INTO_ITEMS_LIST(items_str_list, item_str);
     }
 
+    return items_str_list->count;
+}
+
+
+/**
+ *Simple iport parser.
+ *
+ *Returns:
+ * -1: error, 0: no cfg entries, >0: success.
+ */
+static int cfg_items_data_parse(struct cfg_entry *ce, 
+        struct items_str_list_t *items_str_list)
+{
     return 1;
 }
 
-static void cfg_stats_info_destroy(struct cfg_entry *ce)
+static int cfg_items_entity_init(struct cfg_entry *ce)
 {
-    ce->entity_destroy(ce);
-    cfg_proc_destroy(ce);
+    struct items_str_list_t items_str_list = {NULL, -1};
+    struct item_node_t *p;
+    int res, ret = 1;
+
+    if (!_hash_init((struct hash_table_t **)&ce->cfg_ptr, 0, 
+            hash_func_times33, item_dtor_func)) {
+        return 0; 
+    }
+
+    for (p = cfg_global_items; p->name.data; p++) {
+
+        if (!hash_add((struct hash_table_t *)ce->cfg_ptr, 
+                p->name.data, p->name.len, 
+                p, 0)) {
+            goto out_hash;
+        }
+    }
+
+    if ((res = cfg_items_data_scan(ce, &items_str_list)) <= 0) {
+        if (res < 0) { //error
+            goto out_hash;
+        }
+        goto out_free;
+    }
+
+    if ((res = cfg_items_data_parse(ce, &items_str_list)) <= 0) {
+        if (res < 0) {//error
+            goto out_hash;
+        }
+        goto out_free;
+    }
+
+out_free:
+    items_str_list_free(&items_str_list);
+    return ret;
+
+out_hash:
+    ret = 0;
+    hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
+    goto out_free;
+}
+
+static void cfg_items_entity_destroy(struct cfg_entry *ce)
+{
+    if (ce->raw_ptr) {
+        lkmfree(ce->raw_ptr);
+        ce->raw_ptr = NULL;
+    }
+
+    if (ce->cfg_ptr) 
+        hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
+}
+
+static int cfg_items_entity_reload(struct cfg_entry *ce)
+{
+    int ret;
+
+    write_lock(&ce->cfg_rwlock);
+
+    if (ce->cfg_ptr)    
+        hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
+
+    ret = ce->entity_init(ce);
+
+    write_unlock(&ce->cfg_rwlock);
+
+    return ret;
 }
 
 static int cfg_stats_info_entity_init(struct cfg_entry *ce)
@@ -439,6 +652,8 @@ static void cfg_stats_info_entity_destroy(struct cfg_entry *ce)
 
     ce->raw_len = 0;
 }
+
+
 
 /**
  *Converts an (Ipv4) ip from int to an standard dotted-decimal format string.
@@ -533,7 +748,7 @@ static int iport_line_scan(struct cfg_entry *ce,
     int valid_char_count = 0;
     int success = 0;
     int after_colon = 0;
-    int flags_start = 0;
+    int flags_begin = 0;
 
     (*line)++;
 
@@ -563,7 +778,7 @@ static int iport_line_scan(struct cfg_entry *ce,
             }
 
             if (c == '(') { //flags start tag.
-                flags_start = 1;
+                flags_begin = 1;
                 continue;
             }
 
@@ -575,12 +790,12 @@ static int iport_line_scan(struct cfg_entry *ce,
 
             if (after_colon && iport_pos->port_start < 0)
                 iport_pos->port_start = *pos - 1;
-            if (after_colon && !flags_start)  //port part
+            if (after_colon && !flags_begin)  //port part
                 iport_pos->port_end = *pos - 1;
 
-            if (flags_start && iport_pos->flags_start < 0)
+            if (flags_begin && iport_pos->flags_start < 0)
                 iport_pos->flags_start = *pos - 1;
-            if (flags_start && c == ')') //flags end tag.
+            if (flags_begin && c == ')') //flags end tag.
                 iport_pos->flags_end = *pos - 2; 
             else  //make sure the last valid char is ')'
                 iport_pos->flags_end = -1;
@@ -593,7 +808,7 @@ static int iport_line_scan(struct cfg_entry *ce,
     
     success = iport_pos->ip_end >= 0 && iport_pos->ip_start >= 0 
         && iport_pos->port_end >= 0 && iport_pos->port_start >= 0
-        && (flags_start ? 
+        && (flags_begin ? 
                 (iport_pos->flags_end >= 0 && iport_pos->flags_start >= 0) : 1)
         && (iport_pos->ip_end - iport_pos->ip_start) >= 0
         && (iport_pos->port_end - iport_pos->port_start) >= 0
@@ -611,7 +826,10 @@ out_fail:
 }
 
 /**
- * Simple iport str scanner.
+ *Simple iport scanner.
+ *
+ *Returns:
+ * -1: error, 0: no cfg entries, >0: success.
  */
 static int cfg_iports_data_scan(struct cfg_entry *ce, 
         struct iports_str_list_t *iports_str_scanning_list)
@@ -628,12 +846,12 @@ static int cfg_iports_data_scan(struct cfg_entry *ce,
         res = iport_line_scan(ce, &pos, &line, &iport_pos);
         if (res < 0) //Scan error.
             return -1;
-        if (!res) // Line scan done but needn't.
+        if (!res) //Line scan done but needn't.
             continue;
 
         NEW_IPORT_STR_SCAN_NODE(iport_str, &iport_pos);
         INIT_IPORT_STR_SCAN_NODE(iport_str, ce, &iport_pos, line);
-        INSERT_INTO_IPORTS_STR_LIST(iports_str_scanning_list, iport_str);
+        INSERT_INTO_IPORTS_LIST(iports_str_scanning_list, iport_str);
     }
 
     return iports_str_scanning_list->count;
@@ -794,8 +1012,8 @@ parse_going:
  * -1: error, 0: no cfg entries, >0: success.
  */
 static int cfg_iports_data_parse(struct cfg_entry *ce, 
-        struct iports_str_list_t *iports_str_scanning_list, 
-        struct iports_str_list_t *iports_str_parsing_list)
+        struct iports_str_list_t *iports_str_parsing_list,
+        struct iports_str_list_t *iports_str_scanning_list) 
 {
     struct iport_str_t *p, *iport_str;
     char *ip_str_or_prefix, *port_str;
@@ -851,7 +1069,7 @@ static int cfg_iports_data_parse(struct cfg_entry *ce,
                     flags_str, flags_strlen,
                     p->line);
 
-            INSERT_INTO_IPORTS_STR_LIST(iports_str_parsing_list, iport_str); 
+            INSERT_INTO_IPORTS_LIST(iports_str_parsing_list, iport_str); 
 
         } else if (ip_range_end > 0) { //For parsing []
             char ip_range_str[4] = {0, };
@@ -877,7 +1095,7 @@ static int cfg_iports_data_parse(struct cfg_entry *ce,
                         flags_str, flags_strlen,
                         p->line);
 
-                INSERT_INTO_IPORTS_STR_LIST(iports_str_parsing_list, iport_str); 
+                INSERT_INTO_IPORTS_LIST(iports_str_parsing_list, iport_str); 
 
                 lkmfree(ip_str_tmp);
             }
@@ -935,13 +1153,13 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
     }
 
     if ((res = cfg_iports_data_scan(ce, iports_str_scanning_list)) <= 0) {
-        if (res < 0) //Error.
+        if (res < 0) //error.
             ret = 0;
         goto out_free;
     }
 
-    if ((res = cfg_iports_data_parse(ce, iports_str_scanning_list, 
-                    iports_str_parsing_list)) <= 0) {
+    if ((res = cfg_iports_data_parse(ce, iports_str_parsing_list, 
+                    iports_str_scanning_list)) <= 0) {
         if (res < 0) //error
             ret = 0;
         goto out_free;
@@ -1028,6 +1246,9 @@ static int cfg_iports_entity_reload(struct cfg_entry *ce)
     ret = ce->entity_init(ce);
 
     write_unlock(&ce->cfg_rwlock);
+
+    if (ret)
+        ret = wl->entity_reload(wl);
 
     return ret;
 }

@@ -75,7 +75,8 @@ static inline unsigned long hash_func_times33(const char *key, unsigned int klen
 
 static inline void dtor_func_lkmfree(void *data)
 {
-    lkmfree(data);
+    if (data) 
+        lkmfree(data);
 }
 
 extern int _hash_init(struct hash_table_t **, unsigned int tsize, 

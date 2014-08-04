@@ -13,8 +13,6 @@
 
 #define SOCKP_DEBUG 0
 
-#define NR_SOCKET_BUCKET_LIMIT 1024
-
 #define NR_SOCKET_BUCKET 200
 
 #define NR_HASH (NR_SOCKET_BUCKET/2 + 1)
