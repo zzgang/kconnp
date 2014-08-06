@@ -61,6 +61,21 @@
         (item_str)->line = line_pass;                               \
     } while (0)
 
+#define INSERT_INTO_ITEMS_LIST(items_list, item)    \
+    do {                                            \
+        if ((items_list)->list)                     \
+            (item)->next = (items_list)->list;      \
+        (items_list)->list = item;                  \
+        (items_list)->count++;                      \
+    } while (0)
+
+#define DESTROY_ITEM_STR_NODE(item_str)         \
+    do {                                        \
+        lkmfree(item_str->name.data);           \
+        lkmfree(item_str->value.data);          \
+        lkmfree(item_str);                      \
+    } while (0)                                 \
+
 #define INIT_IPORT_POS(iport_pos)           \
     do {                                    \
         (iport_pos)->ip_start = -1;         \
@@ -118,14 +133,6 @@
         lkmfree(iport_str);                 \
     } while (0)
 
-#define INSERT_INTO_ITEMS_LIST(items_list, item)    \
-    do {                                            \
-        if ((items_list)->list)                     \
-            (item)->next = (items_list)->list;      \
-        (items_list)->list = item;                  \
-        (items_list)->count++;                      \
-    } while (0)
-
 #define INSERT_INTO_IPORTS_LIST(iports_list, iport) \
     INSERT_INTO_ITEMS_LIST(iports_list, iport) 
 
@@ -150,11 +157,10 @@
 /*Regular cfg funcs*/
 static int item_line_scan(struct cfg_entry *, int *pos, int *line, 
         struct item_pos_t *);
-static int item_line_parse(struct item_str_t *, kconnp_str_t *name, 
-        kconnp_str_t *value);
+static int item_line_parse(struct item_str_t *, struct cfg_entry *);
 static void items_str_list_free(struct items_str_list_t *);
-static int cfg_items_data_scan(struct cfg_entry *, struct items_str_list_t *);
-static int cfg_items_data_parse(struct cfg_entry *, struct items_str_list_t *);
+static int cfg_items_data_scan(struct items_str_list_t *, struct cfg_entry *);
+static int cfg_items_data_parse(struct items_str_list_t *, struct cfg_entry *);
 
 /*iports list cfg funcs*/
 static int ip_aton(const char *, struct in_addr *); //For IPV4
@@ -165,9 +171,9 @@ static int iport_line_parse(struct iport_str_t *,
         char *flags_str, char *port_str, char *ip_or_prefix, 
         int *ip_range_start, int *ip_range_end);
 static void iports_str_list_free(struct iports_str_list_t *);
-static int cfg_iports_data_scan(struct cfg_entry *, struct iports_str_list_t *);
-static int cfg_iports_data_parse(struct cfg_entry *, struct iports_str_list_t *, 
-        struct iports_str_list_t *);
+static int cfg_iports_data_scan(struct iports_str_list_t *, struct cfg_entry *);
+static int cfg_iports_data_parse(struct iports_str_list_t *, 
+        struct iports_str_list_t *, struct cfg_entry *);
 
 static inline struct cfg_entry *cfg_get_ce(void *);
 
@@ -516,7 +522,80 @@ static inline void item_dtor_func(void *data)
 static int item_line_scan(struct cfg_entry *ce, int *pos, int *line,
         struct item_pos_t *item_pos) 
 {
+    char c;
+    int delimeter_find = 0;
+    int comment_line_start = 0;
 
+    (*line)++;
+
+    while (*pos < ce->raw_len /*the last line*/
+            && (c = ce->raw_ptr[(*pos)++]) != '\n') {
+
+        if (c == ' ' || c == '\t') {//strip blank char.
+            continue;
+        }
+
+        if (comment_line_start) /*strip comments*/
+            continue;
+
+        if (c == '#') { /*set comment start flag*/
+            comment_line_start = 1;
+            continue;
+        }
+        
+        if (c == ' ' || c == '\t') {
+
+            if (item_pos->name_start < 0) 
+                continue;   
+
+            if (!delimeter_find) {
+                delimeter_find = 1;
+                continue;
+            }
+
+            if (delimeter_find && item_pos->value_start < 0) 
+                continue;
+        }
+
+        if ((c >= '0' && c <= '9') 
+                || (c >= 'a' && c <= 'z') 
+                || (c >= 'A' && c <= 'Z') 
+                || c == '_' || c == ',' || c == '"' || c == '.'
+                || c == ' ' || c == '\t') {
+
+            if (item_pos->name_start < 0) 
+                item_pos->name_start = *pos;
+
+            if (!delimeter_find)
+                item_pos->name_end = *pos;
+
+            if (delimeter_find && (item_pos->value_start < 0))
+                item_pos->value_start = *pos;
+
+            if (delimeter_find)
+                item_pos->value_end = *pos;
+
+        } else 
+            goto out_err;
+    }
+
+    //strip the most right space chars.
+
+    if (item_pos->value_start < 0) 
+        goto out_ret;
+
+    for (c = ce->raw_ptr[item_pos->value_end];
+            c == ' ' || c == '\t'; 
+            c = ce->raw_ptr[--item_pos->value_end]);
+
+out_ret:
+    return item_pos->name_start >= 0 ? 1/*Non-null line*/ : 0;
+
+out_err:
+    printk(KERN_ERR 
+            "Error: Scan cfg items error on line %d in file /proc/%s/%s\n", 
+            *line, CFG_BASE_DIR_NAME, ce->f_name);
+    return -1; //Scan error!
 }
 
 /**
@@ -525,8 +604,8 @@ static int item_line_scan(struct cfg_entry *ce, int *pos, int *line,
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
  */
-static int cfg_items_data_scan(struct cfg_entry *ce, 
-        struct items_str_list_t *items_str_list)
+static int cfg_items_data_scan(struct items_str_list_t *items_str_list, 
+        struct cfg_entry *ce)
 {
     int pos = 0;
     int line = 0;
@@ -550,6 +629,17 @@ static int cfg_items_data_scan(struct cfg_entry *ce,
     return items_str_list->count;
 }
 
+/**
+ *Simple cfg item line parser.
+ *
+ *Returns:
+ *0: node parse error, 1: node parse success.
+ *
+ */
+static int item_line_parse(struct item_str_t *item_str, struct cfg_entry *ce)
+{
+    
+}
 
 /**
  *Simple iport parser.
@@ -557,10 +647,36 @@ static int cfg_items_data_scan(struct cfg_entry *ce,
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
  */
-static int cfg_items_data_parse(struct cfg_entry *ce, 
-        struct items_str_list_t *items_str_list)
+static int cfg_items_data_parse(struct items_str_list_t *items_str_list, 
+        struct cfg_entry *ce)
 {
-    return 1;
+    struct item_str_t *p;
+
+    p = items_str_list->list;
+
+    for (; p; p = p->next) {
+        int res;
+
+        res = item_line_parse(p, ce);
+        if (!res)
+            return -1;
+
+    }
+
+    return items_str_list->count;
+}
+
+static void items_str_list_free(struct items_str_list_t * items_str_list)
+{
+    struct item_str_t *p, *q;
+
+    p = items_str_list->list;
+
+    while (p) {
+        q = p->next;
+        DESTROY_ITEM_STR_NODE(p);
+        p = q;
+    }
 }
 
 static int cfg_items_entity_init(struct cfg_entry *ce)
@@ -583,14 +699,14 @@ static int cfg_items_entity_init(struct cfg_entry *ce)
         }
     }
 
-    if ((res = cfg_items_data_scan(ce, &items_str_list)) <= 0) {
+    if ((res = cfg_items_data_scan(&items_str_list, ce)) <= 0) {
         if (res < 0) { //error
             goto out_hash;
         }
         goto out_free;
     }
 
-    if ((res = cfg_items_data_parse(ce, &items_str_list)) <= 0) {
+    if ((res = cfg_items_data_parse(&items_str_list, ce)) <= 0) {
         if (res < 0) {//error
             goto out_hash;
         }
@@ -759,8 +875,11 @@ static int iport_line_scan(struct cfg_entry *ce,
             continue;
         }
 
-        if (comment_line_start || c == '#') {/*strip comment by '#'*/
-            comment_line_start = 1; 
+        if (comment_line_start) /*strip comments*/
+            continue;
+
+        if (c == '#') { /*set comment start flag*/
+            comment_line_start = 1;
             continue;
         }
 
@@ -800,7 +919,7 @@ static int iport_line_scan(struct cfg_entry *ce,
             else  //make sure the last valid char is ')'
                 iport_pos->flags_end = -1;
         } else
-            goto out_fail;
+            goto out_err;
     }
 
     if (!valid_char_count)
@@ -815,10 +934,10 @@ static int iport_line_scan(struct cfg_entry *ce,
         && (iport_pos->flags_end - iport_pos->flags_start) >= 0;
 
     if (!success)
-        goto out_fail;
+        goto out_err;
     return success;
 
-out_fail: 
+out_err: 
     printk(KERN_ERR 
             "Error: Scan iports cfg error on line %d in file /proc/%s/%s\n", 
             *line, CFG_BASE_DIR_NAME, ce->f_name);
@@ -831,8 +950,8 @@ out_fail:
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
  */
-static int cfg_iports_data_scan(struct cfg_entry *ce, 
-        struct iports_str_list_t *iports_str_scanning_list)
+static int cfg_iports_data_scan(struct iports_str_list_t *iports_str_scanning_list, 
+        struct cfg_entry *ce)
 {
     int pos = 0;
     int line = 0;
@@ -1011,9 +1130,8 @@ parse_going:
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
  */
-static int cfg_iports_data_parse(struct cfg_entry *ce, 
-        struct iports_str_list_t *iports_str_parsing_list,
-        struct iports_str_list_t *iports_str_scanning_list) 
+static int cfg_iports_data_parse(struct iports_str_list_t *iports_str_parsing_list,
+        struct iports_str_list_t *iports_str_scanning_list, struct cfg_entry *ce) 
 {
     struct iport_str_t *p, *iport_str;
     char *ip_str_or_prefix, *port_str;
@@ -1152,14 +1270,14 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
         return 0;
     }
 
-    if ((res = cfg_iports_data_scan(ce, iports_str_scanning_list)) <= 0) {
+    if ((res = cfg_iports_data_scan(iports_str_scanning_list, ce)) <= 0) {
         if (res < 0) //error.
             ret = 0;
         goto out_free;
     }
 
-    if ((res = cfg_iports_data_parse(ce, iports_str_parsing_list, 
-                    iports_str_scanning_list)) <= 0) {
+    if ((res = cfg_iports_data_parse(iports_str_parsing_list, 
+                    iports_str_scanning_list, ce)) <= 0) {
         if (res < 0) //error
             ret = 0;
         goto out_free;
