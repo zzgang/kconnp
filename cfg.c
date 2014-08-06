@@ -638,7 +638,7 @@ static int cfg_items_data_scan(struct items_str_list_t *items_str_list,
  */
 static int item_line_parse(struct item_str_t *item_str, struct cfg_entry *ce)
 {
-    
+    return 1; 
 }
 
 /**
