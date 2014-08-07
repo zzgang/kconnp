@@ -42,6 +42,8 @@
         (item_str)->name.data = lkmalloc((item_str)->name.len + 1/*padding '\0'*/); \
         if (!(item_str)->name.data)                                                 \
             return 0;                                                               \
+        if ((item_pos)->value_start < 0)                                            \
+            continue;                                                               \
         (item_str)->value.len = (item_pos)->value_end - (item_pos)->value_start + 1;\
         (item_str)->value.data = lkmalloc((item_str)->value.len + 1);               \
         if (!(item_str)->value.data) {                                              \
@@ -177,21 +179,6 @@ static int cfg_iports_data_parse(struct iports_str_list_t *,
 
 static inline struct cfg_entry *cfg_get_ce(void *);
 
-static int cfg_entry_init(struct cfg_entry *);
-static void cfg_entry_destroy(struct cfg_entry *);
-
-static int cfg_proc_read(char *buffer, char **buffer_location, 
-        off_t offset, int buffer_length, int *eof, void *data);
-static int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
-        void *data);
-
-static int cfg_proc_file_init(struct cfg_entry *);
-static void cfg_proc_file_destroy(struct cfg_entry *);
-
-static int cfg_items_entity_init(struct cfg_entry *);
-static void cfg_items_entity_destroy(struct cfg_entry *);
-static int cfg_items_entity_reload(struct cfg_entry *);
-
 static int cfg_iports_entity_init(struct cfg_entry *);
 static void cfg_iports_entity_destroy(struct cfg_entry *);
 static int cfg_iports_entity_reload(struct cfg_entry *);
@@ -313,27 +300,32 @@ static struct item_node_t cfg_global_items[] = {
     {
         .name = CONST_STRING("connection_wait_timeout"),
         .v_lval = -1,
-        .type = INTEGER
+        .cfg_item_set_node = cfg_item_set_num_node,
+        .cfg_item_get_value = cfg_item_get_num_value
     },
     {
         .name = CONST_STRING("max_connections"),
         .v_lval = -1,
-        .type = INTEGER
+        .cfg_item_set_node = cfg_item_set_num_node,
+        .cfg_item_get_value = cfg_item_get_num_value
     },
     {
         .name = CONST_STRING("max_requests_per_connection"),
         .v_lval = -1,
-        .type = INTEGER
+        .cfg_item_set_node = cfg_item_set_num_node,
+        .cfg_item_get_value = cfg_item_get_num_value
     },
     {
         .name = CONST_STRING("min_spare_connections_per_iport"),
         .v_lval = -1,
-        .type = INTEGER
+        .cfg_item_set_node = cfg_item_set_num_node,
+        .cfg_item_get_value = cfg_item_get_num_value
     },
     {
         .name = CONST_STRING("max_spare_connections_per_iport"),
         .v_lval = -1,
-        .type = INTEGER
+        .cfg_item_set_node = cfg_item_set_num_node,
+        .cfg_item_get_value = cfg_item_get_num_value
     },
     {CONST_STRING_NULL, }
 };
@@ -357,7 +349,7 @@ static struct item_node_t cfg_global_items[] = {
  * information at this time (end of file). A negative
  * return value is an error condition.
  */
-static int cfg_proc_read(char *buffer, char **buffer_location,
+int cfg_proc_read(char *buffer, char **buffer_location,
         off_t offset, int buffer_length, int *eof, void *data)
 {
     int read_count;
@@ -389,7 +381,7 @@ static int cfg_proc_read(char *buffer, char **buffer_location,
 /*
  * This function is called with the /proc file is written
  */
-static int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
+int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
         void *data)
 {
     struct cfg_entry *ce;
@@ -460,7 +452,7 @@ static inline struct cfg_entry *cfg_get_ce(void *data)
     return NULL;
 }
 
-static int cfg_proc_file_init(struct cfg_entry *ce)
+int cfg_proc_file_init(struct cfg_entry *ce)
 {
     ce->cfg_proc_file = create_proc_entry(ce->f_name, S_IFREG|S_IRUGO, 
             cfg_base_dir);
@@ -483,13 +475,13 @@ static int cfg_proc_file_init(struct cfg_entry *ce)
     return 1;
 }
 
-static void cfg_proc_file_destroy(struct cfg_entry *ce)
+void cfg_proc_file_destroy(struct cfg_entry *ce)
 {
     if (ce->cfg_proc_file)
         remove_proc_entry(ce->f_name, cfg_base_dir);
 }
 
-static int cfg_entry_init(struct cfg_entry *ce)
+int cfg_entry_init(struct cfg_entry *ce)
 {
     if (!ce->proc_file_init(ce))
         return 0;
@@ -502,7 +494,7 @@ static int cfg_entry_init(struct cfg_entry *ce)
     return 1;
 }
 
-static void cfg_entry_destroy(struct cfg_entry *ce)
+void cfg_entry_destroy(struct cfg_entry *ce)
 {
     ce->entity_destroy(ce);
     ce->proc_file_destroy(ce);
@@ -513,10 +505,8 @@ static inline void item_dtor_func(void *data)
     struct item_node_t *item;
 
     item = (struct item_node_t *)data;
-    if (item->type == STRING) {
-        if (item->v_str)
-            lkmfree(item->v_str);
-    }
+    if (item->v_str)
+        lkmfree(item->v_str);
 }
 
 static int item_line_scan(struct cfg_entry *ce, int *pos, int *line,
@@ -638,7 +628,37 @@ static int cfg_items_data_scan(struct items_str_list_t *items_str_list,
  */
 static int item_line_parse(struct item_str_t *item_str, struct cfg_entry *ce)
 {
+    int i;
+    char c, p, f, l;
+
+    //parse item name str.
+    for (i = 0; i < item_str->name.len; i++) {
+        c = item_str->name.data[i];
+        if (c == '"') 
+            goto out_err;
+    }
+
+    //parse item value str.
+    f = item_str->value.data[0];
+    l = item_str->value.data[item_str->value.len - 1];
+    if ((f == '"') == (l == '"'))
+        goto out_err;
+
+    for (i = 1; i < item_str->value.len - 1; i++) {
+        c = item_str->value.data[i]; 
+        p = item_str->value.data[i-1];
+        
+        if (c == '"' && p != '\\')
+            goto out_err;
+    }
+
     return 1; 
+
+out_err:
+    printk(KERN_ERR
+            "Error: Parse cfg items error on line %d in file /proc/%s/%s\n", 
+            item_str->line, CFG_BASE_DIR_NAME, ce->f_name);
+    return 0;
 }
 
 /**
@@ -679,9 +699,9 @@ static void items_str_list_free(struct items_str_list_t * items_str_list)
     }
 }
 
-static int cfg_items_entity_init(struct cfg_entry *ce)
+int cfg_items_entity_init(struct cfg_entry *ce)
 {
-    struct items_str_list_t items_str_list = {NULL, -1};
+    struct items_str_list_t items_str_list = {NULL, 0};
     struct item_node_t *p;
     int res, ret = 1;
 
@@ -723,7 +743,7 @@ out_hash:
     goto out_free;
 }
 
-static void cfg_items_entity_destroy(struct cfg_entry *ce)
+void cfg_items_entity_destroy(struct cfg_entry *ce)
 {
     if (ce->raw_ptr) {
         lkmfree(ce->raw_ptr);
@@ -734,7 +754,7 @@ static void cfg_items_entity_destroy(struct cfg_entry *ce)
         hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
 }
 
-static int cfg_items_entity_reload(struct cfg_entry *ce)
+int cfg_items_entity_reload(struct cfg_entry *ce)
 {
     int ret;
 
@@ -787,7 +807,7 @@ static char *ip_ntoa(unsigned int ip)
 }
 
 /**
- *Convert IPV4 ipstr to int.
+ *Convert IPV4 ip str to int.
  */
 static int ip_aton(const char *ip_str, struct in_addr *iaddr)
 {

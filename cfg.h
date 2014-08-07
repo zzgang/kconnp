@@ -65,26 +65,20 @@ struct item_pos_t {
 #define value_end value_pos.end
 };
 
-enum var_type {
-    INTEGER=0,
-    STRING
-};
-#define VAR_IS_INTEGER(var) ((var)->type == INTEGER)
-#define VAR_IS_STRING(var) ((var)->type == STRING)
-
 struct item_node_t {
     //Global conf item node
    
     kconnp_str_t name;
-    union {
-        long lval;
-        kconnp_str_t str;
-    }value;
+    
+    kconnp_value_t value;
 #define v_strlen value.str.len
 #define v_str value.str.data
 #define v_lval value.lval
     
-    enum var_type type;
+    void *values;
+
+    int (*cfg_item_set_node)(struct item_node_t *node, kconnp_str_t *str); 
+    int (*cfg_item_get_value)(kconnp_value_t *value, struct item_node_t *node); 
 };
 
 struct iport_t {
@@ -165,5 +159,26 @@ extern void cfg_allowd_iport_node_for_each_call(unsigned int ip, unsigned short 
 
 extern int cfg_init(void);
 extern void cfg_destroy(void);
+
+extern int cfg_proc_read(char *buffer, char **buffer_location,
+                off_t offset, int buffer_length, int *eof, void *data);
+extern int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
+                void *data);
+
+extern int cfg_entry_init(struct cfg_entry *);
+extern void cfg_entry_destroy(struct cfg_entry *);
+
+extern int cfg_proc_file_init(struct cfg_entry *);
+extern void cfg_proc_file_destroy(struct cfg_entry *);
+
+extern int cfg_items_entity_init(struct cfg_entry *);
+extern void cfg_items_entity_destroy(struct cfg_entry *);
+extern int cfg_items_entity_reload(struct cfg_entry *);
+
+extern int cfg_item_set_num_node(struct item_node_t *node, kconnp_str_t *str);
+extern int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str);
+
+extern int cfg_item_get_num_value(kconnp_value_t *value, struct item_node_t *node); 
+extern int cfg_item_get_str_value(kconnp_value_t *value, struct item_node_t *node); 
 
 #endif
