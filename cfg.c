@@ -699,15 +699,60 @@ static void items_str_list_free(struct items_str_list_t * items_str_list)
     }
 }
 
+int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
+{
+    if (str->len > 0) {
+        node->v_str = lkmalloc(str->len + 1);
+        if (!node->v_str) {
+            printk(KERN_ERR "No more memory!\n");
+            return 0;
+        }
+        memcpy(node->v_str, str->data, str->len);
+    } else 
+        return 0;
+
+    return 1;
+}
+
+int cfg_item_set_num_node(struct item_node_t *node, kconnp_str_t *str)
+{
+    if (str->len > 0)
+        node->v_lval = simple_strtol(str->data, NULL, 10); 
+    else 
+        return 0;
+
+    return 1;
+}
+
+int cfg_item_set_bool_node(struct item_node_t *node, kconnp_str_t *str)
+{
+    node->v_lval = 1;
+    return 1;
+}
+
 int cfg_items_entity_init(struct cfg_entry *ce)
 {
     struct items_str_list_t items_str_list = {NULL, 0};
     struct item_node_t *p;
+    struct item_str_t *q;
     int res, ret = 1;
+
+   if ((res = cfg_items_data_scan(&items_str_list, ce)) <= 0) {
+       if (res < 0)  //error
+           ret = 0;
+       goto out_free;
+   }
+
+    if ((res = cfg_items_data_parse(&items_str_list, ce)) <= 0) {
+        if (res < 0) //error
+            ret = 0;
+        goto out_free;
+    }
 
     if (!_hash_init((struct hash_table_t **)&ce->cfg_ptr, 0, 
             hash_func_times33, item_dtor_func)) {
-        return 0; 
+        ret = 0;
+        goto out_free;
     }
 
     for (p = cfg_global_items; p->name.data; p++) {
@@ -719,18 +764,26 @@ int cfg_items_entity_init(struct cfg_entry *ce)
         }
     }
 
-    if ((res = cfg_items_data_scan(&items_str_list, ce)) <= 0) {
-        if (res < 0) { //error
+    q = items_str_list.list;
+    for (; q; q = q->next) {
+        struct item_node_t *item_node;
+        if (hash_find((struct hash_table_t *)ce->cfg_ptr, 
+                    (const char *)q->name.data, q->name.len, 
+                    (void **)&item_node)) {
+            if (!item_node->cfg_item_set_node(item_node, &q->value)) {
+                printk(KERN_ERR 
+                        "Error: Invalid cfg item value on line %d in file /proc/%s/%s\n", 
+                        q->line, CFG_BASE_DIR_NAME, ce->f_name);
+                ret = 0;
+                goto out_hash;
+            }
+        } else {
+            printk(KERN_ERR 
+                    "Error: Unrecognized cfg item on line %d in file /proc/%s/%s\n", 
+                    q->line, CFG_BASE_DIR_NAME, ce->f_name);
+            ret = 0;
             goto out_hash;
         }
-        goto out_free;
-    }
-
-    if ((res = cfg_items_data_parse(&items_str_list, ce)) <= 0) {
-        if (res < 0) {//error
-            goto out_hash;
-        }
-        goto out_free;
     }
 
 out_free:
