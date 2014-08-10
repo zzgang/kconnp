@@ -19,9 +19,7 @@ struct cfg_entry {
     rwlock_t cfg_rwlock;
 
     /*proc r/w funcs*/
-    int (*proc_read)(char *buffer,
-                    char **buffer_location,
-                            off_t offset, int buffer_length, int *eof, void *data);
+    int (*proc_read)(char *buffer, char **buffer_location, off_t offset, int buffer_length, int *eof, void *data);
     int (*proc_write)(struct file *file, const char *buffer, unsigned long count, 
             void *data);
 
@@ -36,6 +34,28 @@ struct cfg_entry {
     void (*entity_destroy)(struct cfg_entry *);
     int (*entity_reload)(struct cfg_entry *); 
 };
+
+struct cfg_dir {
+    struct cfg_entry global;
+#define gl global
+#define gl_ptr global.cfg_ptr
+#define gl_rwlock global.cfg_rwlock
+    struct cfg_entry allowed_list;
+#define al allowed_list
+#define al_ptr allowed_list.cfg_ptr
+#define al_rwlock allowed_list.cfg_rwlock
+    struct cfg_entry denied_list;
+#define dl denied_list
+#define dl_ptr denied_list.cfg_ptr
+#define dl_rwlock denied_list.cfg_rwlock
+    struct cfg_entry stats_info;
+#define st stats_info
+#define st_ptr stats_info.raw_ptr
+#define st_len stats_info.raw_len
+#define st_rwlock stats_info.cfg_rwlock
+};
+
+extern struct cfg_dir *cfg;
 
 typedef struct pos { //start and end pos
     int start;
@@ -65,6 +85,11 @@ struct item_pos_t {
 #define value_end value_pos.end
 };
 
+typedef enum {
+    INTEGER = 1,
+    STRING
+} node_type;
+
 struct item_node_t {
     //Global conf item node
    
@@ -74,11 +99,10 @@ struct item_node_t {
 #define v_strlen value.str.len
 #define v_str value.str.data
 #define v_lval value.lval
-    
-    void *values;
+
+    void *data;
 
     int (*cfg_item_set_node)(struct item_node_t *node, kconnp_str_t *str); 
-    int (*cfg_item_get_value)(kconnp_value_t *value, struct item_node_t *node); 
 };
 
 struct iport_t {
@@ -175,10 +199,35 @@ extern int cfg_items_entity_init(struct cfg_entry *);
 extern void cfg_items_entity_destroy(struct cfg_entry *);
 extern int cfg_items_entity_reload(struct cfg_entry *);
 
-extern int cfg_item_set_num_node(struct item_node_t *node, kconnp_str_t *str);
+extern int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str);
 extern int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str);
 
-extern int cfg_item_get_num_value(kconnp_value_t *value, struct item_node_t *node); 
-extern int cfg_item_get_str_value(kconnp_value_t *value, struct item_node_t *node); 
+static inline long cfg_item_get_value(struct cfg_entry *ce, const char *name, int len, kconnp_value_t *value) 
+{
+    struct item_node_t *item_node;
+    int ret = -1;
+    
+    read_lock(ce->cfg_rwlock);
+    
+    if (hash_find((struct hash_table_t *)ce->cfg_ptr, 
+                name, len, 
+                (void **)&item_node)) {
+        if (value) {
+            memcpy(value, &item_node->value, sizeof(kconnp_value_t)); 
+            ret = 1;
+        } else 
+            ret = item_node->v_lval;
+
+        goto ret_unlock;
+    } 
+
+ret_unlock:
+    read_unlock(ce->cfg_rwlock);
+
+    return ret;
+}
+
+#define G(name) cfg_item_get_value(&cfg->global, name, sizeof(name), NULL)
+#define GV(name, vp) cfg_item_get_value(&cfg->global, name, sizeof(name), vp)
 
 #endif

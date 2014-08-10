@@ -195,26 +195,6 @@ static int cfg_white_list_entity_reload(struct cfg_entry *);
 
 static inline void *iport_in_list_check_or_call(unsigned int ip, unsigned short int port,  struct cfg_entry *, void (*call_func)(void *data));
 
-struct cfg_dir {
-    struct cfg_entry global;
-#define g global
-#define g_ptr global.cfg_ptr
-#define g_rwlock global.cfg_rwlock
-    struct cfg_entry allowed_list;
-#define al allowed_list
-#define al_ptr allowed_list.cfg_ptr
-#define al_rwlock allowed_list.cfg_rwlock
-    struct cfg_entry denied_list;
-#define dl denied_list
-#define dl_ptr denied_list.cfg_ptr
-#define dl_rwlock denied_list.cfg_rwlock
-    struct cfg_entry stats_info;
-#define st stats_info
-#define st_ptr stats_info.raw_ptr
-#define st_len stats_info.raw_len
-#define st_rwlock stats_info.cfg_rwlock
-};
-
 static struct cfg_dir cfg_dentry = { //initial the cfg directory.
     { //global conf
         .f_name = CFG_GLOBAL_FILE,
@@ -281,7 +261,8 @@ static struct cfg_dir cfg_dentry = { //initial the cfg directory.
         .entity_reload = NULL
     }
 };
-static struct cfg_dir *cfg = &cfg_dentry;
+
+struct cfg_dir *cfg = &cfg_dentry;
 
 static struct proc_dir_entry *cfg_base_dir;
 
@@ -299,33 +280,28 @@ static struct cfg_entry *wl = &white_list;
 static struct item_node_t cfg_global_items[] = {
     {
         .name = CONST_STRING("connection_wait_timeout"),
-        .v_lval = -1,
-        .cfg_item_set_node = cfg_item_set_num_node,
-        .cfg_item_get_value = cfg_item_get_num_value
+        .v_lval = 30,
+        .cfg_item_set_node = cfg_item_set_int_node,
     },
     {
         .name = CONST_STRING("max_connections"),
-        .v_lval = -1,
-        .cfg_item_set_node = cfg_item_set_num_node,
-        .cfg_item_get_value = cfg_item_get_num_value
+        .v_lval = 1000,
+        .cfg_item_set_node = cfg_item_set_int_node,
     },
     {
         .name = CONST_STRING("max_requests_per_connection"),
-        .v_lval = -1,
-        .cfg_item_set_node = cfg_item_set_num_node,
-        .cfg_item_get_value = cfg_item_get_num_value
+        .v_lval = 0,
+        .cfg_item_set_node = cfg_item_set_int_node,
     },
     {
         .name = CONST_STRING("min_spare_connections_per_iport"),
-        .v_lval = -1,
-        .cfg_item_set_node = cfg_item_set_num_node,
-        .cfg_item_get_value = cfg_item_get_num_value
+        .v_lval = 10,
+        .cfg_item_set_node = cfg_item_set_int_node,
     },
     {
         .name = CONST_STRING("max_spare_connections_per_iport"),
-        .v_lval = -1,
-        .cfg_item_set_node = cfg_item_set_num_node,
-        .cfg_item_get_value = cfg_item_get_num_value
+        .v_lval = 20,
+        .cfg_item_set_node = cfg_item_set_int_node,
     },
     {CONST_STRING_NULL, }
 };
@@ -714,7 +690,7 @@ int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
     return 1;
 }
 
-int cfg_item_set_num_node(struct item_node_t *node, kconnp_str_t *str)
+int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str)
 {
     if (str->len > 0)
         node->v_lval = simple_strtol(str->data, NULL, 10); 
@@ -934,7 +910,7 @@ static int iport_line_scan(struct cfg_entry *ce,
 {
     char c;
     int comment_line_start = 0;
-    int valid_char_count = 0;
+    int valid_chars_count = 0;
     int success = 0;
     int after_colon = 0;
     int flags_begin = 0;
@@ -962,7 +938,7 @@ static int iport_line_scan(struct cfg_entry *ce,
                 || (c >= 'A' && c <= 'Z')
                 || c == '(' || c == ')' || c == '|') {
 
-            valid_char_count++;
+            valid_chars_count++;
 
             if (c == ':') { //delimeter of ip and port.
                 after_colon = 1;
@@ -995,7 +971,7 @@ static int iport_line_scan(struct cfg_entry *ce,
             goto out_err;
     }
 
-    if (!valid_char_count)
+    if (!valid_chars_count)
         return 0;
     
     success = iport_pos->ip_end >= 0 && iport_pos->ip_start >= 0 
