@@ -19,8 +19,10 @@
         struct cfg_entry *p, *entry = (struct cfg_entry *)cfg;  \
         for (p = entry; \
                 p < entry + sizeof(struct cfg_dir) / sizeof(struct cfg_entry); p++) {\
-            if (!p->func_name(p))   \
-                __check_ret = 0;          \
+            if (!p->func_name(p)) {  \
+                __check_ret = 0;        \
+                break;                  \
+            } \
         } \
         __check_ret;    \
     })
@@ -43,7 +45,7 @@
         if (!(item_str)->name.data)                                                 \
             return 0;                                                               \
         if ((item_pos)->value_start < 0)                                            \
-            continue;                                                               \
+            break;                                                                  \
         (item_str)->value.len = (item_pos)->value_end - (item_pos)->value_start + 1;\
         (item_str)->value.data = lkmalloc((item_str)->value.len + 1);               \
         if (!(item_str)->value.data) {                                              \
@@ -57,9 +59,11 @@
         memcpy((item_str)->name.data,                               \
                 ce->raw_ptr + (item_pos)->name_start,               \
                 (item_str)->name.len);                              \
-        memcpy((item_str)->value.data,                              \
-                ce->raw_ptr + (item_pos)->value_start,              \
-                (item_str)->value.len);                             \
+        if ((item_str)->value.data) {                               \
+            memcpy((item_str)->value.data,                          \
+                    ce->raw_ptr + (item_pos)->value_start,          \
+                    (item_str)->value.len);                         \
+        }                                                           \
         (item_str)->line = line_pass;                               \
     } while (0)
 
@@ -77,6 +81,14 @@
         lkmfree(item_str->value.data);          \
         lkmfree(item_str);                      \
     } while (0)                                 \
+
+#define INIT_ITEM_POS(item_pos)                 \
+    do {                                        \
+        (item_pos)->name_start = -1;            \
+        (item_pos)->name_end = -1;              \
+        (item_pos)->value_start = -1;           \
+        (item_pos)->value_end = -1;             \
+    } while (0)
 
 #define INIT_IPORT_POS(iport_pos)           \
     do {                                    \
@@ -446,6 +458,11 @@ int cfg_proc_file_init(struct cfg_entry *ce)
     ce->cfg_proc_file->uid = 0;
     ce->cfg_proc_file->gid = 0;
 
+    ce->raw_len = 0;
+    ce->raw_ptr = NULL;
+    ce->cfg_ptr = NULL;
+    ce->mtime = 0;
+
     rwlock_init(&ce->cfg_rwlock);
 
     return 1;
@@ -497,10 +514,6 @@ static int item_line_scan(struct cfg_entry *ce, int *pos, int *line,
     while (*pos < ce->raw_len /*the last line*/
             && (c = ce->raw_ptr[(*pos)++]) != '\n') {
 
-        if (c == ' ' || c == '\t') {//strip blank char.
-            continue;
-        }
-
         if (comment_line_start) /*strip comments*/
             continue;
 
@@ -530,16 +543,16 @@ static int item_line_scan(struct cfg_entry *ce, int *pos, int *line,
                 || c == ' ' || c == '\t') {
 
             if (item_pos->name_start < 0) 
-                item_pos->name_start = *pos;
+                item_pos->name_start = *pos - 1;
 
             if (!delimeter_find)
-                item_pos->name_end = *pos;
+                item_pos->name_end = *pos - 1;
 
             if (delimeter_find && (item_pos->value_start < 0))
-                item_pos->value_start = *pos;
+                item_pos->value_start = *pos - 1;
 
             if (delimeter_find)
-                item_pos->value_end = *pos;
+                item_pos->value_end = *pos - 1;
 
         } else 
             goto out_err;
@@ -577,10 +590,12 @@ static int cfg_items_data_scan(struct items_str_list_t *items_str_list,
     int line = 0;
     int res;
     struct item_str_t *item_str;
-    struct item_pos_t item_pos = {{-1, -1}, {-1, -1}};
+    struct item_pos_t item_pos;
 
     while (pos < ce->raw_len) {
-        
+
+        INIT_ITEM_POS(&item_pos); 
+
         res = item_line_scan(ce, &pos, &line, &item_pos);
         if (res < 0) //Scan error.
             return -1;
@@ -614,10 +629,13 @@ static int item_line_parse(struct item_str_t *item_str, struct cfg_entry *ce)
             goto out_err;
     }
 
+    if (!item_str->value.data) // null value
+        return 1;
+
     //parse item value str.
     f = item_str->value.data[0];
     l = item_str->value.data[item_str->value.len - 1];
-    if ((f == '"') == (l == '"'))
+    if ((f == '"') != (l == '"'))
         goto out_err;
 
     for (i = 1; i < item_str->value.len - 1; i++) {
@@ -652,11 +670,9 @@ static int cfg_items_data_parse(struct items_str_list_t *items_str_list,
 
     for (; p; p = p->next) {
         int res;
-
         res = item_line_parse(p, ce);
         if (!res)
             return -1;
-
     }
 
     return items_str_list->count;
@@ -702,6 +718,9 @@ int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str)
 
 int cfg_item_set_bool_node(struct item_node_t *node, kconnp_str_t *str)
 {
+    if (str->data)
+        return 0;
+
     node->v_lval = 1;
     return 1;
 }
@@ -713,11 +732,11 @@ int cfg_items_entity_init(struct cfg_entry *ce)
     struct item_str_t *q;
     int res, ret = 1;
 
-   if ((res = cfg_items_data_scan(&items_str_list, ce)) <= 0) {
-       if (res < 0)  //error
-           ret = 0;
-       goto out_free;
-   }
+    if ((res = cfg_items_data_scan(&items_str_list, ce)) <= 0) {
+        if (res < 0)  //error
+            ret = 0;
+        goto out_free;
+    }
 
     if ((res = cfg_items_data_parse(&items_str_list, ce)) <= 0) {
         if (res < 0) //error
@@ -730,19 +749,21 @@ int cfg_items_entity_init(struct cfg_entry *ce)
         ret = 0;
         goto out_free;
     }
-
+    
     for (p = cfg_global_items; p->name.data; p++) {
 
+        printk(KERN_ERR "name:%s, val: %d", p->name.data, p->name.len);
         if (!hash_add((struct hash_table_t *)ce->cfg_ptr, 
                 p->name.data, p->name.len, 
                 p, 0)) {
             goto out_hash;
         }
     }
-
+    
     q = items_str_list.list;
     for (; q; q = q->next) {
         struct item_node_t *item_node;
+        printk(KERN_ERR "name:%s, val: %d", q->name.data, q->name.len);
         if (hash_find((struct hash_table_t *)ce->cfg_ptr, 
                     (const char *)q->name.data, q->name.len, 
                     (void **)&item_node)) {
@@ -761,7 +782,7 @@ int cfg_items_entity_init(struct cfg_entry *ce)
             goto out_hash;
         }
     }
-
+    
 out_free:
     items_str_list_free(&items_str_list);
     return ret;

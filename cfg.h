@@ -4,6 +4,7 @@
 #include <linux/socket.h>
 #include <linux/proc_fs.h>
 #include "connp.h"
+#include "hash.h"
 #include "kconnp.h"
 
 #define CFG_BASE_DIR_NAME "kconnp"
@@ -202,32 +203,57 @@ extern int cfg_items_entity_reload(struct cfg_entry *);
 extern int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str);
 extern int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str);
 
-static inline long cfg_item_get_value(struct cfg_entry *ce, const char *name, int len, kconnp_value_t *value) 
+static inline long cfg_item_get_value(struct cfg_entry *ce, const char *name, int len, kconnp_value_t *value, node_type type) 
 {
     struct item_node_t *item_node;
-    int ret = -1;
+    int ret;
     
-    read_lock(ce->cfg_rwlock);
+    read_lock(&ce->cfg_rwlock);
     
     if (hash_find((struct hash_table_t *)ce->cfg_ptr, 
                 name, len, 
                 (void **)&item_node)) {
-        if (value) {
-            memcpy(value, &item_node->value, sizeof(kconnp_value_t)); 
-            ret = 1;
-        } else 
-            ret = item_node->v_lval;
 
-        goto ret_unlock;
-    } 
+        switch (type) {
+            case STRING:
+                if (value) {
+                    value->str.data = lkmalloc(item_node->v_strlen);
+                    if (!value->str.data) {
+                        ret = -1;
+                        goto ret_unlock;
+                    }
+                    memcpy(value->str.data, item_node->v_str, item_node->v_strlen); 
+                    value->str.len = item_node->v_strlen;
+                    ret = 1;
+                } else 
+                    ret = -1;
+                break;
+            case INTEGER:
+                if (value) {
+                    value->lval = item_node->v_lval;
+                    ret = 1;
+                } else 
+                    ret = item_node->v_lval;
+                break;
+            default:
+                ret = -1;
+                break;
+        }
+
+    } else {
+       printk(KERN_ERR 
+               "The item name %s is not found in file /proc/%s/%s\n", 
+               name, CFG_BASE_DIR_NAME, ce->f_name);
+       ret = -1;
+    }
 
 ret_unlock:
-    read_unlock(ce->cfg_rwlock);
+    read_unlock(&ce->cfg_rwlock);
 
     return ret;
 }
 
-#define G(name) cfg_item_get_value(&cfg->global, name, sizeof(name), NULL)
-#define GV(name, vp) cfg_item_get_value(&cfg->global, name, sizeof(name), vp)
+#define GN(name) cfg_item_get_value(&cfg->global, name, sizeof(name), NULL, INTEGER)
+#define GVS(name, vp) cfg_item_get_value(&cfg->global, name, sizeof(name), vp, STRING)
 
 #endif
