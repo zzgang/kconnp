@@ -69,9 +69,11 @@
 
 #define INSERT_INTO_ITEMS_LIST(items_list, item)    \
     do {                                            \
-        if ((items_list)->list)                     \
-            (item)->next = (items_list)->list;      \
-        (items_list)->list = item;                  \
+        if (!(items_list)->list)                    \
+            (items_list)->list = item;              \
+        if ((items_list)->tail)                     \
+            (items_list)->tail->next = item;        \
+        (items_list)->tail = item;                  \
         (items_list)->count++;                      \
     } while (0)
 
@@ -498,7 +500,7 @@ static inline void item_dtor_func(void *data)
     struct item_node_t *item;
 
     item = (struct item_node_t *)data;
-    if (item->v_str)
+    if (item->cfg_item_set_node == cfg_item_set_str_node)
         lkmfree(item->v_str);
 }
 
@@ -752,7 +754,6 @@ int cfg_items_entity_init(struct cfg_entry *ce)
     
     for (p = cfg_global_items; p->name.data; p++) {
 
-        printk(KERN_ERR "name:%s, val: %d", p->name.data, p->name.len);
         if (!hash_add((struct hash_table_t *)ce->cfg_ptr, 
                 p->name.data, p->name.len, 
                 p, 0)) {
@@ -763,7 +764,6 @@ int cfg_items_entity_init(struct cfg_entry *ce)
     q = items_str_list.list;
     for (; q; q = q->next) {
         struct item_node_t *item_node;
-        printk(KERN_ERR "name:%s, val: %d", q->name.data, q->name.len);
         if (hash_find((struct hash_table_t *)ce->cfg_ptr, 
                     (const char *)q->name.data, q->name.len, 
                     (void **)&item_node)) {
@@ -782,7 +782,6 @@ int cfg_items_entity_init(struct cfg_entry *ce)
             goto out_hash;
         }
     }
-    
 out_free:
     items_str_list_free(&items_str_list);
     return ret;

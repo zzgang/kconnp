@@ -74,6 +74,7 @@ struct item_str_t {
 
 struct items_str_list_t {
     struct item_str_t *list;
+    struct item_str_t *tail;
     int count;
 };
 
@@ -147,6 +148,7 @@ struct iport_str_t {
 
 struct iports_str_list_t {
     struct iport_str_t *list;
+    struct iport_str_t *tail;
     int count;
 };
 
@@ -210,6 +212,13 @@ static inline long cfg_item_get_value(struct cfg_entry *ce, const char *name, in
     
     read_lock(&ce->cfg_rwlock);
     
+    if (!ce->cfg_ptr) { //init default value.
+        if (value)
+            memset(value, 0, sizeof(kconnp_value_t));
+        ret = 0;
+        goto ret_unlock;
+    }
+
     if (hash_find((struct hash_table_t *)ce->cfg_ptr, 
                 name, len, 
                 (void **)&item_node)) {
@@ -253,7 +262,7 @@ ret_unlock:
     return ret;
 }
 
-#define GN(name) cfg_item_get_value(&cfg->global, name, sizeof(name), NULL, INTEGER)
-#define GVS(name, vp) cfg_item_get_value(&cfg->global, name, sizeof(name), vp, STRING)
+#define GN(name) cfg_item_get_value(&cfg->global, name, sizeof(name)-1, NULL, INTEGER)
+#define GVS(name, vp) cfg_item_get_value(&cfg->global, name, sizeof(name)-1, vp, STRING)
 
 #endif
