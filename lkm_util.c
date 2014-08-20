@@ -2,8 +2,8 @@
 #include <linux/socket.h>
 #include <linux/in.h>
 #include "sys_call.h"
-#include "lkm_util.h"
 #include "array.h"
+#include "lkm_util.h"
 
 /* Poll funcs start */
 struct poll_table_entry_alias {
