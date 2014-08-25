@@ -1,7 +1,7 @@
 #ifndef _ARRAY_H_
 #define _ARRAY_H_
 
-#include "util.h"
+#include "lkm_util.h"
 
 struct array_t {
     //attrs

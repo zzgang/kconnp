@@ -1,7 +1,7 @@
 #ifndef _STACK_H_
 #define _STACK_H_
 
-#include "util.h"
+#include "lkm_util.h"
 
 struct stack_t {
     //attrs

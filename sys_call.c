@@ -1,7 +1,7 @@
 #include <linux/syscalls.h>
 #include "sys_call_table.h"
 #include "sys_call.h"
-#include "util.h"
+#include "lkm_util.h"
 
 /*original sys calls*/
 #ifdef __NR_socketcall

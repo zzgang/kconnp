@@ -4,7 +4,7 @@
 #include "sockp.h"
 #include "sys_call.h"
 #include "preconnect.h"
-#include "util.h"
+#include "lkm_util.h"
 #include "array.h"
 
 #define CONNPD_NAME "kconnpd"
@@ -164,6 +164,10 @@ out_free:
 
 static int connpd_func(void *data)
 {
+    struct rlimit new_rlim = {NR_MAX_OPEN_FDS, NR_MAX_OPEN_FDS};
+
+    lkm_setrlimit(RLIMIT_NOFILE, new_rlim);
+    
     allow_signal(NOTIFY_SIG);
 
     for(;;) {
@@ -182,7 +186,7 @@ static int connpd_func(void *data)
             break;
 
         } else {
-            //scan and shutdown
+            //Scan and shutdown
             close_timeout_files();
 
             connpd_unused_fds_prefetch();

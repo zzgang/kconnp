@@ -13,12 +13,17 @@
 
 #define SOCKP_DEBUG 0
 
-#define NR_SOCKET_BUCKET 200
+#define NR_SOCKET_BUCKET NR_MAX_OPEN_FDS
 
-#define NR_HASH (NR_SOCKET_BUCKET/2 + 1)
+#define NR_HASH ((NR_SOCKET_BUCKET)/2 + 1)
 #define NR_SHASH (NR_SOCKET_BUCKET)
 
-#define TIMEOUT 30 //seconds
+#define WAIT_TIMEOUT (GN("connection_wait_timeout") * HZ)//seconds
+
+#define MAX_REQUESTS ({             \
+        u64 requests = GN("max_requests_per_connection");       \
+        requests ? ~0ULL : requests;                            \
+        })
 
 #define LRU 1 //LRU replace algorithm
 

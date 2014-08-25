@@ -5,7 +5,7 @@
 #include "sockp.h"
 #include "connp.h"
 #include "sys_call.h"
-#include "util.h"
+#include "lkm_util.h"
 
 static inline int connp_move_addr_to_kernel(void __user *uaddr, int ulen, struct sockaddr *kaddr)
 {

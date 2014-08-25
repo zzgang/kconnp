@@ -1,6 +1,6 @@
 #include "sys_call.h"
 #include "connp.h"
-#include "util.h"
+#include "lkm_util.h"
 
 asmlinkage long connp_sys_exit(int error_code)
 {

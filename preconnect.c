@@ -2,7 +2,7 @@
 #include <linux/socket.h>
 #include "cfg.h"
 #include "preconnect.h"
-#include "util.h"
+#include "lkm_util.h"
 #include "sys_call.h"
 #include "connp.h"
 

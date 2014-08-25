@@ -1,7 +1,7 @@
 #ifndef _HASH_H
 #define _HASH_H
 
-#include "util.h"
+#include "lkm_util.h"
 
 typedef enum {
     HASH_ADD = 1,

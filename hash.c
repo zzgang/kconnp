@@ -1,4 +1,4 @@
-#include "util.h"
+#include "lkm_util.h"
 #include "hash.h"
 #include "cfg.h"
 

@@ -2,7 +2,7 @@
 #include <linux/in.h>
 #include <linux/uaccess.h>
 #include "connp.h"
-#include "util.h"
+#include "lkm_util.h"
 #include "hash.h"
 #include "cfg.h"
 
@@ -387,8 +387,8 @@ int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
     
     if (count > PAGE_SIZE) {
         printk(KERN_ERR 
-                "Error: The cfg iports file /proc/%s/%s exceeds the max size %lu bytes!\n",
-                CFG_BASE_DIR_NAME, ce->f_name, PAGE_SIZE);
+                "Error: The cfg iports file /etc/%s exceeds the max size %lu bytes!",
+                ce->f_name, PAGE_SIZE);
         return 0;
     }
 
@@ -449,8 +449,8 @@ int cfg_proc_file_init(struct cfg_entry *ce)
 
     if (!ce->cfg_proc_file) {
         printk(KERN_ERR
-                "Error: Could not initialize /proc/%s/%s\n",
-                CFG_BASE_DIR_NAME, ce->f_name);
+                "Error: Could not initialize /etc/%s",
+                ce->f_name);
         return 0;
     }
 
@@ -574,8 +574,8 @@ out_ret:
 
 out_err:
     printk(KERN_ERR 
-            "Error: Scan cfg items error on line %d in file /proc/%s/%s\n", 
-            *line, CFG_BASE_DIR_NAME, ce->f_name);
+            "Error: Scan cfg items error on line %d in file /etc/%s", 
+            *line, ce->f_name);
     return -1; //Scan error!
 }
 
@@ -652,8 +652,8 @@ static int item_line_parse(struct item_str_t *item_str, struct cfg_entry *ce)
 
 out_err:
     printk(KERN_ERR
-            "Error: Parse cfg items error on line %d in file /proc/%s/%s\n", 
-            item_str->line, CFG_BASE_DIR_NAME, ce->f_name);
+            "Error: Parse cfg items error on line %d in file /etc/%s", 
+            item_str->line, ce->f_name);
     return 0;
 }
 
@@ -710,9 +710,11 @@ int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
 
 int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str)
 {
-    if (str->len > 0)
+    if (str->len > 0) {
         node->v_lval = simple_strtol(str->data, NULL, 10); 
-    else 
+        if (node->v_lval < 0) 
+            return 0;
+    } else 
         return 0;
 
     return 1;
@@ -769,15 +771,15 @@ int cfg_items_entity_init(struct cfg_entry *ce)
                     (void **)&item_node)) {
             if (!item_node->cfg_item_set_node(item_node, &q->value)) {
                 printk(KERN_ERR 
-                        "Error: Invalid cfg item value on line %d in file /proc/%s/%s\n", 
-                        q->line, CFG_BASE_DIR_NAME, ce->f_name);
+                        "Error: Invalid cfg item value on line %d in file /etc/%s", 
+                        q->line, ce->f_name);
                 ret = 0;
                 goto out_hash;
             }
         } else {
             printk(KERN_ERR 
-                    "Error: Unrecognized cfg item on line %d in file /proc/%s/%s\n", 
-                    q->line, CFG_BASE_DIR_NAME, ce->f_name);
+                    "Error: Unrecognized cfg item on line %d in file /etc/%s", 
+                    q->line, ce->f_name);
             ret = 0;
             goto out_hash;
         }
@@ -1008,8 +1010,8 @@ static int iport_line_scan(struct cfg_entry *ce,
 
 out_err: 
     printk(KERN_ERR 
-            "Error: Scan iports cfg error on line %d in file /proc/%s/%s\n", 
-            *line, CFG_BASE_DIR_NAME, ce->f_name);
+            "Error: Scan iports cfg error on line %d in file /etc/%s", 
+            *line, ce->f_name);
     return -1; //Scan error!
 }
 
@@ -1296,8 +1298,8 @@ out_free:
 
         if (!res){
             printk(KERN_ERR
-                    "Error: Parse iports cfg error on line %d in file /proc/%s/%s\n", 
-                    p->line, CFG_BASE_DIR_NAME, ce->f_name);
+                    "Error: Parse iports cfg error on line %d in file /etc/%s", 
+                    p->line, ce->f_name);
             return -1;
         }else
             continue;
@@ -1370,8 +1372,8 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
         else {
             if (!ip_aton(p->ip_str, &iaddr)) {
                 printk(KERN_ERR 
-                        "Error: Convert iport str error on line %d in file /proc/%s/%s\n",
-                        p->line, CFG_BASE_DIR_NAME, ce->f_name);
+                        "Error: Convert iport str error on line %d in file /etc/%s",
+                        p->line, ce->f_name);
                 hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
                 ret = 0;
                 goto out_free;
@@ -1580,7 +1582,7 @@ int cfg_init()
     //Init cfg base dir.
     cfg_base_dir = proc_mkdir(CFG_BASE_DIR_NAME, NULL);
     if (!cfg_base_dir) {
-        printk(KERN_ERR "Error: Couldn't create dir /proc/%s\n", CFG_BASE_DIR_NAME);
+        printk(KERN_ERR "Error: Couldn't create dir /proc/%s", CFG_BASE_DIR_NAME);
         return 0;
     }
     

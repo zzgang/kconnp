@@ -8,7 +8,7 @@
 #include "sys_call.h"
 #include "connpd.h"
 #include "sockp.h"
-#include "util.h"
+#include "lkm_util.h"
 #include "cfg.h"
 #include "preconnect.h"
 
@@ -29,13 +29,13 @@
 #define PUT_SB(sb) ((sb)->sb_in_use = 0) 
 
 #define IN_HLIST(head, bucket) ({                       \
-        struct socket_bucket *__p;                      \
+        struct socket_bucket *__p = NULL;               \
         for (__p = (head); __p; __p = __p->sb_next) {   \
-        LOOP_COUNT_SAFE_CHECK(__p);                        \
-        if (__p == (bucket))                            \
-        break;                                          \
+            LOOP_COUNT_SAFE_CHECK(__p);                 \
+            if (__p == (bucket))                        \
+                break;                                  \
         }                                               \
-        LOOP_COUNT_RESET();                                 \
+        LOOP_COUNT_RESET();                             \
         __p;})
 
 #define INSERT_INTO_HLIST(head, bucket) \
@@ -56,16 +56,6 @@
         if ((head) == (bucket)) \
         (head) = (bucket)->sb_next;     \
     } while(0)
-
-#define IN_SHLIST(head, bucket) ({                      \
-        struct socket_bucket *__p;                      \
-        for (__p = (head); __p; __p = __p->sb_snext) {  \
-        LOOP_COUNT_SAFE_CHECK(__p);                        \
-        if (__p == (bucket))                            \
-        break;                                          \
-        }                                               \
-        LOOP_COUNT_RESET();                             \
-        __p;})
 
 #define INSERT_INTO_SHLIST(head, bucket) \
     do {                               \
@@ -105,6 +95,7 @@
         if (ht.sb_trav_tail)               \
         ht.sb_trav_tail->sb_trav_next = (bucket);  \
         ht.sb_trav_tail = (bucket); \
+        ht.elements_count++;        \
     } while(0)
 
 #define REMOVE_FROM_TLIST(bucket) \
@@ -117,6 +108,7 @@
         ht.sb_trav_head = (bucket)->sb_trav_next; \
         if ((bucket) == ht.sb_trav_tail)   \
         ht.sb_trav_tail = (bucket)->sb_trav_prev; \
+        ht.elements_count--;                        \
     } while(0)
 
 #define SOCKADDR_COPY(sockaddr_dest, sockaddr_src) memcpy((void *)sockaddr_dest, (void *)sockaddr_src, sizeof(struct sockaddr))
@@ -221,6 +213,8 @@ static struct {
     struct socket_bucket *sb_trav_head;
     struct socket_bucket *sb_trav_tail;
 
+    unsigned int elements_count;
+
     SOCKP_LOCK_T ht_lock;
 } ht;
 
@@ -297,6 +291,7 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *address)
         if (KEY_MATCH(address, &p->address)) {
 
             if (p->sock_in_use 
+                    || p->sock_close_now
                     || sock_is_not_available(p) 
                     || SOCK_IS_RECLAIM_PASSIVE(p))
                 continue;
@@ -306,7 +301,9 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *address)
                 continue;
             }
                 
-            p->uc++; //inc used count
+            if(++p->uc > MAX_REQUESTS)  //check used count
+                p->sock_close_now = 1;
+
             p->sock_in_use = 1; //set "in use" tag.
 
             //Remove reference to avoid to destroy the sk in sockp.
@@ -349,7 +346,7 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
             goto shutdown;
 
         if (p->sock_close_now) {
-           if (!p->uc) {
+           if (!p->uc) { //get keep alive timeout at begin time.
                u64 keep_alive;
                keep_alive = lkm_jiffies_elapsed_from(p->sock_create_jiffies);
                cfg_conn_set_keep_alive(&p->address, &keep_alive);
@@ -364,10 +361,10 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
         if (SOCK_IS_NOT_SPEC_BUT_PRECONNECT(p)
                 || SOCK_IS_RECLAIM_PASSIVE(p) 
                 || (SOCK_IS_RECLAIM(p)
-                    && (lkm_jiffies_elapsed_from(p->last_used_jiffies) > TIMEOUT * HZ))
-                || (SOCK_IS_PRECONNECT(p) 
+                    && (lkm_jiffies_elapsed_from(p->last_used_jiffies) > WAIT_TIMEOUT))
+                || (SOCK_IS_PRECONNECT(p) //Be a long connection activity
                     && p->sock_in_use 
-                    && (lkm_jiffies_elapsed_from(p->last_used_jiffies) > TIMEOUT * HZ)))
+                    && (lkm_jiffies_elapsed_from(p->last_used_jiffies) > WAIT_TIMEOUT)))
             goto shutdown;
 
         //Luckly, selected as idle conn.
@@ -384,24 +381,24 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
         continue;
 
 shutdown:
-        {
+        do {
             LOOP_COUNT_LOCAL_DEFINE(local_loop_count);
             LOOP_COUNT_SAVE(local_loop_count);
 
             LOOP_COUNT_RESET();
 
+            if (connpd_close_pending_fds_in(p->connpd_fd) < 0)
+                break;
+
             if (IN_HLIST(HASH(&p->address), p))
                 REMOVE_FROM_HLIST(HASH(&p->address), p);
-            if (IN_SHLIST(SHASH(p->sk), p))
-                REMOVE_FROM_SHLIST(SHASH(p->sk), p);
+            REMOVE_FROM_SHLIST(SHASH(p->sk), p);
             REMOVE_FROM_TLIST(p);
 
             PUT_SB(p);
 
-            connpd_close_pending_fds_in(p->connpd_fd);
-
             LOOP_COUNT_RESTORE(local_loop_count);
-        }
+        } while (0);
     }
 
     LOOP_COUNT_RESET();
@@ -452,6 +449,42 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
     return sb;
 }
 
+static inline int socket_buckets_pool_resize(void)
+{
+    static int nr_current_connections = 0;
+    long nr_max_connections = GN("max_connections");
+    int i;
+
+    if (nr_max_connections > NR_MAX_OPEN_FDS)
+        nr_max_connections = NR_MAX_OPEN_FDS;
+
+    if (!nr_current_connections && !nr_max_connections) 
+        return 0;
+
+    if (nr_current_connections != nr_max_connections) {
+
+        if (nr_current_connections) {
+            SB[nr_current_connections - 1].sb_free_next = SB + (nr_current_connections % NR_MAX_OPEN_FDS);
+        }
+
+        if (nr_max_connections) {
+            SB[0].sb_free_prev = SB + nr_max_connections - 1;
+            SB[nr_max_connections - 1].sb_free_next = SB;
+        }
+        
+        //Close the connections in previous effective pool.
+        for (i = nr_max_connections; i < nr_current_connections; i++) {
+            if (SB[i].sb_in_use) {
+                SB[i].sock_close_now = 1;    
+            }
+        }
+
+        nr_current_connections = nr_max_connections;   
+    }
+
+    return nr_max_connections;
+}
+
 /**
  *Get a empty slot from sockp;
  */
@@ -464,9 +497,12 @@ static struct socket_bucket *get_empty_slot(void)
     struct socket_bucket *p; 
 #if LRU
     struct socket_bucket *lru = NULL;
-    u64 uc = (~0ULL);
+    u64 uc = ~0ULL;
 #endif
 
+    if (!socket_buckets_pool_resize())
+        return NULL;
+    
     p = ht.sb_free_p;
 
     do {
@@ -509,6 +545,8 @@ static struct socket_bucket *get_empty_slot(void)
         REMOVE_FROM_SHLIST(SHASH(lru->sk), lru);
         REMOVE_FROM_TLIST(lru);
 
+        printk(KERN_ERR "LRU executed, consider raising the max_connections setting");
+
         return lru;
 
     } 
@@ -523,31 +561,31 @@ static struct socket_bucket *get_empty_slot(void)
 struct socket_bucket *insert_sock_to_sockp(struct sockaddr *address, 
         struct socket *s, int connpd_fd, sock_create_way_t create_way)
 {
-    struct socket_bucket *empty = NULL;
+    struct socket_bucket *sb = NULL;
 
     //printk(KERN_ERR "Insert\n");
     SOCKP_LOCK();
 
 #if LRU
-    if (!(empty = get_empty_slot(address))) 
+    if (!(sb = get_empty_slot(address))) 
         goto unlock_ret;
 #else
-    if (!(empty = get_empty_slot())) 
+    if (!(sb = get_empty_slot())) 
         goto unlock_ret;
 #endif
 
-    INIT_SB(empty, s, connpd_fd, create_way);
+    INIT_SB(sb, s, connpd_fd, create_way);
 
-    SOCKADDR_COPY(&empty->address, address);
+    SOCKADDR_COPY(&sb->address, address);
 
-    INSERT_INTO_HLIST(HASH(&empty->address), empty);
-    INSERT_INTO_SHLIST(SHASH(empty->sk), empty);
-    INSERT_INTO_TLIST(empty);
+    INSERT_INTO_HLIST(HASH(&sb->address), sb);
+    INSERT_INTO_SHLIST(SHASH(sb->sk), sb);
+    INSERT_INTO_TLIST(sb);
 
 unlock_ret:
     SOCKP_UNLOCK();
 
-    return empty;
+    return sb;
 }
 
 int sockp_init()

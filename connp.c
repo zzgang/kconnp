@@ -4,7 +4,7 @@
 #include <net/sock.h>
 #include <linux/spinlock.h>
 #include "sys_call.h"
-#include "util.h"
+#include "lkm_util.h"
 #include "cfg.h"
 #include "sockp.h"
 #include "connp.h"
