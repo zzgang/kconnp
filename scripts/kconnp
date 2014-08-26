@@ -14,14 +14,14 @@ exit;
 
 kv=`uname -r`;
 kmconnp="/lib/modules/$kv/kernel/net/kconnp/kconnp.ko"
-net_iports_cfgs="iports.allow iports.deny"
+kconnp_cfgs="kconnp.conf iports.allow iports.deny"
 
 stats(){
     cat /proc/kconnp/stats.info
 }
 
 ldcfg(){
-    for f in $net_iports_cfgs 
+    for f in $kconnp_cfgs
     do 
         cat /etc/$f > /proc/kconnp/$f
     done;

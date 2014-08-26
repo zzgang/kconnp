@@ -55,7 +55,7 @@ do
             help;
             ;;
         *)
-            echo "Unrecognized param: ${1%=*}\n";
+            echo "Unrecognized param: ${1%=*}";
             help;
             ;;
     esac
@@ -64,7 +64,7 @@ done
 
 if test ! -d $kmbd || test ! -e $sysmap_file 
 then
-    echo "Can't build the ENV for building the LKM\n";
+    echo "Can't build the ENV for building the LKM";
     help;
 fi
 #######################
@@ -100,7 +100,7 @@ fi
 
 cat > Makefile <<MF
 obj-m += kconnp.o
-kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o preconnect.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o hash.o cfg.o util.o
+kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o preconnect.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o hash.o cfg.o lkm_util.o
 
 $CCFLAGS_APPEND
 

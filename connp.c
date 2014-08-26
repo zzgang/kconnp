@@ -272,20 +272,20 @@ int connp_init()
     connp_rwlock_init();
 
     if (!cfg_init()) {
-        printk(KERN_ERR "Error: cfg_init error!\n");
+        printk(KERN_ERR "Error: cfg_init error!");
         return 0;
     }
 
     if (!sockp_init()) {
         cfg_destroy();
-        printk(KERN_ERR "Error: sockp_init error!\n");
+        printk(KERN_ERR "Error: sockp_init error!");
         return 0;
     }
 
     if (!connpd_init()) {
         sockp_destroy();
         cfg_destroy();
-        printk(KERN_ERR "Error: create connp daemon thread error!\n");
+        printk(KERN_ERR "Error: create connp daemon thread error!");
         return 0;
     }
 
@@ -293,7 +293,7 @@ int connp_init()
         connpd_destroy();
         sockp_destroy();
         cfg_destroy();
-        printk(KERN_ERR "Error: replace_syscalls error!\n");
+        printk(KERN_ERR "Error: replace_syscalls error!");
         return 0;
     }
 

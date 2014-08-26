@@ -216,7 +216,7 @@ static int connpd_start(void)
     if (!IS_ERR(ptr)) 
         CONNP_DAEMON_SET(ptr);
     else 
-        printk(KERN_ERR "Create connpd error!\n");
+        printk(KERN_ERR "Create connpd error!");
 
     return IS_ERR(ptr) ? 0 : 1; 
 }

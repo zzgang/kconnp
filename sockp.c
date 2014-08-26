@@ -177,7 +177,7 @@ break_unlock:                                                           \
 static unsigned int loop_count = 0;
 #define LOOP_COUNT_SAFE_CHECK(ptr) do { \
     if (++loop_count > NR_SOCKET_BUCKET) { \
-    printk(KERN_ERR "Loop count overflow, function: %s, line: %d\n", __FUNCTION__, __LINE__);    \
+    printk(KERN_ERR "Loop count overflow, function: %s, line: %d", __FUNCTION__, __LINE__);    \
     } \
 } while(0)
 
@@ -297,7 +297,7 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *address)
                 continue;
 
             if (p->sk != p->sock->sk) {
-                printk(KERN_ERR "SK of sock changed!\n");
+                printk(KERN_ERR "SK of sock changed!");
                 continue;
             }
                 
@@ -423,7 +423,7 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
         if (SKEY_MATCH(sk, p->sk)) {
 
             if (!p->sock_in_use) {//can't release it repeatedly!
-                printk(KERN_ERR "Free socket error!\n");
+                printk(KERN_ERR "Free socket error!");
                 break;
             }
 

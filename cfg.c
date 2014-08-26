@@ -698,7 +698,7 @@ int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
     if (str->len > 0) {
         node->v_str = lkmalloc(str->len + 1);
         if (!node->v_str) {
-            printk(KERN_ERR "No more memory!\n");
+            printk(KERN_ERR "No more memory!");
             return 0;
         }
         memcpy(node->v_str, str->data, str->len);

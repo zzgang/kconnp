@@ -20,9 +20,9 @@
 
 #define WAIT_TIMEOUT (GN("connection_wait_timeout") * HZ)//seconds
 
-#define MAX_REQUESTS ({             \
+#define MAX_REQUESTS ({                                         \
         u64 requests = GN("max_requests_per_connection");       \
-        requests ? ~0ULL : requests;                            \
+        requests ? requests : ~0ULL;                            \
         })
 
 #define LRU 1 //LRU replace algorithm
