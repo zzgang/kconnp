@@ -4,7 +4,7 @@ KV=`uname -r`
 LKM_INS_DIR="/lib/modules/$KV/kernel/net/kconnp"
 BIN_INS_DIR="/bin"
 CFG_INS_DIR="/etc"
-CFG_FILES="iports.allow iports.deny"
+CFG_FILES="kconnp.conf iports.allow iports.deny"
 PWD=`pwd`
 mkdir -p $LKM_INS_DIR
 cp -f $PWD/kconnp.ko $LKM_INS_DIR
