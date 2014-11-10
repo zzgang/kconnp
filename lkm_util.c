@@ -24,8 +24,8 @@ struct poll_wqueues_alias {
 };
 
 struct poll_table_page {
-    struct poll_table_page * next;
-    struct poll_table_entry_alias * entry;
+    struct poll_table_page *next;
+    struct poll_table_entry_alias *entry;
     struct poll_table_entry_alias entries[0];
 };
 
@@ -116,7 +116,7 @@ static inline void free_poll_entry(struct poll_table_entry_alias *entry)
 
 static void lkm_poll_freewait(struct poll_wqueues_alias *pwq)
 {
-    struct poll_table_page * p = pwq->table;
+    struct poll_table_page *p = pwq->table;
     int i;
 
     for (i = 0; i < pwq->inline_index; i++)
@@ -184,8 +184,8 @@ static int pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 }
 
 /* Add a new entry */
-static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
-        poll_table *p)
+static void __pollwait(struct file *filp, 
+        wait_queue_head_t *wait_address, poll_table *p)
 {
     struct poll_wqueues_alias *pwq = container_of(p, struct poll_wqueues_alias, pt);
     struct poll_table_entry_alias *entry = poll_get_entry(pwq);
