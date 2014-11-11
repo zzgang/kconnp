@@ -32,7 +32,7 @@ struct stack_t *connpd_close_pending_fds,
                *connpd_unused_fds;
 
 #define connpd_close_pending_fds_init(num) \
-    stack_init(&connpd_close_pending_fds, num, sizeof(int))
+    stack_init(&connpd_close_pending_fds, num, sizeof(int), WITHOUT_MUTEX)
 
 #define connpd_close_pending_fds_destroy() \
     do {     \
@@ -41,7 +41,7 @@ struct stack_t *connpd_close_pending_fds,
     } while(0)
 
 #define connpd_unused_fds_init(num) \
-    stack_init(&connpd_unused_fds, num, sizeof(int))
+    stack_init(&connpd_unused_fds, num, sizeof(int), WITH_MUTEX)
 
 #define connpd_unused_fds_destroy() \
     do {    \

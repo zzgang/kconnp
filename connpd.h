@@ -28,7 +28,7 @@ extern struct stack_t *connpd_close_pending_fds,
     ({int *ele = (int *)(list)->out(list); \
      ele ? *ele : -1;})
 
-#define connpd_get_unused_fd()  connpd_unused_fds_out()
+#define connpd_get_unused_fd() connpd_unused_fds_out()
 
 #define connpd_unused_fds_in(fd) fd_list_in(connpd_unused_fds, fd)
 #define connpd_unused_fds_out() fd_list_out(connpd_unused_fds) 

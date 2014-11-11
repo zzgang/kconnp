@@ -164,7 +164,7 @@ break_unlock:                                                           \
 #define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowd(&(sb)->address) && SOCK_IS_PRECONNECT(sb))
 
 #define sockp_sbs_check_list_init(num) \
-    stack_init(&sockp_sbs_check_list, num, sizeof(struct socket_bucket *))
+    stack_init(&sockp_sbs_check_list, num, sizeof(struct socket_bucket *), WITH_MUTEX)
 
 #define sockp_sbs_check_list_destroy() \
     do {  \
@@ -292,6 +292,7 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *address)
 
             if (p->sock_in_use 
                     || p->sock_close_now
+                    || !p->sock->sk
                     || sock_is_not_available(p) 
                     || SOCK_IS_RECLAIM_PASSIVE(p))
                 continue;
@@ -306,16 +307,17 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *address)
 
             p->sock_in_use = 1; //set "in use" tag.
 
-            //Remove reference to avoid to destroy the sk in sockp.
-            spin_lock(&p->s_lock);
-            p->sock->sk = NULL;
-            spin_unlock(&p->s_lock);
- 
             REMOVE_FROM_HLIST(HASH(address), p);
 
             LOOP_COUNT_RESET();
            
             SOCKP_UNLOCK();
+            
+            //Remove reference to avoid to destroy the sk in sockp.
+            spin_lock(&p->s_lock);
+            p->sock->sk = NULL;
+            spin_unlock(&p->s_lock);
+            
             return p;
         }
     }
@@ -387,8 +389,10 @@ shutdown:
 
             LOOP_COUNT_RESET();
 
-            if (connpd_close_pending_fds_in(p->connpd_fd) < 0)
+            if (connpd_close_pending_fds_in(p->connpd_fd) < 0) {
+                printk(KERN_ERR "Close pending fds buffer overflow!");
                 break;
+            }
 
             if (IN_HLIST(HASH(&p->address), p))
                 REMOVE_FROM_HLIST(HASH(&p->address), p);
@@ -432,9 +436,6 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
 
             INSERT_INTO_HLIST(HASH(&p->address), p);
 
-            //Grafted to sock of sockp
-            sock_graft(sk, p->sock);
-
             sb = p;
             
             break;
@@ -445,6 +446,10 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
     LOOP_COUNT_RESET();
 
     SOCKP_UNLOCK();
+
+    //Grafted to sock of sockp
+    if (sb)
+        sock_graft(sk, sb->sock);
 
     return sb;
 }
@@ -535,8 +540,10 @@ static struct socket_bucket *get_empty_slot(void)
 #if LRU
     if (lru) {
 
-        if (connpd_close_pending_fds_in(lru->connpd_fd) < 0)
+        if (connpd_close_pending_fds_in(lru->connpd_fd) < 0) {
+            printk(KERN_ERR "Close pending fds buffer overflow!");
             return NULL;
+        }
 
         ht.sb_free_p = lru->sb_free_next;
 
@@ -545,7 +552,7 @@ static struct socket_bucket *get_empty_slot(void)
         REMOVE_FROM_SHLIST(SHASH(lru->sk), lru);
         REMOVE_FROM_TLIST(lru);
 
-        printk(KERN_ERR "LRU executed, consider raising the max_connections setting");
+        printk(KERN_WARNING "LRU executed, consider raising the max_connections setting");
 
         return lru;
 

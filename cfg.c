@@ -342,7 +342,7 @@ static struct item_node_t cfg_global_items[] = {
 int cfg_proc_read(char *buffer, char **buffer_location,
         off_t offset, int buffer_length, int *eof, void *data)
 {
-    int read_count;
+    int read_count = 0;
     struct cfg_entry *ce;
 
     ce = cfg_get_ce(data);
@@ -354,15 +354,15 @@ int cfg_proc_read(char *buffer, char **buffer_location,
     if (offset >= ce->raw_len) { //has read all data.
         *eof = 1;
         
-        read_unlock(&ce->cfg_rwlock);
-        return 0;
-    }
+        goto out_ret;
+   }
 
     read_count = buffer_length > (ce->raw_len - offset) 
         ? (ce->raw_len - offset) : buffer_length;
 
     memcpy(buffer, ce->raw_ptr + offset, read_count);
 
+out_ret:
     read_unlock(&ce->cfg_rwlock);
     return read_count; 
 }
