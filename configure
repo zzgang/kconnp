@@ -15,6 +15,7 @@ exit;
 }
 
 clean(){
+    test -f Makefile && make clean;
     rm -f Makefile;
     rm -f sys_call_table_ea.h;
     rm -f local_func_ea.h;
