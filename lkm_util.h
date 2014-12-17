@@ -347,7 +347,7 @@ static inline void set_page_ro(unsigned long addr)
 
 #else
 
-static inline void disable_page_protection(void) 
+static inline void page_protection_disable(void) 
 {
     unsigned long value;
 
@@ -359,7 +359,7 @@ static inline void disable_page_protection(void)
     }
 }
 
-static inline void enable_page_protection(void) 
+static inline void page_protection_enable(void) 
 {
     unsigned long value;
 
