@@ -2,9 +2,14 @@
 
 help(){
     cat <<EOF
+
 LKM build params:
-    --with-kernel-build-dir=DIR (Kernel module build dir)
-    --clean (Clean the Makefile)
+
+    --with-kernel-build-dir=DIR
+        Set kernel module build dir
+    --clean
+        Clean the Makefile
+
 EOF
 exit;
 }
