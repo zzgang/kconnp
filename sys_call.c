@@ -118,10 +118,12 @@ int connp_set_syscall(int flag)
             !build_syscall_func_table((unsigned long *)sys_call_table)) //init
         return 0;
 
+    preempt_disable();
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
     set_page_rw((unsigned long)sys_call_table);
 #else
-    disable_page_protection();
+    page_protection_disable();
 #endif
 
     for (p = syscall_func; p->name; p++) {
@@ -136,8 +138,10 @@ int connp_set_syscall(int flag)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
     set_page_ro((unsigned long)sys_call_table);
 #else
-    enable_page_protection();
+    page_protection_enable();
 #endif
+
+    preempt_enable();
 
     return 1;
 }
