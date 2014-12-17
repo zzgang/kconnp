@@ -3,8 +3,7 @@
 help(){
     cat <<EOF
 LKM build params:
-    --with-kernel-build-dir=DIR (Kernel build dir)
-    --with-sysmap-file=SYM_FILE (Kernel system map file)
+    --with-kernel-build-dir=DIR (Kernel module build dir)
     --clean (Clean the Makefile)
 EOF
 exit;
@@ -43,9 +42,6 @@ do
     case "${1%=*}" in
         --with-kernel-build-dir)
             kmbd="${1#*=}";
-            ;;
-        --with-sysmap-file)
-            sysmap_file="${1#*=}";
             ;;
         --clean)
             clean;
