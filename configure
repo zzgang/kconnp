@@ -15,7 +15,8 @@ exit;
 }
 
 clean(){
-    test -f Makefile && make clean;
+    echo 'Cleaning...'
+    test -f Makefile && make clean 1>/dev/null;
     rm -f Makefile;
     rm -f sys_call_table_ea.h;
     rm -f local_func_ea.h;
@@ -111,3 +112,5 @@ clean:
 install:
 	./scripts/install
 MF
+
+echo 'Done';
