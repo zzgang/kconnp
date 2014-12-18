@@ -83,24 +83,33 @@ static struct syscall_func_struct syscall_func[] = { //initial.
     {NULL, 0, 0, -1, NULL, NULL} //end tag.
 };
 
-static int build_syscall_func_table(unsigned long * sys_call_table)
+static int build_syscall_func_table(unsigned long *sys_call_table)
 {
-    struct syscall_func_struct * p;
-    int i;
+    struct syscall_func_struct *p;
+    int i, nr_max = 0;
 
     for (p = syscall_func; p->name; p++) {
-        if (p->real_addr && (p->real_addr != p->sym_addr)) //check symbol map addr.
-            return 0;
-        for (i = 0; i < MAX_SYS_CALL_NUM; i++) 
+        if (p->real_addr && (p->real_addr != p->sym_addr)) {//check symbol map addr.
+            printk(KERN_ERR "Current kernel is ambiguous!"); 
+            return -1;
+        }
+        for (i = 0;  i < MAX_SYS_CALL_NUM; i++) 
             if (sys_call_table[i] == p->sym_addr) {//match the symbol map addr.
                 p->nr = i;
                 *p->orig_sys_func = (void *)sys_call_table[i]; //reassign.
                 break;
             }
-        if (i >= MAX_SYS_CALL_NUM)
-            return 0;
+        
+        if (i >= MAX_SYS_CALL_NUM) {
+            printk(KERN_ERR "Can't find the sys call \"%s\", consider enlarging the macro MAX_SYS_CALL_NUM", p->name); 
+            return -1;
+        }
+
+        if (nr_max < p->nr) 
+           nr_max = p->nr; 
     }
-    return 1;
+
+    return nr_max;
 }
 
 /**
@@ -111,20 +120,20 @@ int connp_set_syscall(int flag)
 {
     struct syscall_func_struct *p;
     unsigned long * sys_call_table;
+    static int sys_call_span_pages;
+    int nr_max;
 
     *(unsigned long *)&sys_call_table = get_syscall_table_ea();
 
-    if (flag & SYSCALL_REPLACE && 
-            !build_syscall_func_table((unsigned long *)sys_call_table)) //init
-        return 0;
+    if (flag & SYSCALL_REPLACE) { //init.
+        nr_max = build_syscall_func_table((unsigned long *)sys_call_table);
+        if (nr_max < 0) 
+            return 0;
+        sys_call_span_pages = ((unsigned)(nr_max * sizeof(long)) >> PAGE_SHIFT) + 1;
+        printk(KERN_ERR "sys_call_span_pages: %d", sys_call_span_pages);
+    }
 
-    preempt_disable();
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
-    set_page_rw((unsigned long)sys_call_table);
-#else
-    page_protection_disable();
-#endif
+    page_protection_disable((unsigned long)sys_call_table, sys_call_span_pages);
 
     for (p = syscall_func; p->name; p++) {
         if (flag & SYSCALL_REPLACE) { //Replace
@@ -135,13 +144,7 @@ int connp_set_syscall(int flag)
         }
     }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
-    set_page_ro((unsigned long)sys_call_table);
-#else
-    page_protection_enable();
-#endif
-
-    preempt_enable();
+    page_protection_enable((unsigned long)sys_call_table, sys_call_span_pages);
 
     return 1;
 }

@@ -319,3 +319,58 @@ int lkm_create_tcp_connect(struct sockaddr_in *address)
 
     return fd;
 }
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
+
+enum {
+    PG_LEVEL_NONE,
+    PG_LEVEL_4K,
+    PG_LEVEL_2M,
+    PG_LEVEL_1G,
+};
+
+#define pud_large(a) pmd_large(__pmd(pud_val(a)))
+
+pte_t *lookup_address(unsigned long address, unsigned int *level);
+
+/*
+ * Lookup the page table entry for a virtual address. Return a pointer
+ * to the entry and the level of the mapping.
+ *
+ * Note: We return pud and pmd either when the entry is marked large
+ * or when the present bit is not set. Otherwise we would return a
+ * pointer to a nonexisting mapping.
+ */
+pte_t *lookup_address(unsigned long address, unsigned int *level)
+{
+    pgd_t *pgd = pgd_offset_k(address);
+    pud_t *pud;
+    pmd_t *pmd;
+
+    *level = PG_LEVEL_NONE;
+
+    if (pgd_none(*pgd))
+        return NULL;
+
+    pud = pud_offset(pgd, address);
+    if (pud_none(*pud))
+        return NULL;
+
+    *level = PG_LEVEL_1G;
+    if (pud_large(*pud) || !pud_present(*pud))
+        return (pte_t *)pud;
+
+    pmd = pmd_offset(pud, address);
+    if (pmd_none(*pmd))
+        return NULL;
+
+    *level = PG_LEVEL_2M;
+    if (pmd_large(*pmd) || !pmd_present(*pmd))
+        return (pte_t *)pmd;
+
+    *level = PG_LEVEL_4K;
+
+    return pte_offset_kernel(pmd, address);
+}
+
+#endif

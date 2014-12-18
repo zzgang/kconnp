@@ -325,7 +325,11 @@ static inline time_t get_fmtime(char *fname)
     return statbuf.mtime.tv_sec; 
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
+
+extern pte_t *lookup_address(unsigned long address, unsigned int *level);
+
+#endif
 
 static inline void set_page_rw(unsigned long addr) 
 {
@@ -345,9 +349,23 @@ static inline void set_page_ro(unsigned long addr)
     pte->pte &= ~_PAGE_RW;
 }
 
-#else
+static inline void page_protection_disable(unsigned long addr, int pages)
+{
+    while (pages-- > 0) {
+        set_page_rw(addr);
+        addr += PAGE_SIZE;
+    }
+}
 
-static inline void page_protection_disable(void) 
+static inline void page_protection_enable(unsigned long addr, int pages)
+{
+    while (pages-- > 0) {
+        set_page_ro(addr);
+        addr += PAGE_SIZE;
+    }
+}
+
+static inline void page_protection_global_disable(void) 
 {
     unsigned long value;
 
@@ -359,7 +377,7 @@ static inline void page_protection_disable(void)
     }
 }
 
-static inline void page_protection_enable(void) 
+static inline void page_protection_global_enable(void) 
 {
     unsigned long value;
 
@@ -370,7 +388,5 @@ static inline void page_protection_enable(void)
         asm volatile("mov %0,%%cr0": : "r" (value));
     }
 }
-
-#endif //end KERNEL_VERSION
 
 #endif
