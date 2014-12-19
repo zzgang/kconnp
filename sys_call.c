@@ -130,7 +130,6 @@ int connp_set_syscall(int flag)
         if (nr_max < 0) 
             return 0;
         sys_call_span_pages = ((unsigned)(nr_max * sizeof(long)) >> PAGE_SHIFT) + 1;
-        printk(KERN_ERR "sys_call_span_pages: %d", sys_call_span_pages);
     }
 
     page_protection_disable((unsigned long)sys_call_table, sys_call_span_pages);
