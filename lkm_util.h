@@ -337,7 +337,9 @@ static inline void flush_tlb_local(void)
 
 }
 
-static inline pte_t *lkm_lookup_address(unsigned long address)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 28)
+
+static inline pte_t *my_lookup_address(unsigned long address, unsigned int *level)
 {
     pgd_t *pgd = pgd_offset_k(address);
     pud_t *pud;
@@ -355,24 +357,44 @@ static inline pte_t *lkm_lookup_address(unsigned long address)
     return pte_offset_kernel(pmd, address);
 }
 
+#define lkm_lookup_address my_lookup_address
+
+#else
+
+#define lkm_lookup_address lookup_address
+
+#endif
+
+#define lkm_ptep_val(ptep) (*((unsigned long *)(ptep))) 
 
 static inline void set_page_rw(unsigned long addr) 
 {
-    pte_t *pte = lkm_lookup_address(addr);
+    unsigned int level;
 
-    if (pte_val(*pte) & ~_PAGE_RW) 
-        pte_val(*pte) |= _PAGE_RW;
+    pte_t *ptep = lkm_lookup_address(addr, &level);
+
+    printk(KERN_ERR "se: %lu", lkm_ptep_val(ptep));
+    if (lkm_ptep_val(ptep) & ~_PAGE_RW) 
+        lkm_ptep_val(ptep) |= _PAGE_RW;
+    printk(KERN_ERR "se: %lu", lkm_ptep_val(ptep));
 }
 
 static inline void set_page_ro(unsigned long addr) 
 {
-    pte_t *pte = lkm_lookup_address(addr);
-    if (pte_val(*pte) & _PAGE_RW)
-        pte_val(*pte) &= ~_PAGE_RW;
+    unsigned int level;
+
+    pte_t *ptep = lkm_lookup_address(addr, &level);
+
+    printk(KERN_ERR "es: %lu", lkm_ptep_val(ptep));
+    if (lkm_ptep_val(ptep) & _PAGE_RW)
+        lkm_ptep_val(ptep) &= ~_PAGE_RW;
+    printk(KERN_ERR "es: %lu", lkm_ptep_val(ptep));
+
 }
 
 static inline void page_protection_disable(unsigned long addr, int pages)
 {
+    printk(KERN_ERR "pages: %d", pages);
     while (pages-- > 0) {
         set_page_rw(addr);
         addr += PAGE_SIZE;

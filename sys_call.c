@@ -133,7 +133,7 @@ int connp_set_syscall(int flag)
     }
 
     page_protection_disable((unsigned long)sys_call_table, sys_call_span_pages);
-
+/*
     for (p = syscall_func; p->name; p++) {
         if (flag & SYSCALL_REPLACE) { //Replace
             xchg(&sys_call_table[p->nr], (unsigned long)*p->new_sys_func);
@@ -142,6 +142,7 @@ int connp_set_syscall(int flag)
             xchg(&sys_call_table[p->nr], (unsigned long)*p->orig_sys_func);
         }
     }
+*/
 
     page_protection_enable((unsigned long)sys_call_table, sys_call_span_pages);
 
