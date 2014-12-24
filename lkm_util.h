@@ -337,47 +337,38 @@ static inline void flush_tlb_local(void)
 
 }
 
-
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 24)
-
-static inline void page_protection_disable(unsigned long addr, int pages)
+static inline pte_t *lkm_lookup_address(unsigned long address)
 {
-    struct page *pg;
-    pgprot_t prot;
-    pg = virt_to_page(addr);
-    prot.pgprot = VM_READ | VM_WRITE;
-    change_page_attr(pg, pages, prot);
-    flush_tlb_local();
+    pgd_t *pgd = pgd_offset_k(address);
+    pud_t *pud;
+    pmd_t *pmd;
+    if (pgd_none(*pgd))
+        return NULL;
+    pud = pud_offset(pgd, address);
+    if (pud_none(*pud))
+        return NULL;
+    pmd = pmd_offset(pud, address);
+    if (pmd_none(*pmd))
+        return NULL;
+    if (pmd_large(*pmd))
+        return (pte_t *)pmd;
+    return pte_offset_kernel(pmd, address);
 }
 
-static inline void page_protection_enable(unsigned long addr, int pages)
-{
-    struct page *pg;
-    pgprot_t prot;
-    pg = virt_to_page(addr);
-    prot.pgprot = VM_READ;
-    change_page_attr(pg, pages, prot);
-    flush_tlb_local();
-}
-
-#else
 
 static inline void set_page_rw(unsigned long addr) 
 {
-    unsigned int level;
+    pte_t *pte = lkm_lookup_address(addr);
 
-    pte_t *pte = lookup_address(addr, &level);
-
-    if (pte->pte & ~_PAGE_RW) 
-        pte->pte |= _PAGE_RW;
+    if (pte_val(*pte) & ~_PAGE_RW) 
+        pte_val(*pte) |= _PAGE_RW;
 }
 
 static inline void set_page_ro(unsigned long addr) 
 {
-    unsigned int level;
-
-    pte_t *pte = lookup_address(addr, &level);
-    pte->pte &= ~_PAGE_RW;
+    pte_t *pte = lkm_lookup_address(addr);
+    if (pte_val(*pte) & _PAGE_RW)
+        pte_val(*pte) &= ~_PAGE_RW;
 }
 
 static inline void page_protection_disable(unsigned long addr, int pages)
@@ -386,6 +377,7 @@ static inline void page_protection_disable(unsigned long addr, int pages)
         set_page_rw(addr);
         addr += PAGE_SIZE;
     }
+
     flush_tlb_local();
 }
 
@@ -395,10 +387,9 @@ static inline void page_protection_enable(unsigned long addr, int pages)
         set_page_ro(addr);
         addr += PAGE_SIZE;
     }
+
     flush_tlb_local();
 }
-
-#endif
 
 //Usually stand for host based OS.
 
