@@ -325,11 +325,42 @@ static inline time_t get_fmtime(char *fname)
     return statbuf.mtime.tv_sec; 
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
+static inline void flush_tlb_local(void)
+{
+    unsigned int tmpreg;                    
 
-extern pte_t *lookup_address(unsigned long address, unsigned int *level);
+    asm volatile(                   
+            "movl %%cr3, %0;              \n"       
+            "movl %0, %%cr3;  # flush TLB \n"       
+            : "=r" (tmpreg)                 
+            :: "memory");                   
 
-#endif
+}
+
+
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 24)
+
+static inline void page_protection_disable(unsigned long addr, int pages)
+{
+    struct page *pg;
+    pgprot_t prot;
+    pg = virt_to_page(addr);
+    prot.pgprot = VM_READ | VM_WRITE;
+    change_page_attr(pg, pages, prot);
+    flush_tlb_local();
+}
+
+static inline void page_protection_enable(unsigned long addr, int pages)
+{
+    struct page *pg;
+    pgprot_t prot;
+    pg = virt_to_page(addr);
+    prot.pgprot = VM_READ;
+    change_page_attr(pg, pages, prot);
+    flush_tlb_local();
+}
+
+#else
 
 static inline void set_page_rw(unsigned long addr) 
 {
@@ -355,6 +386,7 @@ static inline void page_protection_disable(unsigned long addr, int pages)
         set_page_rw(addr);
         addr += PAGE_SIZE;
     }
+    flush_tlb_local();
 }
 
 static inline void page_protection_enable(unsigned long addr, int pages)
@@ -363,7 +395,12 @@ static inline void page_protection_enable(unsigned long addr, int pages)
         set_page_ro(addr);
         addr += PAGE_SIZE;
     }
+    flush_tlb_local();
 }
+
+#endif
+
+//Usually stand for host based OS.
 
 static inline void page_protection_global_disable(void) 
 {
@@ -373,7 +410,7 @@ static inline void page_protection_global_disable(void)
 
     if (value & 0x10000UL) {
         value &= ~0x10000UL;
-        asm volatile("mov %0,%%cr0": : "r" (value));
+        asm volatile("mov %0, %%cr0": : "r" (value));
     }
 }
 
@@ -385,7 +422,7 @@ static inline void page_protection_global_enable(void)
 
     if (!(value & 0x10000UL)) {
         value |= 0x10000UL;
-        asm volatile("mov %0,%%cr0": : "r" (value));
+        asm volatile("mov %0, %%cr0": : "r" (value));
     }
 }
 
