@@ -328,7 +328,7 @@ static inline time_t get_fmtime(char *fname)
 static inline void flush_tlb_local(void)
 {
     unsigned int tmpreg;                    
-
+    
     asm volatile(                   
             "movl %%cr3, %0;              \n"       
             "movl %0, %%cr3;  # flush TLB \n"       
@@ -373,10 +373,8 @@ static inline void set_page_rw(unsigned long addr)
 
     pte_t *ptep = lkm_lookup_address(addr, &level);
 
-    printk(KERN_ERR "se: %lu", lkm_ptep_val(ptep));
     if (lkm_ptep_val(ptep) & ~_PAGE_RW) 
         lkm_ptep_val(ptep) |= _PAGE_RW;
-    printk(KERN_ERR "se: %lu", lkm_ptep_val(ptep));
 }
 
 static inline void set_page_ro(unsigned long addr) 
@@ -385,16 +383,12 @@ static inline void set_page_ro(unsigned long addr)
 
     pte_t *ptep = lkm_lookup_address(addr, &level);
 
-    printk(KERN_ERR "es: %lu", lkm_ptep_val(ptep));
     if (lkm_ptep_val(ptep) & _PAGE_RW)
         lkm_ptep_val(ptep) &= ~_PAGE_RW;
-    printk(KERN_ERR "es: %lu", lkm_ptep_val(ptep));
-
 }
 
 static inline void page_protection_disable(unsigned long addr, int pages)
 {
-    printk(KERN_ERR "pages: %d", pages);
     while (pages-- > 0) {
         set_page_rw(addr);
         addr += PAGE_SIZE;

@@ -39,11 +39,9 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
                 return -EFAULT;
             err = connp_sys_shutdown(a[0], a[1]); 
             break;
-
         default:
             //Clean the stack in this function and jmp orig_sys_socketcall directly.
-            asm volatile(".align 4\n\t"
-                    "leave\n\t"
+            asm volatile("leave\n\t"
                     "jmp *%1\n\t" //change eip to orig_sys_socketcall directly.
                     :"=a"(err) //dummy for no compile warning.
                     :"m"(orig_sys_socketcall));
@@ -59,7 +57,7 @@ asmlinkage long connp_sys_connect(int fd, struct sockaddr __user * uservaddr,
 {
     struct sockaddr_storage address;
     int err;
-
+    
     err = connp_move_addr_to_kernel(uservaddr, addrlen, (struct sockaddr *)&address);
     if (err < 0)
         return -EFAULT;

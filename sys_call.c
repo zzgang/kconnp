@@ -132,19 +132,24 @@ int connp_set_syscall(int flag)
         sys_call_span_pages = ((unsigned)(nr_max * sizeof(long)) >> PAGE_SHIFT) + 1;
     }
 
+    preempt_disable();
+
     page_protection_disable((unsigned long)sys_call_table, sys_call_span_pages);
-/*
+
+    mb();
+
     for (p = syscall_func; p->name; p++) {
         if (flag & SYSCALL_REPLACE) { //Replace
             xchg(&sys_call_table[p->nr], (unsigned long)*p->new_sys_func);
-            printk(KERN_INFO "nr_%s:%d", p->name, p->nr);
+            printk(KERN_INFO "nr_%s:%d:%p", p->name, p->nr, *p->new_sys_func);
         } else if (flag & SYSCALL_RESTORE) { //Restore
             xchg(&sys_call_table[p->nr], (unsigned long)*p->orig_sys_func);
         }
     }
-*/
 
-    page_protection_enable((unsigned long)sys_call_table, sys_call_span_pages);
+    //page_protection_enable((unsigned long)sys_call_table, sys_call_span_pages);
+    
+    preempt_enable();
 
     return 1;
 }

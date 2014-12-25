@@ -300,7 +300,6 @@ int connp_init()
     return 1;
 }
 
-
 void connp_destroy()
 {
     restore_syscalls();

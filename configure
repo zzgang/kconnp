@@ -67,7 +67,11 @@ if test ! -d $kmbd || test ! -e $sysmap_file
 then
     echo "Can't build the ENV for building the LKM";
     help;
+else
+    echo "Check kernel devel dir for building LKM... yes";
+    echo "Check kernel sysmap file for building LKM... yes";
 fi
+
 #######################
 #Generate sys calls ea.
 #######################
@@ -90,20 +94,24 @@ sed -e "s/%%SYS_EXIT_GROUP_EA%%/0x${sys_exit_group_ea}/" |
 sed -e "s/%%SYS_EXIT_EA%%/0x${sys_exit_ea}/"  > sys_call_table_ea.h;
 
 
-CCFLAGS_APPEND="ccflags-y +="
+NO_OMIT_FRAME_POINTER=""
 
 machine_bits=`getconf LONG_BIT`
 
-if [ $machine_bits -eq 32 ] #32 bits machine#
+echo "Check machine bits... $machine_bits";
+
+if [ $machine_bits -eq 32 ] #32 bits machine
 then
-    CCFLAGS_APPEND="${CCFLAGS_APPEND} -fno-omit-frame-pointer"
+    NO_OMIT_FRAME_POINTER="export CONFIG_FRAME_POINTER=ON"
 fi
 
+$NO_OMIT_FRAME_POINTER
+
 cat > Makefile <<MF
-obj-m += kconnp.o
+obj-m = kconnp.o
 kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o preconnect.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o hash.o cfg.o lkm_util.o
 
-$CCFLAGS_APPEND
+$NO_OMIT_FRAME_POINTER
 
 all:
 	make -C $kmbd SUBDIRS=\$(PWD) modules
@@ -113,4 +121,4 @@ install:
 	./scripts/install
 MF
 
-echo 'Done';
+echo 'Successful.';
