@@ -325,18 +325,6 @@ static inline time_t get_fmtime(char *fname)
     return statbuf.mtime.tv_sec; 
 }
 
-static inline void flush_tlb_local(void)
-{
-    unsigned int tmpreg;                    
-    
-    asm volatile(                   
-            "movl %%cr3, %0;              \n"       
-            "movl %0, %%cr3;  # flush TLB \n"       
-            : "=r" (tmpreg)                 
-            :: "memory");                   
-
-}
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 28)
 
 static inline pte_t *my_lookup_address(unsigned long address, unsigned int *level)
@@ -394,7 +382,7 @@ static inline void page_protection_disable(unsigned long addr, int pages)
         addr += PAGE_SIZE;
     }
 
-    flush_tlb_local();
+    __flush_tlb_all();
 }
 
 static inline void page_protection_enable(unsigned long addr, int pages)
@@ -404,7 +392,7 @@ static inline void page_protection_enable(unsigned long addr, int pages)
         addr += PAGE_SIZE;
     }
 
-    flush_tlb_local();
+     __flush_tlb_all();
 }
 
 //Usually stand for host based OS.
