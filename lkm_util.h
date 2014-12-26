@@ -24,6 +24,7 @@
 #include <linux/list.h>
 #include <linux/poll.h>
 #include <linux/jiffies.h>
+#include <asm/tlbflush.h>
 
 #define wait_for_sig_or_timeout(timeout) schedule_timeout_interruptible(timeout)
 #define wait_for_timeout(timeout) schedule_timeout_uninterruptible(timeout)
