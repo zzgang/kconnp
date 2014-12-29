@@ -7,6 +7,8 @@ LKM build params:
 
     --with-kernel-build-dir=DIR
         Set kernel module build dir
+    --debug
+        Enable machine restart automatically
     --clean
         Clean the Makefile
 
@@ -47,6 +49,9 @@ do
     case "${1%=*}" in
         --with-kernel-build-dir)
             kmbd="${1#*=}";
+            ;;
+        --debug)
+            sysctl -w kernel.panic=1 > /dev/null
             ;;
         --clean)
             clean;
