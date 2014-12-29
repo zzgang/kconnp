@@ -65,7 +65,7 @@ done
 
 if test ! -d $kmbd || test ! -e $sysmap_file 
 then
-    echo "Can't build the ENV for building the LKM";
+    echo "Error: Can't build the ENV for building the LKM";
     help;
 else
     echo "Check kernel devel dir for building LKM... yes";
@@ -96,11 +96,23 @@ sed -e "s/%%SYS_EXIT_EA%%/0x${sys_exit_ea}/"  > sys_call_table_ea.h;
 
 NO_OMIT_FRAME_POINTER=""
 
-machine_bits=`getconf LONG_BIT`
+machine_type=`uname -p | sed -e 's/^i[0-9]86$/x86_32/'`
 
-echo "Check machine bits... $machine_bits";
+case "$machine_type" in
+    'x86_32')
+        machine_type='x86_32'
+        ;;
+    'x86_64')
+        ;;
+    *)
+        echo "Error: Unsurported machine type $machine_type"
+        exit
+        ;;
+esac
 
-if [ $machine_bits -eq 32 ] #32 bits machine
+echo "Check machine type... $machine_type yes";
+
+if [ "$machine_type" == "x86_32" ] #32 bits machine
 then
     NO_OMIT_FRAME_POINTER="export CONFIG_FRAME_POINTER=ON"
 fi

@@ -96,7 +96,7 @@ struct pollfd_ex_t {
 #define lkm_atomic64_sub(v, a) atomic64_sub_return(a, (atomic64_t *)v)
 #define lkm_atomic64_set(v, a) atomic64_set((atomic64_t *)v, a) 
 
-#if BITS_PER_LONG < 64 //32 bits
+#if BITS_PER_LONG == 32 //32 bits
 
 typedef atomic_t lkm_atomic_t;
 #define lkm_atomic_read(v) lkm_atomic32_read(v)
@@ -104,7 +104,7 @@ typedef atomic_t lkm_atomic_t;
 #define lkm_atomic_sub(v, a) lkm_atomic32_sub(v, a)
 #define lkm_atomic_set(v, a) lkm_atomic32_set(v, a)
 
-#else //64bits
+#elif BITS_PER_LONG == 64 //64bits
 
 typedef atomic64_t lkm_atomic_t;
 #define lkm_atomic_read(v) lkm_atomic64_read(v)
@@ -328,7 +328,9 @@ static inline time_t get_fmtime(char *fname)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 28)
 
-static inline pte_t *my_lookup_address(unsigned long address, unsigned int *level)
+#if BITS_PER_LONG == 32
+
+static inline pte_t *my_lookup_address(unsigned long address, unsigned int *level/*cummy for compile*/)
 {
     pgd_t *pgd = pgd_offset_k(address);
     pud_t *pud;
@@ -345,6 +347,32 @@ static inline pte_t *my_lookup_address(unsigned long address, unsigned int *leve
         return (pte_t *)pmd;
     return pte_offset_kernel(pmd, address);
 }
+
+#elif BITS_PER_LONG == 64
+
+static inline pte_t *my_lookup_address(unsigned long address, unsigned int *level/*dummy for compile*/)
+{
+    pgd_t *pgd = pgd_offset_k(address);
+    pud_t *pud;
+    pmd_t *pmd;
+    pte_t *pte;
+    if (pgd_none(*pgd))
+        return NULL;
+    pud = pud_offset(pgd, address);
+    if (!pud_present(*pud))
+        return NULL;
+    pmd = pmd_offset(pud, address);
+    if (!pmd_present(*pmd))
+        return NULL;
+    if (pmd_large(*pmd))
+        return (pte_t *)pmd;
+    pte = pte_offset_kernel(pmd, address);
+    if (pte && !pte_present(*pte))
+        pte = NULL;
+    return pte;
+}
+
+#endif
 
 #define lkm_lookup_address my_lookup_address
 
@@ -382,7 +410,7 @@ static inline void page_protection_disable(unsigned long addr, int pages)
         set_page_rw(addr);
         addr += PAGE_SIZE;
     }
-
+    
     __flush_tlb_all();
 }
 
@@ -392,8 +420,8 @@ static inline void page_protection_enable(unsigned long addr, int pages)
         set_page_ro(addr);
         addr += PAGE_SIZE;
     }
-
-     __flush_tlb_all();
+    
+    __flush_tlb_all();
 }
 
 //Usually stand for host based OS.

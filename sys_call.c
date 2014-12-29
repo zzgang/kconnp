@@ -26,7 +26,7 @@ static sys_close_func_ptr_t new_sys_close = connp_sys_close;
 static sys_exit_func_ptr_t new_sys_exit = connp_sys_exit;
 static sys_exit_func_ptr_t new_sys_exit_group = connp_sys_exit_group;
 
-static int build_syscall_func_table(unsigned long *);
+static int build_syscall_func_table(unsigned long *sys_call_table, int *nr_min, int *nr_max);
 
 static struct syscall_func_struct syscall_func[] = { //initial.
 #ifdef __NR_socketcall //usually for 32 bit.
@@ -83,15 +83,15 @@ static struct syscall_func_struct syscall_func[] = { //initial.
     {NULL, 0, 0, -1, NULL, NULL} //end tag.
 };
 
-static int build_syscall_func_table(unsigned long *sys_call_table)
+static int build_syscall_func_table(unsigned long *sys_call_table, int *nr_min, int *nr_max)
 {
     struct syscall_func_struct *p;
-    int i, nr_max = 0;
+    int i;
 
     for (p = syscall_func; p->name; p++) {
         if (p->real_addr && (p->real_addr != p->sym_addr)) {//check symbol map addr.
             printk(KERN_ERR "Current kernel is ambiguous!"); 
-            return -1;
+            return 0;
         }
         for (i = 0;  i < MAX_SYS_CALL_NUM; i++) 
             if (sys_call_table[i] == p->sym_addr) {//match the symbol map addr.
@@ -102,14 +102,17 @@ static int build_syscall_func_table(unsigned long *sys_call_table)
         
         if (i >= MAX_SYS_CALL_NUM) {
             printk(KERN_ERR "Can't find the sys call \"%s\", consider enlarging the macro MAX_SYS_CALL_NUM", p->name); 
-            return -1;
+            return 0;
         }
 
-        if (nr_max < p->nr) 
-           nr_max = p->nr; 
+        if (*nr_min > p->nr)
+           *nr_min = p->nr;
+
+        if (*nr_max < p->nr) 
+           *nr_max = p->nr; 
     }
 
-    return nr_max;
+    return 1;
 }
 
 /**
@@ -120,32 +123,33 @@ int connp_set_syscall(int flag)
 {
     struct syscall_func_struct *p;
     unsigned long * sys_call_table;
-    static int sys_call_span_pages;
-    int nr_max;
+    static int sys_call_span_pages, nr_min, nr_max;
 
     *(unsigned long *)&sys_call_table = get_syscall_table_ea();
 
     if (flag & SYSCALL_REPLACE) { //init.
-        nr_max = build_syscall_func_table((unsigned long *)sys_call_table);
-        if (nr_max < 0) 
+        if (!build_syscall_func_table((unsigned long *)sys_call_table, 
+            &nr_min, &nr_max)) {
             return 0;
-        sys_call_span_pages = ((unsigned)(nr_max * sizeof(long)) >> PAGE_SHIFT) + 1;
+        }
+        sys_call_span_pages = (((unsigned long)&sys_call_table[nr_max] >> PAGE_SHIFT) - ((unsigned long)&sys_call_table[nr_min] >> PAGE_SHIFT)) + 1;
     }
 
     preempt_disable();
 
-    page_protection_disable((unsigned long)sys_call_table, sys_call_span_pages);
+    page_protection_disable((unsigned long)&sys_call_table[nr_min], sys_call_span_pages);
 
     for (p = syscall_func; p->name; p++) {
         if (flag & SYSCALL_REPLACE) { //Replace
             xchg(&sys_call_table[p->nr], (unsigned long)*p->new_sys_func);
-            printk(KERN_INFO "nr_%s:%d:%p", p->name, p->nr, *p->new_sys_func);
+            printk(KERN_INFO "Replace %s: nr %d, addr %p", p->name, p->nr, *p->new_sys_func);
         } else if (flag & SYSCALL_RESTORE) { //Restore
             xchg(&sys_call_table[p->nr], (unsigned long)*p->orig_sys_func);
+            printk(KERN_INFO "Restore %s: nr %d, addr %p", p->name, p->nr, *p->orig_sys_func);
         }
     }
 
-    page_protection_enable((unsigned long)sys_call_table, sys_call_span_pages);
+    page_protection_enable((unsigned long)&sys_call_table[nr_min], sys_call_span_pages);
     
     preempt_enable();
 
