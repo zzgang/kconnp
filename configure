@@ -101,7 +101,7 @@ sed -e "s/%%SYS_EXIT_EA%%/0x${sys_exit_ea}/"  > sys_call_table_ea.h;
 
 NO_OMIT_FRAME_POINTER=""
 
-machine_type=`uname -p | sed -e 's/^i[0-9]86$/x86_32/'`
+machine_type=`uname -m | sed -e 's/^i[0-9]86$/x86_32/'`
 
 case "$machine_type" in
     'x86_32')
