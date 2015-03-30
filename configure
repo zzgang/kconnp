@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /bin/sh
 
 help(){
     cat <<EOF
@@ -117,7 +117,7 @@ esac
 
 echo "Check machine type... $machine_type yes";
 
-if [ "$machine_type" == "x86_32" ] #32 bits machine
+if [ "$machine_type" = 'x86_32' ] #32 bits machine
 then
     NO_OMIT_FRAME_POINTER="export CONFIG_FRAME_POINTER=ON"
 fi
