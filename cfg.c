@@ -1617,8 +1617,8 @@ int cfg_conn_op(struct sockaddr *addr, int op_type, void *val)
     unsigned short int port;
     int ret = 1;
 
-    ip = ((struct sockaddr_in *)addr)->sin_addr.s_addr;
-    port = ((struct sockaddr_in *)addr)->sin_port;
+    ip = SOCKADDR_IP(addr);
+    port = SOCKADDR_PORT(addr);
 
     read_lock(&wl->cfg_rwlock);
 

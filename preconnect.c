@@ -58,21 +58,29 @@ static void do_preconnect(void *data)
     return;
 }
 
-static void do_create_connects(struct sockaddr_in *address, int nums)
+static void do_create_connects(struct sockaddr_in *servaddr, int nums)
 {
     int fd;
     struct socket *sock;
+    struct sockaddr cliaddr;
     int i;
 
     for (i = 0; i < nums; i++) {
 
-        fd = lkm_create_tcp_connect(address);
+        fd = lkm_create_tcp_connect(servaddr);
         if (fd < 0)
             break;
 
         sock = getsock(fd); 
-
-        if (!insert_sock_to_sockp((struct sockaddr *)address, sock, fd, 
+        if (!sock)
+            break;
+            
+        if (!getsockcliaddr(sock, &cliaddr))
+            break;
+        
+        if (!insert_sock_to_sockp(&cliaddr, 
+                    (struct sockaddr *)servaddr,
+                    sock, fd, 
                     SOCK_PRECONNECT)) {
             orig_sys_close(fd);
             break;

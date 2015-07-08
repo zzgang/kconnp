@@ -19,11 +19,10 @@
 #define SOCKP_UNLOCK() spin_unlock(&ht.ht_lock)
 #define SOCKP_LOCK_DESTROY()
 
-#define HASH(address_ptr) ht.hash_table[_hashfn((struct sockaddr_in *)(address_ptr))]
+#define HASH(cliaddr_ptr, servaddr_ptr) ht.hash_table[_hashfn((struct sockaddr_in *)(cliaddr_ptr), (struct sockaddr_in *)(servaddr_ptr))]
 #define SHASH(sk) ht.shash_table[_shashfn(sk)]
 
-#define KEY_MATCH_CAST(address_ptr1, address_ptr2) ((address_ptr1)->sin_port == (address_ptr2)->sin_port && (address_ptr1)->sin_addr.s_addr == (address_ptr2)->sin_addr.s_addr)
-#define KEY_MATCH(address_ptr1, address_ptr2) KEY_MATCH_CAST((struct sockaddr_in *)address_ptr1, (struct sockaddr_in *)address_ptr2)
+#define KEY_MATCH(address_ptr11, address_ptr12, address_ptr21, address_ptr22) (SOCKADDR_IP(address_ptr11) == SOCKADDR_IP(address_ptr12) && SOCKADDR_PORT(address_ptr21)  == SOCKADDR_PORT(address_ptr22) && SOCKADDR_IP(address_ptr21) == SOCKADDR_IP(address_ptr22))
 #define SKEY_MATCH(sk_ptr1, sk_ptr2) (sk_ptr1 == sk_ptr2)
 
 #define PUT_SB(sb) ((sb)->sb_in_use = 0) 
@@ -158,10 +157,10 @@ break_unlock:                                                           \
 #define LEFT_LIFETIME_THRESHOLD ((unsigned)(HZ >> 1)) //500ms
 
 #define SOCK_IS_RECLAIM(sb) ((sb)->sock_create_way == SOCK_RECLAIM)
-#define SOCK_IS_RECLAIM_PASSIVE(sb) (SOCK_IS_RECLAIM(sb) && !cfg_conn_is_positive(&(sb)->address))
+#define SOCK_IS_RECLAIM_PASSIVE(sb) (SOCK_IS_RECLAIM(sb) && !cfg_conn_is_positive(&(sb)->servaddr))
 
 #define SOCK_IS_PRECONNECT(sb) ((sb)->sock_create_way == SOCK_PRECONNECT)
-#define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowd(&(sb)->address) && SOCK_IS_PRECONNECT(sb))
+#define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowd(&(sb)->servaddr) && SOCK_IS_PRECONNECT(sb))
 
 #define sockp_sbs_check_list_init(num) \
     stack_init(&sockp_sbs_check_list, num, sizeof(struct socket_bucket *), WITH_MUTEX)
@@ -223,7 +222,7 @@ static struct socket_bucket SB[NR_SOCKET_BUCKET];
 struct stack_t *sockp_sbs_check_list;
 
 #if LRU
-static struct socket_bucket *get_empty_slot(struct sockaddr *);
+static struct socket_bucket *get_empty_slot(struct sockaddr *, struct sockaddr *);
 #else
 static struct socket_bucket *get_empty_slot(void);
 #endif
@@ -232,7 +231,7 @@ static struct socket_bucket *get_empty_slot(void);
 static inline int sock_is_available(struct socket_bucket *);
 static inline u64 estimate_min_left_lifetime(u64 est_time);
 
-static inline unsigned int _hashfn(struct sockaddr_in *);
+static inline unsigned int _hashfn(struct sockaddr_in *, struct sockaddr_in *);
 static inline unsigned int _shashfn(struct sock *);
 
 static inline u64 estimate_min_left_lifetime(u64 timev)
@@ -251,7 +250,7 @@ static inline int sock_is_available(struct socket_bucket *sb)
     if (!SK_ESTABLISHED(sb->sk))
         return 0;
 
-    cfg_conn_get_keep_alive(&sb->address, &sock_keep_alive);
+    cfg_conn_get_keep_alive(&sb->servaddr, &sock_keep_alive);
     sock_age = lkm_jiffies_elapsed_from(sb->sock_create_jiffies);
     sock_left_lifetime = sock_keep_alive - sock_age;
 
@@ -262,9 +261,9 @@ static inline int sock_is_available(struct socket_bucket *sb)
     return 1;
 }
 
-static inline unsigned int _hashfn(struct sockaddr_in *address)
+static inline unsigned int _hashfn(struct sockaddr_in *cliaddr, struct sockaddr_in *servaddr)
 {
-    return (unsigned)((*address).sin_port ^ (*address).sin_addr.s_addr) % NR_HASH;
+    return (unsigned)(SOCKADDR_IP(cliaddr) ^ SOCKADDR_PORT(servaddr) ^ SOCKADDR_IP(servaddr)) % NR_HASH;
 }
 
 static inline unsigned int _shashfn(struct sock *sk)
@@ -277,18 +276,18 @@ SOCK_SET_ATTR_DEFINE(sock, sock_close_now)
     ATOMIC_SET_SOCK_ATTR(sock, sock_close_now);
 }
 
-struct socket_bucket *apply_sk_from_sockp(struct sockaddr *address)
+struct socket_bucket *apply_sk_from_sockp(struct sockaddr *cliaddr, struct sockaddr *servaddr)
 {
     struct socket_bucket *p;
 
     SOCKP_LOCK();
 
-    p = HASH(address);
+    p = HASH(cliaddr, servaddr);
     for (; p; p = p->sb_next) {
 
         LOOP_COUNT_SAFE_CHECK(p);
 
-        if (KEY_MATCH(address, &p->address)) {
+        if (KEY_MATCH(cliaddr, &p->cliaddr, servaddr, &p->servaddr)) {
 
             if (p->sock_in_use 
                     || p->sock_close_now
@@ -307,7 +306,7 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *address)
 
             p->sock_in_use = 1; //set "in use" tag.
 
-            REMOVE_FROM_HLIST(HASH(address), p);
+            REMOVE_FROM_HLIST(HASH(cliaddr, servaddr), p);
 
             LOOP_COUNT_RESET();
            
@@ -351,9 +350,9 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
            if (!p->uc) { //get keep alive timeout at begin time.
                u64 keep_alive;
                keep_alive = lkm_jiffies_elapsed_from(p->sock_create_jiffies);
-               cfg_conn_set_keep_alive(&p->address, &keep_alive);
+               cfg_conn_set_keep_alive(&p->servaddr, &keep_alive);
            }
-           cfg_conn_set_passive(&p->address); //may be passive socket 
+           cfg_conn_set_passive(&p->servaddr); //may be passive socket 
            goto shutdown;
         }
 
@@ -370,13 +369,13 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
             goto shutdown;
 
         //Luckly, selected as idle conn.
-        if (conn_spec_check_close_flag(&p->address))
+        if (conn_spec_check_close_flag(&p->servaddr))
             goto shutdown;
 
         if (!p->sock_in_use)
-            conn_inc_idle_count(&p->address);
+            conn_inc_idle_count(&p->servaddr);
 
-        conn_inc_all_count(&p->address);
+        conn_inc_all_count(&p->servaddr);
 
         sockp_sbs_check_list_in(&p);
 
@@ -394,8 +393,8 @@ shutdown:
                 break;
             }
 
-            if (IN_HLIST(HASH(&p->address), p))
-                REMOVE_FROM_HLIST(HASH(&p->address), p);
+            if (IN_HLIST(HASH(&p->cliaddr, &p->servaddr), p))
+                REMOVE_FROM_HLIST(HASH(&p->cliaddr, &p->servaddr), p);
             REMOVE_FROM_SHLIST(SHASH(p->sk), p);
             REMOVE_FROM_TLIST(p);
 
@@ -434,7 +433,7 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
             p->sock_in_use = 0; //clear "in use" tag.
             p->last_used_jiffies = lkm_jiffies;
 
-            INSERT_INTO_HLIST(HASH(&p->address), p);
+            INSERT_INTO_HLIST(HASH(&p->cliaddr, &p->servaddr), p);
 
             sb = p;
             
@@ -494,7 +493,7 @@ static inline int socket_buckets_pool_resize(void)
  *Get a empty slot from sockp;
  */
 #if LRU
-static struct socket_bucket *get_empty_slot(struct sockaddr *addr)
+static struct socket_bucket *get_empty_slot(struct sockaddr *cliaddr, struct sockaddr *servaddr)
 #else
 static struct socket_bucket *get_empty_slot(void)
 #endif
@@ -523,7 +522,7 @@ static struct socket_bucket *get_empty_slot(void)
 #if LRU
         /*connpd_fd: -1, was not attached to connpd*/
         if (!p->sock_in_use 
-                && !KEY_MATCH(addr, &p->address) 
+                && !KEY_MATCH(cliaddr, &p->cliaddr, servaddr, &p->servaddr) 
                 && p->connpd_fd >= 0 
                 && p->uc <= uc) { 
             lru = p;
@@ -548,7 +547,7 @@ static struct socket_bucket *get_empty_slot(void)
         ht.sb_free_p = lru->sb_free_next;
 
         //It is safe because it is in every list already.
-        REMOVE_FROM_HLIST(HASH(&lru->address), lru);
+        REMOVE_FROM_HLIST(HASH(&lru->cliaddr, &lru->servaddr), lru);
         REMOVE_FROM_SHLIST(SHASH(lru->sk), lru);
         REMOVE_FROM_TLIST(lru);
 
@@ -565,8 +564,10 @@ static struct socket_bucket *get_empty_slot(void)
 /**
  *Insert a new socket to sockp.
  */
-struct socket_bucket *insert_sock_to_sockp(struct sockaddr *address, 
-        struct socket *s, int connpd_fd, sock_create_way_t create_way)
+struct socket_bucket *insert_sock_to_sockp(struct sockaddr *cliaddr, 
+        struct sockaddr *servaddr, 
+        struct socket *s, int connpd_fd, 
+        sock_create_way_t create_way)
 {
     struct socket_bucket *sb = NULL;
 
@@ -574,7 +575,7 @@ struct socket_bucket *insert_sock_to_sockp(struct sockaddr *address,
     SOCKP_LOCK();
 
 #if LRU
-    if (!(sb = get_empty_slot(address))) 
+    if (!(sb = get_empty_slot(cliaddr, servaddr))) 
         goto unlock_ret;
 #else
     if (!(sb = get_empty_slot())) 
@@ -583,9 +584,10 @@ struct socket_bucket *insert_sock_to_sockp(struct sockaddr *address,
 
     INIT_SB(sb, s, connpd_fd, create_way);
 
-    SOCKADDR_COPY(&sb->address, address);
+    SOCKADDR_COPY(&sb->cliaddr, cliaddr);
+    SOCKADDR_COPY(&sb->servaddr, servaddr);
 
-    INSERT_INTO_HLIST(HASH(&sb->address), sb);
+    INSERT_INTO_HLIST(HASH(&sb->cliaddr, &sb->servaddr), sb);
     INSERT_INTO_SHLIST(SHASH(sb->sk), sb);
     INSERT_INTO_TLIST(sb);
 

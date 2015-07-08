@@ -11,6 +11,10 @@
 #include <linux/fs.h>
 #include <linux/net.h>
 #include <net/sock.h>
+#include <linux/tcp.h>
+#include <net/inet_sock.h>
+#include <net/flow.h>
+#include <net/route.h>
 #include <linux/stat.h>
 #include <linux/sched.h>
 
@@ -160,6 +164,11 @@ typedef atomic64_t lkm_atomic_t;
         *old_rlim = new_rlim;                                   \
     } while (0)
 
+
+#define SOCKADDR_FAMILY(sockaddr_ptr) (((struct sockaddr_in *)(sockaddr_ptr)))->sin_family
+#define SOCKADDR_IP(sockaddr_ptr) (((struct sockaddr_in *)(sockaddr_ptr)))->sin_addr.s_addr
+#define SOCKADDR_PORT(sockaddr_ptr) (((struct sockaddr_in *)(sockaddr_ptr)))->sin_port
+
 typedef struct array_t array_t;
 extern int lkm_poll(array_t *, int timeout);
 
@@ -285,7 +294,9 @@ static inline struct socket *getsock(int fd)
     return NULL;
 }
 
-static inline int getsockservaddr(struct socket *sock, struct sockaddr *address)
+#define getsockcliaddr(sock, address) getsockaddr(sock, address, 0)
+#define getsockservaddr(sock, address) getsockaddr(sock, address, 1)
+static inline int getsockaddr(struct socket *sock, struct sockaddr *address, int peer)
 {
     int len;
     int err;
@@ -293,9 +304,90 @@ static inline int getsockservaddr(struct socket *sock, struct sockaddr *address)
     if (!sock->sk)
         return 0;
 
-    err = sock->ops->getname(sock, address, &len, 1);
+    err = sock->ops->getname(sock, address, &len, peer);
     if (err)
         return 0;
+
+    return 1;
+}
+
+static inline int getsocklocaladdr(struct socket *sock, struct sockaddr *cliaddr, struct sockaddr *servaddr) 
+{
+    struct sock *sk = sock->sk;
+    struct sockaddr_in *usin = (struct sockaddr_in *)servaddr;
+    struct inet_sock *inet = inet_sk(sk);
+    struct rtable *rt; 
+    __be32 daddr, nexthop;
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0)
+    __be16 orig_sport, orig_dport;
+    struct flowi4 *fl4;
+    int err; 
+    struct ip_options_rcu *inet_opt;
+
+    nexthop = daddr = SOCKADDR_IP(usin);
+    inet_opt = rcu_dereference_protected(inet->inet_opt,
+            sock_owned_by_user(sk));
+    if (inet_opt && inet_opt->opt.srr) {
+        if (!daddr)
+            return 0;
+        nexthop = inet_opt->opt.faddr;
+    }
+
+    orig_sport = inet->inet_sport;
+    orig_dport = SOCKADDR_PORT(usin);
+    fl4 = &inet->cork.fl.u.ip4;
+    rt = ip_route_connect(fl4, nexthop, inet->inet_saddr,
+            RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
+            IPPROTO_TCP,
+            orig_sport, orig_dport, sk, true);
+    if (IS_ERR(rt)) {
+        err = PTR_ERR(rt);
+        if (err == -ENETUNREACH)
+            IP_INC_STATS_BH(sock_net(sk), IPSTATS_MIB_OUTNOROUTES);
+        return 0;
+    }
+
+    if (rt->rt_flags & (RTCF_MULTICAST | RTCF_BROADCAST)) {
+        ip_rt_put(rt);
+        return 0;
+    }
+
+    SOCKADDR_IP(cliaddr) = fl4->saddr;
+
+#else
+    
+    int tmp;
+
+    nexthop = daddr = SOCKADDR_IP(usin);
+    if (inet->opt && inet->opt->srr) {
+        if (!daddr)
+            return 0;
+        nexthop = inet->opt->faddr;
+    }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 21)
+    tmp = ip_route_connect(&rt, nexthop, inet->saddr,
+            RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
+            IPPROTO_TCP,
+            inet->sport, usin->sin_port, sk, 1);
+#else
+    tmp = ip_route_connect(&rt, nexthop, inet->saddr,
+            RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
+            IPPROTO_TCP,
+            inet->sport, usin->sin_port, sk);
+#endif
+    if (tmp < 0)
+        return 0;
+
+    if (rt->rt_flags & (RTCF_MULTICAST | RTCF_BROADCAST)) {
+        ip_rt_put(rt);
+        return 0;
+    }
+
+    SOCKADDR_IP(cliaddr) = rt->rt_src;
+
+#endif
 
     return 1;
 }

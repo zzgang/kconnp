@@ -52,20 +52,20 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
 }
 #endif
 
-asmlinkage long connp_sys_connect(int fd, struct sockaddr __user * uservaddr, 
-        int addrlen)
+asmlinkage long connp_sys_connect(int fd, 
+        struct sockaddr __user * uservaddr, int addrlen)
 {
-    struct sockaddr_storage address;
+    struct sockaddr_storage servaddr;
     int err;
     
-    err = connp_move_addr_to_kernel(uservaddr, addrlen, (struct sockaddr *)&address);
+    err = connp_move_addr_to_kernel(uservaddr, addrlen, (struct sockaddr *)&servaddr);
     if (err < 0)
         return -EFAULT;
     
-    if ((err = fetch_conn_from_connp(fd, (struct sockaddr *)&address))) {
+    if ((err = fetch_conn_from_connp(fd, (struct sockaddr *)&servaddr))) {
         if (err == CONN_BLOCK)
             return 0;
-        else
+        else if (err == CONN_NONBLOCK)
             return -EINPROGRESS;
     }
 

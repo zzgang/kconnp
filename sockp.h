@@ -41,7 +41,8 @@ typedef enum {
 } shutdown_way_t;
 
 struct socket_bucket {
-    struct sockaddr address;
+    struct sockaddr cliaddr;
+    struct sockaddr servaddr;
 
     struct socket *sock;
     struct sock *sk;
@@ -91,7 +92,7 @@ extern void set_sock_close_now(struct socket *sock, typeof(((struct socket_bucke
 /**
  *Apply a existed socket from socket pool.
  */
-extern struct socket_bucket *apply_sk_from_sockp(struct sockaddr *);
+extern struct socket_bucket *apply_sk_from_sockp(struct sockaddr *, struct sockaddr *);
 
 /**
  *Free a socket which is returned by 'apply_socket_from_sockp', return the bucket of this socket.
@@ -101,7 +102,7 @@ extern struct socket_bucket *free_sk_to_sockp(struct sock *);
 /**
  *Insert a new socket to sockp, return the new bucket of this socket.
  */
-extern struct socket_bucket *insert_sock_to_sockp(struct sockaddr *, 
+extern struct socket_bucket *insert_sock_to_sockp(struct sockaddr *, struct sockaddr *, 
         struct socket *, int fd, sock_create_way_t create_way);
 
 extern void shutdown_sock_list(shutdown_way_t shutdown_way);

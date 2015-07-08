@@ -18,8 +18,8 @@ static void do_conn_inc_idle_count(void *data);
 static void do_conn_inc_connected_miss_count(void *data);
 static void do_conn_inc_connected_hit_count(void *data);
 
-static inline int insert_socket_to_connp(struct sockaddr *, struct socket *);
-static inline int insert_into_connp(struct sockaddr *, struct socket *);
+static inline int insert_socket_to_connp(struct sockaddr *, struct sockaddr *, struct socket *);
+static inline int insert_into_connp(struct sockaddr *, struct sockaddr *, struct socket *);
 
 static inline void deferred_destroy(void);
 
@@ -39,8 +39,8 @@ int conn_spec_check_close_flag(struct sockaddr *address)
    unsigned int ip;
    unsigned short int port;
 
-   ip = ((struct sockaddr_in *)address)->sin_addr.s_addr;
-   port = ((struct sockaddr_in *)address)->sin_port;
+   ip = SOCKADDR_IP(address);
+   port = SOCKADDR_PORT(address);
 
    conn_close_flag = 0;
 
@@ -83,8 +83,8 @@ int conn_inc_count(struct sockaddr *addr, int count_type)
    unsigned short int port;
    void (*conn_inc_count_func)(void *data) = NULL;
 
-   ip = ((struct sockaddr_in *)addr)->sin_addr.s_addr;
-   port = ((struct sockaddr_in *)addr)->sin_port;
+   ip = SOCKADDR_IP(addr);
+   port = SOCKADDR_PORT(addr);
 
    if (count_type == ALL_COUNT)
        conn_inc_count_func = do_conn_inc_all_count;
@@ -100,8 +100,7 @@ int conn_inc_count(struct sockaddr *addr, int count_type)
    return 1;
 }
 
-static inline int insert_socket_to_connp(struct sockaddr *servaddr, 
-        struct socket *sock)
+static inline int insert_socket_to_connp(struct sockaddr *cliaddr, struct sockaddr *servaddr, struct socket *sock)
 {
     int connpd_fd;
 
@@ -112,7 +111,7 @@ static inline int insert_socket_to_connp(struct sockaddr *servaddr,
     task_fd_install(CONNP_DAEMON_TSKP, connpd_fd, sock->file);
     file_count_inc(sock->file); //add file reference count.
 
-    if (!insert_sock_to_sockp(servaddr, sock, connpd_fd, SOCK_RECLAIM)) {
+    if (!insert_sock_to_sockp(cliaddr, servaddr, sock, connpd_fd, SOCK_RECLAIM)) {
         connpd_close_pending_fds_in(connpd_fd);
         return 0;
     }
@@ -120,7 +119,7 @@ static inline int insert_socket_to_connp(struct sockaddr *servaddr,
     return 1;
 }
 
-static inline int insert_into_connp(struct sockaddr *servaddr, struct socket *sock)
+static inline int insert_into_connp(struct sockaddr *cliaddr, struct sockaddr *servaddr, struct socket *sock)
 {
     int fc;
 
@@ -135,7 +134,7 @@ static inline int insert_into_connp(struct sockaddr *servaddr, struct socket *so
     }
     
     //To insert
-    if (insert_socket_to_connp(servaddr, sock))
+    if (insert_socket_to_connp(cliaddr, servaddr, sock))
         return 1;
 
     return 0;
@@ -144,7 +143,8 @@ static inline int insert_into_connp(struct sockaddr *servaddr, struct socket *so
 int insert_into_connp_if_permitted(int fd)
 {
     struct socket *sock;
-    struct sockaddr address;
+    struct sockaddr cliaddr;
+    struct sockaddr servaddr;
     int err;
 
     connp_rlock();
@@ -161,21 +161,28 @@ int insert_into_connp_if_permitted(int fd)
             || !IS_CLIENT_SOCK(sock))
         goto ret_fail;
 
-    if (!getsockservaddr(sock, &address))
+    if (!getsockcliaddr(sock, &cliaddr)) 
         goto ret_fail;
 
-    if (address.sa_family != AF_INET)
+    if (!getsockservaddr(sock, &servaddr))
         goto ret_fail;
 
-    if (!cfg_conn_is_positive(&address))
+    //only stand for ipv4
+    if (cliaddr.sa_family != AF_INET) 
+        goto ret_fail;
+
+    if (servaddr.sa_family != AF_INET)
+        goto ret_fail;
+
+    if (!cfg_conn_is_positive(&servaddr))
         goto sock_close;
 
     if (!SOCK_ESTABLISHED(sock)) {
-        cfg_conn_set_passive(&address); //may be passive sock.
+        cfg_conn_set_passive(&servaddr); //may be passive sock.
         goto sock_close;
     }
 
-    err = insert_into_connp(&address, sock);
+    err = insert_into_connp(&cliaddr, &servaddr, sock);
     
     connp_runlock();
     return err;
@@ -189,11 +196,13 @@ ret_fail:
     return 0;
 }
 
-int fetch_conn_from_connp(int fd, struct sockaddr *address)
+int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
 {
+    struct sockaddr cliaddr;
     struct socket *sock;
     struct socket_bucket *sb;
     int ret = 0; 
+    
 
     connp_rlock(); 
 
@@ -215,15 +224,31 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         ret = 0;
         goto ret_unlock;
     }
+    
 
-    if (address->sa_family != AF_INET 
-            || !cfg_conn_acl_allowd(address)) {
+    if (servaddr->sa_family != AF_INET 
+            || !cfg_conn_acl_allowd(servaddr)) {
+        ret = 0;
+        goto ret_unlock;
+    }
+    //check the client sock local address
+
+
+    if (!getsockcliaddr(sock, &cliaddr)) {
         ret = 0;
         goto ret_unlock;
     }
 
+    if (SOCKADDR_IP(&cliaddr) == htonl(INADDR_ANY)) { // address not bind before connect
+        //get local sock client addr
+        if (!getsocklocaladdr(sock, &cliaddr, servaddr)) {
+            ret = 0;
+            goto ret_unlock;
+        }
 
-    if ((sb = apply_sk_from_sockp(address))) {
+    }
+
+    if ((sb = apply_sk_from_sockp((struct sockaddr *)&cliaddr, servaddr))) {
        
         //Destroy the pre-create sk 
         sock_destroy(sock->sk);
@@ -237,9 +262,9 @@ int fetch_conn_from_connp(int fd, struct sockaddr *address)
         else
             ret = CONN_BLOCK;
         
-        conn_inc_connected_hit_count(address); 
+        conn_inc_connected_hit_count(servaddr); 
     } else
-        conn_inc_connected_miss_count(address);
+        conn_inc_connected_miss_count(servaddr);
 
     SET_CLIENT_FLAG(sock);
 
