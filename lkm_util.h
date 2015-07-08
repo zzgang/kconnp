@@ -10,13 +10,14 @@
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/net.h>
+#include <linux/stat.h>
+#include <linux/sched.h>
 #include <net/sock.h>
 #include <linux/tcp.h>
 #include <net/inet_sock.h>
 #include <net/flow.h>
 #include <net/route.h>
-#include <linux/stat.h>
-#include <linux/sched.h>
+#include <net/ip.h>
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
 #include <linux/fdtable.h>
