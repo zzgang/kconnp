@@ -216,7 +216,7 @@ static int cfg_proc_write(struct file *file, const char *buffer, unsigned long c
 static ssize_t cfg_proc_read(struct file *file, char __user *buffer, size_t count, loff_t *pos);
 
 static ssize_t cfg_proc_write(struct file *file, const char __user *buffer, size_t count,
-        loff_t *pos)
+        loff_t *pos);
 #endif
 
 static int cfg_entry_init(struct cfg_entry *); 
