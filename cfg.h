@@ -20,9 +20,17 @@ struct cfg_entry {
     rwlock_t cfg_rwlock;
 
     /*proc r/w funcs*/
-    int (*proc_read)(char *buffer, char **buffer_location, off_t offset, int buffer_length, int *eof, void *data);
-    int (*proc_write)(struct file *file, const char *buffer, unsigned long count, 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
+    int (*proc_read)(char __user *buffer, char **buffer_location, off_t offset, 
+            int buffer_length, int *eof, void *data);
+    int (*proc_write)(struct file *file, const char __user *buffer, unsigned long count, 
             void *data);
+#else
+    ssize_t (*proc_read)(struct file *file, char __user *buffer, size_t count, loff_t *ppos);
+    ssize_t (*proc_write)(struct file *file, const char __user *buffer, size_t count, 
+            loff_t *pos);
+#endif
 
     /*cfg funcs*/
     int (*init)(struct cfg_entry *); 
@@ -187,24 +195,6 @@ extern void cfg_allowd_iport_node_for_each_call(unsigned int ip, unsigned short 
 extern int cfg_init(void);
 extern void cfg_destroy(void);
 
-extern int cfg_proc_read(char *buffer, char **buffer_location,
-                off_t offset, int buffer_length, int *eof, void *data);
-extern int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
-                void *data);
-
-extern int cfg_entry_init(struct cfg_entry *);
-extern void cfg_entry_destroy(struct cfg_entry *);
-
-extern int cfg_proc_file_init(struct cfg_entry *);
-extern void cfg_proc_file_destroy(struct cfg_entry *);
-
-extern int cfg_items_entity_init(struct cfg_entry *);
-extern void cfg_items_entity_destroy(struct cfg_entry *);
-extern int cfg_items_entity_reload(struct cfg_entry *);
-
-extern int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str);
-extern int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str);
-
 static inline long cfg_item_get_value(struct cfg_entry *ce, const char *name, int len, kconnp_value_t *value, node_type type) 
 {
     struct item_node_t *item_node;
@@ -293,8 +283,9 @@ static inline struct proc_dir_entry *lkm_proc_create(
         .write = ce->proc_write,
         .owner = THIS_MODULE
     };
+    void *data = (void *)ce;
 
-    ce->cfg_proc_file = proc_create_data(fname, mode, parent, proc_fops, (void*)ce);
+    ce->cfg_proc_file = proc_create_data(fname, mode, parent, proc_fops, data);
 
 #endif
 

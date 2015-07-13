@@ -207,6 +207,32 @@ static int cfg_white_list_entity_init(struct cfg_entry *);
 static void cfg_white_list_entity_destroy(struct cfg_entry *);
 static int cfg_white_list_entity_reload(struct cfg_entry *);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
+static int cfg_proc_read(char *buffer, char **buffer_location,
+                        off_t offset, int buffer_length, int *eof, void *data);
+static int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
+                        void *data);
+#else
+static ssize_t cfg_proc_read(struct file *file, char __user *buffer, size_t count, loff_t *pos);
+
+static ssize_t cfg_proc_write(struct file *file, const char __user *buffer, size_t count,
+        loff_t *pos)
+#endif
+
+static int cfg_entry_init(struct cfg_entry *); 
+static void cfg_entry_destroy(struct cfg_entry *); 
+
+static int cfg_proc_file_init(struct cfg_entry *); 
+static void cfg_proc_file_destroy(struct cfg_entry *); 
+
+static int cfg_items_entity_init(struct cfg_entry *); 
+static void cfg_items_entity_destroy(struct cfg_entry *); 
+static int cfg_items_entity_reload(struct cfg_entry *); 
+
+static int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str);
+static int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str);
+
+
 static inline void *iport_in_list_check_or_call(unsigned int ip, unsigned short int port,  struct cfg_entry *, void (*call_func)(void *data));
 
 static struct cfg_dir cfg_dentry = { //initial the cfg directory.
@@ -320,6 +346,7 @@ static struct item_node_t cfg_global_items[] = {
     {CONST_STRING_NULL, }
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
 /* Arguments
  * =========
  * 1. The buffer where the data is to be inserted, if
@@ -339,7 +366,7 @@ static struct item_node_t cfg_global_items[] = {
  * information at this time (end of file). A negative
  * return value is an error condition.
  */
-int cfg_proc_read(char *buffer, char **buffer_location,
+static int cfg_proc_read(char *buffer, char **buffer_location,
         off_t offset, int buffer_length, int *eof, void *data)
 {
     int read_count = 0;
@@ -347,7 +374,7 @@ int cfg_proc_read(char *buffer, char **buffer_location,
 
     ce = cfg_get_ce(data);
     if (!ce) 
-        return 0;
+        return -EINVAL;
 
     read_lock(&ce->cfg_rwlock);
 
@@ -367,11 +394,10 @@ out_ret:
     return read_count; 
 }
 
-
 /*
  * This function is called with the /proc file is written
  */
-int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
+static int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
         void *data)
 {
     struct cfg_entry *ce;
@@ -383,13 +409,13 @@ int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
 
     ce = cfg_get_ce(data);
     if (!ce)
-        return 0;
+        return -EINVAL;
     
     if (count > PAGE_SIZE) {
         printk(KERN_ERR 
                 "Error: The cfg iports file /etc/%s exceeds the max size %lu bytes!",
                 ce->f_name, PAGE_SIZE);
-        return 0;
+        return -EINVAL;
     }
 
     write_lock(&ce->cfg_rwlock);
@@ -429,6 +455,106 @@ int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
     return count;
 }
 
+#else
+
+static ssize_t cfg_proc_read(struct file *file, char __user *buffer, size_t count, loff_t *pos)
+{
+    int read_count = 0;
+    struct cfg_entry *ce;
+    int err;
+
+    ce = cfg_get_ce(PDE_DATA(file_inode(file)));
+    if (!ce) 
+        return -EINVAL;
+
+    read_lock(&ce->cfg_rwlock);
+
+    if (*pos >= ce->raw_len) { //has read all data.
+        read_count = 0;
+        goto out_ret;
+    }
+
+    read_count = size > (ce->raw_len - *pos) 
+        ? (ce->raw_len - *pos) : size;
+
+    err = copy_to_user(buffer, ce->raw_ptr + *pos, read_count);
+    if (err)
+        goto out_fail;
+
+    *pos += read_count;
+
+out_ret:
+    read_unlock(&ce->cfg_rwlock);
+    return read_count; 
+
+out_fail:
+    read_unlock(&ce->cfg_rwlock);
+    return -EFAULT;
+}
+
+static ssize_t cfg_proc_write(struct file *file, const char __user *buffer, size_t count,
+        loff_t *pos)
+{
+    struct cfg_entry *ce;
+    char *old_raw_ptr = NULL;
+    int old_raw_len = 0;
+
+    if (!count) 
+        return 0; 
+
+    ce = cfg_get_ce(PDE_DATA(file_inode(file)));
+    if (!ce)
+        return -EINVAL;
+
+    if (count > PAGE_SIZE) {
+        printk(KERN_ERR 
+                "Error: The cfg iports file /etc/%s exceeds the max size %lu bytes!",
+                ce->f_name, PAGE_SIZE);
+        return -EINVAL;
+    }
+
+    write_lock(&ce->cfg_rwlock);
+
+    if (ce->raw_ptr) {
+        /*Remove ldcfg for safety*/
+        old_raw_ptr = ce->raw_ptr;
+        old_raw_len = ce->raw_len;
+    }
+
+    ce->raw_ptr = lkmalloc(count);
+    if (!ce->raw_ptr) {
+        write_unlock(&ce->cfg_rwlock);
+        return -ENOMEM;
+    }
+
+    ce->raw_len = count;
+
+    /* Write data to the buffer */
+    if (copy_from_user(ce->raw_ptr, buffer, count)) {
+        lkmfree(ce->raw_ptr);
+        ce->raw_ptr = old_raw_ptr; //Restore
+        ce->raw_len = old_raw_len;
+
+        write_unlock(&ce->cfg_rwlock);
+        return -EFAULT;
+    }
+
+    write_unlock(&ce->cfg_rwlock);
+
+    if (old_raw_ptr) {
+        lkmfree(old_raw_ptr);
+    }
+
+    ce->entity_reload(ce); //Reload proc cfg.
+
+    return count;
+}
+
+#endif
+
+/*
+ *revalidate the data ptr
+ * */
 static inline struct cfg_entry *cfg_get_ce(void *data)
 {
     struct cfg_entry *p, *entry = (struct cfg_entry *)cfg;
@@ -442,7 +568,7 @@ static inline struct cfg_entry *cfg_get_ce(void *data)
     return NULL;
 }
 
-int cfg_proc_file_init(struct cfg_entry *ce)
+static int cfg_proc_file_init(struct cfg_entry *ce)
 {
     ce->cfg_proc_file = lkm_proc_create(ce->f_name, S_IFREG|S_IRUGO, 
             cfg_base_dir, ce);
@@ -464,13 +590,13 @@ int cfg_proc_file_init(struct cfg_entry *ce)
     return 1;
 }
 
-void cfg_proc_file_destroy(struct cfg_entry *ce)
+static void cfg_proc_file_destroy(struct cfg_entry *ce)
 {
     if (ce->cfg_proc_file)
         lkm_proc_remove(ce->f_name, cfg_base_dir);
 }
 
-int cfg_entry_init(struct cfg_entry *ce)
+static int cfg_entry_init(struct cfg_entry *ce)
 {
     if (!ce->proc_file_init(ce))
         return 0;
@@ -483,7 +609,7 @@ int cfg_entry_init(struct cfg_entry *ce)
     return 1;
 }
 
-void cfg_entry_destroy(struct cfg_entry *ce)
+static void cfg_entry_destroy(struct cfg_entry *ce)
 {
     ce->entity_destroy(ce);
     ce->proc_file_destroy(ce);
@@ -687,7 +813,7 @@ static void items_str_list_free(struct items_str_list_t * items_str_list)
     }
 }
 
-int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
+static int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
 {
     if (str->len > 0) {
         node->v_str = lkmalloc(str->len + 1);
@@ -702,7 +828,7 @@ int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
     return 1;
 }
 
-int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str)
+static int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str)
 {
     if (str->len > 0) {
         node->v_lval = simple_strtol(str->data, NULL, 10); 
@@ -713,8 +839,8 @@ int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str)
 
     return 1;
 }
-
-int cfg_item_set_bool_node(struct item_node_t *node, kconnp_str_t *str)
+/*
+static int cfg_item_set_bool_node(struct item_node_t *node, kconnp_str_t *str)
 {
     if (str->data)
         return 0;
@@ -722,8 +848,9 @@ int cfg_item_set_bool_node(struct item_node_t *node, kconnp_str_t *str)
     node->v_lval = 1;
     return 1;
 }
+*/
 
-int cfg_items_entity_init(struct cfg_entry *ce)
+static int cfg_items_entity_init(struct cfg_entry *ce)
 {
     struct items_str_list_t items_str_list = {NULL, 0};
     struct item_node_t *p;
