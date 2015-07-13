@@ -393,6 +393,21 @@ static inline int getsocklocaladdr(struct socket *sock, struct sockaddr *cliaddr
     return 1;
 }
 
+#define lkm_proc_mkdir(dname) proc_mkdir(dname, NULL)
+#define lkm_proc_rmdir(dname) remove_proc_entry(dname, NULL)
+
+#define lkm_proc_remove(fname, parent) remove_proc_entry(fname, parent)
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
+
+#define lkm_proc_create(fname, mode, parent) create_proc_entry(fname, mode, parent)
+
+#else
+
+#define lkm_proc_create(fname, mode, parent) proc_create(fname, mode, parent, NULL)
+
+#endif
+
 static inline int is_sock_fd(int fd)
 {
     struct kstat statbuf;

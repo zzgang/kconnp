@@ -444,7 +444,7 @@ static inline struct cfg_entry *cfg_get_ce(void *data)
 
 int cfg_proc_file_init(struct cfg_entry *ce)
 {
-    ce->cfg_proc_file = create_proc_entry(ce->f_name, S_IFREG|S_IRUGO, 
+    ce->cfg_proc_file = lkm_proc_create(ce->f_name, S_IFREG|S_IRUGO, 
             cfg_base_dir);
 
     if (!ce->cfg_proc_file) {
@@ -473,7 +473,7 @@ int cfg_proc_file_init(struct cfg_entry *ce)
 void cfg_proc_file_destroy(struct cfg_entry *ce)
 {
     if (ce->cfg_proc_file)
-        remove_proc_entry(ce->f_name, cfg_base_dir);
+        lkm_proc_remove(ce->f_name, cfg_base_dir);
 }
 
 int cfg_entry_init(struct cfg_entry *ce)
@@ -1580,7 +1580,7 @@ static int cfg_white_list_entity_reload(struct cfg_entry *ce)
 int cfg_init()
 {
     //Init cfg base dir.
-    cfg_base_dir = proc_mkdir(CFG_BASE_DIR_NAME, NULL);
+    cfg_base_dir = lkm_proc_mkdir(CFG_BASE_DIR_NAME);
     if (!cfg_base_dir) {
         printk(KERN_ERR "Error: Couldn't create dir /proc/%s", CFG_BASE_DIR_NAME);
         return 0;
@@ -1607,7 +1607,7 @@ void cfg_destroy()
     cfg_entries_walk_func_no_check(destroy);
 
     //Destroy cfg base dir.
-    remove_proc_entry(CFG_BASE_DIR_NAME, NULL);
+    lkm_proc_rmdir(CFG_BASE_DIR_NAME);
 }
  
 int cfg_conn_op(struct sockaddr *addr, int op_type, void *val)
