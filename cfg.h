@@ -285,7 +285,7 @@ static inline struct proc_dir_entry *lkm_proc_create(
     };
     void *data = (void *)ce;
 
-    ce->cfg_proc_file = proc_create_data(fname, mode, parent, proc_fops, data);
+    ce->cfg_proc_file = proc_create_data(fname, mode, parent, &proc_fops, data);
 
 #endif
 
