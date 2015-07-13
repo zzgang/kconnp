@@ -454,12 +454,6 @@ int cfg_proc_file_init(struct cfg_entry *ce)
         return 0;
     }
 
-    ce->cfg_proc_file->data = (void *)ce; 
-    ce->cfg_proc_file->read_proc = ce->proc_read;
-    ce->cfg_proc_file->write_proc = ce->proc_write;
-    ce->cfg_proc_file->uid = 0;
-    ce->cfg_proc_file->gid = 0;
-
     ce->raw_len = 0;
     ce->raw_ptr = NULL;
     ce->cfg_ptr = NULL;
