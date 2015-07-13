@@ -445,7 +445,7 @@ static inline struct cfg_entry *cfg_get_ce(void *data)
 int cfg_proc_file_init(struct cfg_entry *ce)
 {
     ce->cfg_proc_file = lkm_proc_create(ce->f_name, S_IFREG|S_IRUGO, 
-            cfg_base_dir);
+            cfg_base_dir, ce);
 
     if (!ce->cfg_proc_file) {
         printk(KERN_ERR

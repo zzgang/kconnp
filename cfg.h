@@ -265,4 +265,41 @@ ret_unlock:
 #define GN(name) cfg_item_get_value(&cfg->global, name, sizeof(name)-1, NULL, INTEGER)
 #define GVS(name, vp) cfg_item_get_value(&cfg->global, name, sizeof(name)-1, vp, STRING)
 
+#define lkm_proc_mkdir(dname) proc_mkdir(dname, NULL)
+#define lkm_proc_rmdir(dname) remove_proc_entry(dname, NULL)
+
+#define lkm_proc_remove(fname, parent) remove_proc_entry(fname, parent)
+
+static inline struct proc_dir_entry *lkm_proc_create(
+          const char *fname, umode_t mode, struct proc_dir_entry *parent,
+          struct cfg_entry *ce)
+{ 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
+
+    ce->cfg_proc_file = create_proc_entry(fname, mode, parent);
+    if (!ce->cfg_proc_file) 
+        return NULL;
+
+    ce->cfg_proc_file->data = (void *)ce;
+    ce->cfg_proc_file->read_proc = ce->proc_read;
+    ce->cfg_proc_file->write_proc = ce->proc_write;
+    ce->cfg_proc_file->uid = 0;
+    ce->cfg_proc_file->gid = 0;
+
+#else
+
+    struct file_operations proc_fops = {
+        .read = ce->proc_read,
+        .write = ce->proc_write,
+        .owner = THIS_MODULE
+    };
+
+    ce->cfg_proc_file = proc_create_data(fname, mode, parent, proc_fops, (void*)ce);
+
+#endif
+
+return ce->cfg_proc_file;
+}
+
+
 #endif
