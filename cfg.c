@@ -474,8 +474,8 @@ static ssize_t cfg_proc_read(struct file *file, char __user *buffer, size_t coun
         goto out_ret;
     }
 
-    read_count = size > (ce->raw_len - *pos) 
-        ? (ce->raw_len - *pos) : size;
+    read_count = count > (ce->raw_len - *pos) 
+        ? (ce->raw_len - *pos) : count;
 
     err = copy_to_user(buffer, ce->raw_ptr + *pos, read_count);
     if (err)
