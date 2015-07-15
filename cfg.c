@@ -213,8 +213,8 @@ static int cfg_proc_read(char *buffer, char **buffer_location,
 static int cfg_proc_write(struct file *file, const char *buffer, unsigned long count,
                         void *data);
 #else
-static ssize_t cfg_proc_read(struct file *file, char __user *buffer, size_t count, loff_t *pos);
 
+static int cfg_proc_read(struct seq_file *seq, void *offset);
 static ssize_t cfg_proc_write(struct file *file, const char __user *buffer, size_t count,
         loff_t *pos);
 #endif
@@ -457,39 +457,19 @@ static int cfg_proc_write(struct file *file, const char *buffer, unsigned long c
 
 #else
 
-static ssize_t cfg_proc_read(struct file *file, char __user *buffer, size_t count, loff_t *pos)
+static int cfg_proc_read(struct seq_file *seq, void *offset)
 {
-    int read_count = 0;
     struct cfg_entry *ce;
-    int err;
-
-    ce = cfg_get_ce(PDE_DATA(file_inode(file)));
+    
+    ce = cfg_get_ce(seq->private);
     if (!ce) 
         return -EINVAL;
 
     read_lock(&ce->cfg_rwlock);
-
-    if (*pos >= ce->raw_len) { //has read all data.
-        read_count = 0;
-        goto out_ret;
-    }
-
-    read_count = count > (ce->raw_len - *pos) 
-        ? (ce->raw_len - *pos) : count;
-
-    err = copy_to_user(buffer, ce->raw_ptr + *pos, read_count);
-    if (err)
-        goto out_fail;
-
-    *pos += read_count;
-
-out_ret:
+    seq_printf(seq, "%s", ce->raw_ptr);
     read_unlock(&ce->cfg_rwlock);
-    return read_count; 
 
-out_fail:
-    read_unlock(&ce->cfg_rwlock);
-    return -EFAULT;
+    return 0; 
 }
 
 static ssize_t cfg_proc_write(struct file *file, const char __user *buffer, size_t count,
@@ -568,6 +548,55 @@ static inline struct cfg_entry *cfg_get_ce(void *data)
     return NULL;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+
+static int cfg_proc_open(struct inode *inode, struct file *file)
+{
+    void *data = PDE_DATA(inode);
+    struct cfg_entry *ce = cfg_get_ce(data);
+    if (!ce) {
+        return -EINVAL;
+    }
+
+    return single_open(file, cfg_proc_read, data);
+}
+
+#endif
+
+static inline struct proc_dir_entry *lkm_proc_create(
+          const char *fname, umode_t mode, struct proc_dir_entry *parent,
+          struct cfg_entry *ce)
+{ 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
+
+    ce->cfg_proc_file = create_proc_entry(fname, mode, parent);
+    if (!ce->cfg_proc_file) 
+        return NULL;
+
+    ce->cfg_proc_file->data = (void *)ce;
+    ce->cfg_proc_file->read_proc = ce->proc_read;
+    ce->cfg_proc_file->write_proc = ce->proc_write;
+    ce->cfg_proc_file->uid = 0;
+    ce->cfg_proc_file->gid = 0;
+
+#else
+
+    ce->proc_fops = lkmalloc(sizeof(struct file_operations));
+
+    ce->proc_fops->owner = THIS_MODULE;
+    ce->proc_fops->open = cfg_proc_open;
+    ce->proc_fops->read = seq_read;
+    ce->proc_fops->write = ce->proc_write;
+    ce->proc_fops->llseek = seq_lseek;
+    ce->proc_fops->release = single_release;
+    
+    ce->cfg_proc_file = proc_create_data(fname, mode, parent, ce->proc_fops, ce);
+
+#endif
+
+return ce->cfg_proc_file;
+}
+
 static int cfg_proc_file_init(struct cfg_entry *ce)
 {
     ce->cfg_proc_file = lkm_proc_create(ce->f_name, S_IFREG|S_IRUGO, 
@@ -594,6 +623,10 @@ static void cfg_proc_file_destroy(struct cfg_entry *ce)
 {
     if (ce->cfg_proc_file)
         lkm_proc_remove(ce->f_name, cfg_base_dir);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+    if (ce->proc_fops) 
+        lkmfree(ce->proc_fops);
+#endif
 }
 
 static int cfg_entry_init(struct cfg_entry *ce)
