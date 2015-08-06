@@ -11,7 +11,7 @@
 #define CFG_DENIED_IPORTS_FILE      "iports.deny"
 #define CFG_CONN_STATS_INFO_FILE    "stats.info"
 
-#define DUMP_INTERVAL 5 //Unit: second
+#define DUMP_INTERVAL 5 //seconds
 
 #define cfg_entries_walk_func_check(func_name)    \
     ({    \

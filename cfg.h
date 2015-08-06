@@ -20,7 +20,6 @@ struct cfg_entry {
     rwlock_t cfg_rwlock;
 
     /*proc r/w funcs*/
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
     int (*proc_read)(char __user *buffer, char **buffer_location, off_t offset, 
             int buffer_length, int *eof, void *data);
