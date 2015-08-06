@@ -466,7 +466,7 @@ static int cfg_proc_read(struct seq_file *seq, void *offset)
         return -EINVAL;
 
     read_lock(&ce->cfg_rwlock);
-    seq_printf(seq, "%s", ce->raw_ptr);
+    seq_write(seq, ce->raw_ptr, ce->raw_len);
     read_unlock(&ce->cfg_rwlock);
 
     return 0; 
