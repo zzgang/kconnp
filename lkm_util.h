@@ -341,7 +341,7 @@ static inline int getsocklocaladdr(struct socket *sock, struct sockaddr *cliaddr
     rt = ip_route_connect(fl4, nexthop, inet->inet_saddr,
             RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
             IPPROTO_TCP,
-            orig_sport, orig_dport, sk, true);
+            orig_sport, orig_dport, sk, 1);
     if (IS_ERR(rt)) {
         err = PTR_ERR(rt);
         if (err == -ENETUNREACH)
@@ -367,10 +367,21 @@ static inline int getsocklocaladdr(struct socket *sock, struct sockaddr *cliaddr
         nexthop = inet->opt->faddr;
     }
 
+/*
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 21)
+*/
     tmp = ip_route_connect(&rt, nexthop, inet->saddr,
             RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
             IPPROTO_TCP,
-            inet->sport, usin->sin_port, sk, true);
+            inet->sport, usin->sin_port, sk, 1);
+/*
+#else
+    tmp = ip_route_connect(&rt, nexthop, inet->saddr,
+            RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
+            IPPROTO_TCP,
+            inet->sport, usin->sin_port, sk);
+#endif
+*/
     if (tmp < 0)
         return 0;
 
