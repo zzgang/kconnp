@@ -10,7 +10,7 @@
 #include "connp.h"
 #include "connpd.h"
 
-rwlock_t connp_rwlock; //global connp read/write lock;
+rwlock_t connp_rwlock; //global connp r/w lock;
 
 static void do_conn_spec_check_close_flag(void *data);
 static void do_conn_inc_all_count(void *data);
