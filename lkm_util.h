@@ -367,17 +367,10 @@ static inline int getsocklocaladdr(struct socket *sock, struct sockaddr *cliaddr
         nexthop = inet->opt->faddr;
     }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 21)
     tmp = ip_route_connect(&rt, nexthop, inet->saddr,
             RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
             IPPROTO_TCP,
-            inet->sport, usin->sin_port, sk, 1);
-#else
-    tmp = ip_route_connect(&rt, nexthop, inet->saddr,
-            RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
-            IPPROTO_TCP,
-            inet->sport, usin->sin_port, sk);
-#endif
+            inet->sport, usin->sin_port, sk, true);
     if (tmp < 0)
         return 0;
 
