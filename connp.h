@@ -5,7 +5,7 @@
 #include <linux/sched.h>
 #include "sockp.h"
 
-#define CONN_BLOCK 1
+#define CONN_BLOCK    1
 #define CONN_NONBLOCK 2
 #define CONN_IS_NONBLOCK(filp) ((filp)->f_flags & O_NONBLOCK)
 
