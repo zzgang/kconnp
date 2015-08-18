@@ -312,6 +312,34 @@ static inline int getsockaddr(struct socket *sock, struct sockaddr *address, int
     return 1;
 }
 
+static inline int lkm_ip_route_connect(struct rtable **rp, u32 dst,
+		u32 src, u32 tos, int oif, u8 protocol,
+		u16 sport, u16 dport, struct sock *sk,
+		int flags)
+{
+	struct flowi fl = { .oif = oif,
+		.nl_u = { .ip4_u = { .daddr = dst,
+			.saddr = src,
+			.tos   = tos } },
+		.proto = protocol,
+		.uli_u = { .ports =
+			{ .sport = sport,
+				.dport = dport } } };
+
+	int err;
+	if (!dst || !src) {
+		err = __ip_route_output_key(rp, &fl);
+		if (err)
+			return err;
+		fl.fl4_dst = (*rp)->rt_dst;
+		fl.fl4_src = (*rp)->rt_src;
+                ip_rt_put(*rp);
+                *rp = NULL;
+        }
+        security_sk_classify_flow(sk, &fl);
+        return ip_route_output_flow(rp, &fl, sk, flags);
+}
+
 static inline int getsocklocaladdr(struct socket *sock, struct sockaddr *cliaddr, struct sockaddr *servaddr) 
 {
     struct sock *sk = sock->sk;
@@ -367,21 +395,10 @@ static inline int getsocklocaladdr(struct socket *sock, struct sockaddr *cliaddr
         nexthop = inet->opt->faddr;
     }
 
-/*
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 21)
-*/
-    tmp = ip_route_connect(&rt, nexthop, inet->saddr,
+    tmp = lkm_ip_route_connect(&rt, nexthop, inet->saddr,
             RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
             IPPROTO_TCP,
             inet->sport, usin->sin_port, sk, 1);
-/*
-#else
-    tmp = ip_route_connect(&rt, nexthop, inet->saddr,
-            RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
-            IPPROTO_TCP,
-            inet->sport, usin->sin_port, sk);
-#endif
-*/
     if (tmp < 0)
         return 0;
 
