@@ -2,8 +2,6 @@ kconnp
 ======
 
 The connection pool in linux kernel layer.
-### Summary
-Reduce system overload by creating common connection pool in linux kernel layer.
 
 ###Requires：
  * X86 CPU
