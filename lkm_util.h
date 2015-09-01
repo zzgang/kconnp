@@ -312,19 +312,21 @@ static inline int getsockaddr(struct socket *sock, struct sockaddr *address, int
     return 1;
 }
 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
 static inline int lkm_ip_route_connect(struct rtable **rp, u32 dst,
 		u32 src, u32 tos, int oif, u8 protocol,
 		u16 sport, u16 dport, struct sock *sk,
 		int flags)
 {
-	struct flowi fl = { .oif = oif,
-		.nl_u = { .ip4_u = { .daddr = dst,
-			.saddr = src,
-			.tos   = tos } },
-		.proto = protocol,
-		.uli_u = { .ports =
-			{ .sport = sport,
-				.dport = dport } } };
+    struct flowi fl = { .oif = oif,
+        .nl_u = { .ip4_u = { .daddr = dst,
+            .saddr = src,
+            .tos   = tos } },
+        .proto = protocol,
+        .uli_u = { .ports =
+            { .sport = sport,
+                .dport = dport } } };
 
 	int err;
 	if (!dst || !src) {
@@ -339,6 +341,7 @@ static inline int lkm_ip_route_connect(struct rtable **rp, u32 dst,
         security_sk_classify_flow(sk, &fl);
         return ip_route_output_flow(rp, &fl, sk, flags);
 }
+#endif
 
 static inline int getsocklocaladdr(struct socket *sock, struct sockaddr *cliaddr, struct sockaddr *servaddr) 
 {
@@ -348,7 +351,7 @@ static inline int getsocklocaladdr(struct socket *sock, struct sockaddr *cliaddr
     struct rtable *rt; 
     __be32 daddr, nexthop;
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
     __be16 orig_sport, orig_dport;
     struct flowi4 *fl4;
     int err; 
@@ -366,10 +369,19 @@ static inline int getsocklocaladdr(struct socket *sock, struct sockaddr *cliaddr
     orig_sport = inet->inet_sport;
     orig_dport = SOCKADDR_PORT(usin);
     fl4 = &inet->cork.fl.u.ip4;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
     rt = ip_route_connect(fl4, nexthop, inet->inet_saddr,
             RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
             IPPROTO_TCP,
             orig_sport, orig_dport, sk, 1);
+#else
+    rt = ip_route_connect(fl4, nexthop, inet->inet_saddr,
+            RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
+            IPPROTO_TCP,
+            orig_sport, orig_dport, sk);
+#endif
+
     if (IS_ERR(rt)) {
         err = PTR_ERR(rt);
         if (err == -ENETUNREACH)

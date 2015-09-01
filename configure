@@ -77,6 +77,14 @@ else
     echo "Check kernel sysmap file for building LKM... yes";
 fi
 
+if ! (which pcregrep 1>/dev/null) && echo "Check system command pcregrep... no";
+then
+    echo "Check system command pcregrep... no";
+    exit
+else
+    echo "Check system command pcregrep... yes";
+fi
+
 #######################
 #Generate sys calls ea.
 #######################
