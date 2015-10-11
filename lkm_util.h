@@ -327,6 +327,7 @@ static inline int lkm_ip_route_connect(struct rtable **rp, u32 dst,
         .uli_u = { .ports =
             { .sport = sport,
                 .dport = dport } } };
+	struct net *net = sock_net(sk);
 
 	int err;
 	if (!dst || !src) {
@@ -335,11 +336,16 @@ static inline int lkm_ip_route_connect(struct rtable **rp, u32 dst,
 			return err;
 		fl.fl4_dst = (*rp)->rt_dst;
 		fl.fl4_src = (*rp)->rt_src;
-                ip_rt_put(*rp);
-                *rp = NULL;
-        }
-        security_sk_classify_flow(sk, &fl);
-        return ip_route_output_flow(rp, &fl, sk, flags);
+		ip_rt_put(*rp);
+		*rp = NULL;
+	}
+	security_sk_classify_flow(sk, &fl);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 28)
+	return ip_route_output_flow(rp, &fl, sk, flags);
+#else
+	return ip_route_output_flow(sock_net(sk), rp, &fl, sk, flags);
+#endif
+
 }
 #endif
 
