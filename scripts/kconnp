@@ -4,7 +4,7 @@ help(){
     cat <<EOF
 Kconnp actions:
     stats
-    ldcfg
+    reload
     start
     stop
     restart
@@ -20,7 +20,7 @@ stats(){
     cat /proc/kconnp/stats.info
 }
 
-ldcfg(){
+reload(){
     for f in $kconnp_cfgs
     do 
         cat /etc/$f > /proc/kconnp/$f
@@ -29,7 +29,7 @@ ldcfg(){
 
 start(){
     insmod $kmconnp;
-    ldcfg;
+    reload;
 }
 
 stop(){
@@ -54,8 +54,8 @@ do
         stats)
             stats;
             ;;
-        ldcfg)
-            ldcfg;
+        reload)
+            reload;
             ;;
         start)
             start;
