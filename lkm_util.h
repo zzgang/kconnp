@@ -327,9 +327,8 @@ static inline int lkm_ip_route_connect(struct rtable **rp, u32 dst,
         .uli_u = { .ports =
             { .sport = sport,
                 .dport = dport } } };
-	struct net *net = sock_net(sk);
-
 	int err;
+
 	if (!dst || !src) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 28)
 		err = __ip_route_output_key(rp, &fl);
