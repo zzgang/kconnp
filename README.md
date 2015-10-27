@@ -31,8 +31,8 @@ kconnp (stats|ldcfg|start|stop|restart)
 * Black list for ACL: /etc/iports.deny
 
 ######Explains
-* The priority of black list is higer than white black list.
-* If the iport is specified，the connections will be precommectted.
+* The priority of black list is higher than white black list.
+* If the iport is specified，the connections will be pre-connected.
 * If the connection is configured stateful (tag: (S))，each connection only be use one time before closing. 
 
 
