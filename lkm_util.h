@@ -406,15 +406,32 @@ static inline int getsocklocaladdr(struct socket *sock, struct sockaddr *cliaddr
     SOCKADDR_IP(cliaddr) = fl4->saddr;
 
 #else
-    
+
     int tmp;
 
     nexthop = daddr = SOCKADDR_IP(usin);
-    if (inet->opt && inet->opt->srr) {
+
+#if defined(optlength)
+
+	if (inet->opt && inet->opt->srr) {
         if (!daddr)
             return 0;
         nexthop = inet->opt->faddr;
     }
+
+#else
+
+	{
+		struct ip_options_rcu *inet_opt;
+		inet_opt = inet->inet_opt;
+		if (inet_opt && inet_opt->opt.srr) {
+			if (!daddr)
+				return 0;
+			nexthop = inet_opt->opt.faddr;
+		}    
+	}
+
+#endif
 
     tmp = lkm_ip_route_connect(&rt, nexthop, inet->saddr,
             RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
