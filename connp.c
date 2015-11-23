@@ -140,6 +140,31 @@ static inline int insert_into_connp(struct sockaddr *cliaddr, struct sockaddr *s
     return 0;
 }
 
+int check_if_ignore_primitives(int fd, const char __user * buf, size_t len)
+{
+    struct socket *sock;
+    struct sockaddr servaddr;
+    kconnp_str_t b = {.data = (char *)buf, .len = len};
+
+    if (!is_sock_fd(fd))
+        return 0;
+
+    sock = getsock(fd);
+    if (!sock 
+            || !IS_TCP_SOCK(sock) 
+            || !IS_CLIENT_SOCK(sock))
+        return 0;
+
+    if (!getsockservaddr(sock, &servaddr))
+        return 0;
+    
+    if (servaddr.sa_family != AF_INET)
+        return 0;
+
+    return cfg_conn_check_primitive(&servaddr, (void *)&b);
+
+}
+
 int insert_into_connp_if_permitted(int fd)
 {
     struct socket *sock;

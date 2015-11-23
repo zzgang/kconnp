@@ -1,19 +1,20 @@
 # /etc/iports.allow: list of ip-ports that are allowed to access the kconnp.
 #
-# Per ip-port per line.
+# Per service:ip:port per line.
 #
-# Format: ip:port(flags)
+# Format: service:ip:port(flags)
+# 		  service:  Service name.
 #         ip:       Internet dotted decimal ip string or '*' wildcard.
-#         port:     Internet port number string (0 ~ 65535).
+#         port:     Internet port number string.
 #         flags:    S or N
 #                   S 
 #                       Stateful connection.
 #                   N 
 #                       Non-state connection, that is default set.
 #
-# Example:    *:11211
-#             10.207.0.1:11211
-#             10.207.0.[1-9]:11211
-#             10.207.0.[1-9]:3306(S)
+# Example: memcache:*:11211
+#          memcache:10.207.0.1:11211
+#          memcache:10.207.0.[1-9]:11211
+#          mysql:10.207.0.[1-9]:3306(S)
 
-*:11211 #Memcache port, Non-state connection
+memcache:*:11211 #Memcache port, Non-state connection

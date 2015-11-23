@@ -96,6 +96,9 @@ sys_close_ea=`pcregrep '\bsys_close\b' $sysmap_file | awk '{print $1;}' | sed -e
 sys_shutdown_ea=`pcregrep '\bsys_shutdown\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
 sys_exit_group_ea=`pcregrep '\bsys_exit_group\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
 sys_exit_ea=`pcregrep '\bsys_exit\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_write_ea=`pcregrep '\bsys_write\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_send_ea=`pcregrep '\bsys_send\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_sendto_ea=`pcregrep '\bsys_sendto\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
 
 cat sys_call_table_ea.h.in |
 sed -e "s/%%SYS_CALL_TABLE_EA%%/0x${sys_call_table_ea}/" |
@@ -104,8 +107,10 @@ sed -e "s/%%SYS_CONNECT_EA%%/0x${sys_connect_ea}/" |
 sed -e "s/%%SYS_CLOSE_EA%%/0x${sys_close_ea}/" | 
 sed -e "s/%%SYS_SHUTDOWN_EA%%/0x${sys_shutdown_ea}/" | 
 sed -e "s/%%SYS_EXIT_GROUP_EA%%/0x${sys_exit_group_ea}/" | 
-sed -e "s/%%SYS_EXIT_EA%%/0x${sys_exit_ea}/"  > sys_call_table_ea.h;
-
+sed -e "s/%%SYS_EXIT_EA%%/0x${sys_exit_ea}/"  | 
+sed -e "s/%%SYS_WRITE_EA%%/0x${sys_write_ea}/" | 
+sed -e "s/%%SYS_SEND_EA%%/0x${sys_send_ea}/" | 
+sed -e "s/%%SYS_SENDTO_EA%%/0x${sys_sendto_ea}/" > sys_call_table_ea.h;
 
 NO_OMIT_FRAME_POINTER=""
 
@@ -134,7 +139,7 @@ $NO_OMIT_FRAME_POINTER
 
 cat > Makefile <<MF
 obj-m = kconnp.o
-kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o preconnect.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o hash.o cfg.o lkm_util.o
+kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o preconnect.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o sys_sendcalls.o hash.o cfg.o lkm_util.o
 
 $NO_OMIT_FRAME_POINTER
 

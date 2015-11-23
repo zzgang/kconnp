@@ -13,23 +13,22 @@ exit;
 }
 
 kv=`uname -r`;
-kmconnp="/lib/modules/$kv/kernel/net/kconnp/kconnp.ko"
-kconnp_cfgs="kconnp.conf iports.allow iports.deny"
+kmconnp="/lib/modules/$kv/kernel/net/kconnp/kconnp.ko";
+kconnp_cfgs="kconnp.conf iports.allow iports.deny primitives.deny";
 
 stats(){
-    cat /proc/kconnp/stats.info
+    cat /proc/kconnp/stats.info;
 }
 
 reload(){
     for f in $kconnp_cfgs
     do 
-        cat /etc/$f > /proc/kconnp/$f
+        cat /etc/$f > /proc/kconnp/$f;
     done;
 }
 
 start(){
-    insmod $kmconnp;
-    reload;
+    insmod $kmconnp  && reload;
 }
 
 stop(){

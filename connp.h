@@ -20,8 +20,6 @@ typedef enum {
 } conn_close_way_t;
 
 struct conn_attr_t {
-    int flags;
-
     struct {
         conn_close_way_t close_way;
         u64 last_set_jiffies;
@@ -38,6 +36,7 @@ struct conn_attr_t {
     } stats;
 };
 
+extern int check_if_ignore_primitives(int fd, const char __user * buf, size_t len);
 extern int insert_into_connp_if_permitted(int fd);
 extern int fetch_conn_from_connp(int fd, struct sockaddr *);
 

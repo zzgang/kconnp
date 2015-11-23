@@ -6,10 +6,11 @@
 #include "hash.h"
 #include "cfg.h"
 
-#define CFG_GLOBAL_FILE             "kconnp.conf"
-#define CFG_ALLOWED_IPORTS_FILE     "iports.allow"
-#define CFG_DENIED_IPORTS_FILE      "iports.deny"
-#define CFG_CONN_STATS_INFO_FILE    "stats.info"
+#define CFG_GLOBAL_FILE                        "kconnp.conf"
+#define CFG_ALLOWED_IPORTS_FILE     		   "iports.allow"
+#define CFG_DENIED_IPORTS_FILE                 "iports.deny"
+#define CFG_COMMUNICATION_PRIMITIVES_FILE      "primitives.deny"
+#define CFG_CONN_STATS_INFO_FILE               "stats.info"
 
 #define DUMP_INTERVAL 5 //seconds
 
@@ -94,6 +95,8 @@
 
 #define INIT_IPORT_POS(iport_pos)           \
     do {                                    \
+        (iport_pos)->sn_start = -1;         \
+        (iport_pos)->sn_end = -1;           \
         (iport_pos)->ip_start = -1;         \
         (iport_pos)->ip_end = -1;           \
         (iport_pos)->port_start = -1;       \
@@ -102,19 +105,26 @@
         (iport_pos)->flags_end = -1;        \
     } while (0)
 
-#define NEW_IPORT_STR_NODE(iport_str, ip_strlen, port_strlen, flags_strlen) \
+#define NEW_IPORT_STR_NODE(iport_str, sn_strlen, ip_strlen, port_strlen, flags_strlen) \
     do {                                                        \
         iport_str = lkmalloc(sizeof(struct iport_str_t));       \
         if (!iport_str)                                         \
             return 0;                                           \
+        (iport_str)->sn_str = lkmalloc(sn_strlen);              \
+        if (!(iport_str)->sn_str) {                             \
+            lkmfree(iport_str);                                 \
+            return 0;                                           \
+        }                                                       \
         (iport_str)->ip_str = lkmalloc(ip_strlen);              \
         if (!(iport_str)->ip_str) {                             \
+            lkmfree((iport_str)->sn_str);                       \
             lkmfree(iport_str);                                 \
             return 0;                                           \
         }                                                       \
         (iport_str)->port_str = lkmalloc(port_strlen);          \
         if (!(iport_str)->port_str) {                           \
             lkmfree((iport_str)->ip_str);                       \
+            lkmfree((iport_str)->sn_str);                       \
             lkmfree(iport_str);                                 \
             return 0;                                           \
         }                                                       \
@@ -123,6 +133,7 @@
             if (!(iport_str)->flags_str) {                      \
                 lkmfree((iport_str)->port_str);                 \
                 lkmfree((iport_str)->ip_str);                   \
+                lkmfree((iport_str)->sn_str);                   \
                 lkmfree(iport_str);                             \
                 return 0;                                       \
             }                                                   \
@@ -130,11 +141,13 @@
     } while (0)  
 
 #define INIT_IPORT_STR_NODE(iport_str,                                  \
+        sn_str_pass, sn_strlen,                                         \
         ip_str_pass, ip_strlen,                                         \
         port_str_pass, port_strlen,                                     \
         flags_str_pass, flags_strlen,                                   \
         line_pass)                                                      \
     do {                                                                \
+        memcpy((iport_str)->sn_str, sn_str_pass, sn_strlen);            \
         memcpy((iport_str)->ip_str, ip_str_pass, ip_strlen);            \
         memcpy((iport_str)->port_str, port_str_pass, port_strlen);      \
         if ((iport_str)->flags_str && flags_strlen)                     \
@@ -144,6 +157,7 @@
 
 #define DESTROY_IPORT_STR_NODE(iport_str)   \
     do {                                    \
+        lkmfree((iport_str)->sn_str);       \
         lkmfree((iport_str)->ip_str);       \
         lkmfree((iport_str)->port_str);     \
         lkmfree(iport_str);                 \
@@ -154,13 +168,16 @@
 
 #define NEW_IPORT_STR_SCAN_NODE(iport_str, iport_pos)                           \
     NEW_IPORT_STR_NODE(iport_str,                                               \
+            (iport_pos)->sn_end - (iport_pos)->sn_start + 2, /*padding '\0'*/   \
             (iport_pos)->ip_end - (iport_pos)->ip_start + 2, /*padding '\0'*/   \
-            (iport_pos)->port_end - (iport_pos)->port_start + 2,                \
+            (iport_pos)->port_end - (iport_pos)->port_start + 2,/*padding '\0'*/\
             ((iport_pos)->flags_end >= 0 && (iport_pos)->flags_start >= 0)      \
             ? ((iport_pos)->flags_end - (iport_pos)->flags_start + 2) : 0)  
 
 #define INIT_IPORT_STR_SCAN_NODE(iport_str, ce, iport_pos, line)    \
     INIT_IPORT_STR_NODE(iport_str,                                  \
+            (ce)->raw_ptr + (iport_pos)->sn_start,                  \
+            (iport_pos)->sn_end - (iport_pos)->sn_start + 1,        \
             (ce)->raw_ptr + (iport_pos)->ip_start,                  \
             (iport_pos)->ip_end - (iport_pos)->ip_start + 1,        \
             (ce)->raw_ptr + (iport_pos)->port_start,                \
@@ -170,7 +187,7 @@
             line)
 
 
-/*Regular cfg funcs*/
+/*Global cfg funcs*/
 static int item_line_scan(struct cfg_entry *, int *pos, int *line, 
         struct item_pos_t *);
 static int item_line_parse(struct item_str_t *, struct cfg_entry *);
@@ -185,7 +202,8 @@ static int iport_line_scan(struct cfg_entry *,
         struct iport_pos_t *);
 static int iport_line_parse(struct iport_str_t *, 
         char *flags_str, char *port_str, char *ip_or_prefix, 
-        int *ip_range_start, int *ip_range_end);
+        int *ip_range_start, int *ip_range_end,
+        char *sn_str);
 static void iports_str_list_free(struct iports_str_list_t *);
 static int cfg_iports_data_scan(struct iports_str_list_t *, struct cfg_entry *);
 static int cfg_iports_data_parse(struct iports_str_list_t *, 
@@ -200,12 +218,12 @@ static int cfg_iports_entity_reload(struct cfg_entry *);
 static int cfg_white_list_init(struct cfg_entry *);
 static void cfg_white_list_destroy(struct cfg_entry *);
 
-static int cfg_stats_info_entity_init(struct cfg_entry *);
-static void cfg_stats_info_entity_destroy(struct cfg_entry *);
-
 static int cfg_white_list_entity_init(struct cfg_entry *);
 static void cfg_white_list_entity_destroy(struct cfg_entry *);
 static int cfg_white_list_entity_reload(struct cfg_entry *);
+
+static int cfg_stats_info_entity_init(struct cfg_entry *);
+static void cfg_stats_info_entity_destroy(struct cfg_entry *);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
 static int cfg_proc_read(char *buffer, char **buffer_location,
@@ -225,9 +243,10 @@ static void cfg_entry_destroy(struct cfg_entry *);
 static int cfg_proc_file_init(struct cfg_entry *); 
 static void cfg_proc_file_destroy(struct cfg_entry *); 
 
-static int cfg_items_entity_init(struct cfg_entry *); 
+static int cfg_prims_entity_init(struct cfg_entry *); 
 static void cfg_items_entity_destroy(struct cfg_entry *); 
 static int cfg_items_entity_reload(struct cfg_entry *); 
+static int cfg_global_entity_init(struct cfg_entry *); 
 
 static int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str);
 static int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str);
@@ -236,9 +255,9 @@ static int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str);
 static inline void *iport_in_list_check_or_call(unsigned int ip, unsigned short int port,  struct cfg_entry *, void (*call_func)(void *data));
 
 static struct cfg_dir cfg_dentry = { //initial the cfg directory.
-    { //global conf
+    .global = {
         .f_name = CFG_GLOBAL_FILE,
-        
+
         .proc_read = cfg_proc_read,
         .proc_write = cfg_proc_write,
 
@@ -248,11 +267,11 @@ static struct cfg_dir cfg_dentry = { //initial the cfg directory.
         .proc_file_init = cfg_proc_file_init,
         .proc_file_destroy = cfg_proc_file_destroy,
 
-        .entity_init = cfg_items_entity_init,
+        .entity_init = cfg_global_entity_init,
         .entity_destroy = cfg_items_entity_destroy,
         .entity_reload = cfg_items_entity_reload
     },
-    { //allowed_list
+    .allowed_list = { 
         .f_name = CFG_ALLOWED_IPORTS_FILE,
 
         .proc_read = cfg_proc_read,
@@ -268,12 +287,12 @@ static struct cfg_dir cfg_dentry = { //initial the cfg directory.
         .entity_destroy = cfg_iports_entity_destroy,
         .entity_reload = cfg_iports_entity_reload
     },
-    { //denied_list
+    .denied_list = {
         .f_name = CFG_DENIED_IPORTS_FILE,
 
         .proc_read = cfg_proc_read,
         .proc_write = cfg_proc_write,
-        
+
         .init = cfg_entry_init,
         .destroy = cfg_entry_destroy,
 
@@ -284,7 +303,23 @@ static struct cfg_dir cfg_dentry = { //initial the cfg directory.
         .entity_destroy = cfg_iports_entity_destroy,
         .entity_reload = cfg_iports_entity_reload
     },
-    { //stats info
+    .prim_list = { //communication primitives
+        .f_name = CFG_COMMUNICATION_PRIMITIVES_FILE,
+
+        .proc_read = cfg_proc_read,
+        .proc_write = cfg_proc_write,
+
+        .init = cfg_entry_init,
+        .destroy = cfg_entry_destroy,
+
+        .proc_file_init = cfg_proc_file_init,
+        .proc_file_destroy = cfg_proc_file_destroy,
+
+        .entity_init = cfg_prims_entity_init,
+        .entity_destroy = cfg_items_entity_destroy,
+        .entity_reload = cfg_items_entity_reload
+    },
+    .stats_info = {
         .f_name = CFG_CONN_STATS_INFO_FILE,
 
         .proc_read = cfg_proc_read,
@@ -534,7 +569,7 @@ static ssize_t cfg_proc_write(struct file *file, const char __user *buffer, size
 
 /*
  *revalidate the data ptr
- * */
+ */
 static inline struct cfg_entry *cfg_get_ce(void *data)
 {
     struct cfg_entry *p, *entry = (struct cfg_entry *)cfg;
@@ -648,20 +683,32 @@ static void cfg_entry_destroy(struct cfg_entry *ce)
     ce->proc_file_destroy(ce);
 }
 
-static inline void item_dtor_func(void *data) 
+static inline void item_str_node_dtor_func(void *data) 
 {
     struct item_node_t *item;
 
+    if (!data) 
+        return;
     item = (struct item_node_t *)data;
-    if (item->cfg_item_set_node == cfg_item_set_str_node)
-        lkmfree(item->v_str);
+    if (item->cfg_item_set_node == cfg_item_set_str_node) {
+        if (item->v_str)
+            lkmfree(item->v_str);
+    }
+}
+
+static inline void item_dtor_func(void *data) 
+{
+    if (data) {
+        item_str_node_dtor_func(data); 
+        lkmfree(data);   
+    }
 }
 
 static int item_line_scan(struct cfg_entry *ce, int *pos, int *line,
         struct item_pos_t *item_pos) 
 {
     char c;
-    int delimeter_find = 0;
+    int delimeter_found = 0;
     int comment_line_start = 0;
 
     (*line)++;
@@ -682,31 +729,31 @@ static int item_line_scan(struct cfg_entry *ce, int *pos, int *line,
             if (item_pos->name_start < 0) 
                 continue;   
 
-            if (!delimeter_find) {
-                delimeter_find = 1;
+            if (!delimeter_found) {
+                delimeter_found = 1;
                 continue;
             }
 
-            if (delimeter_find && item_pos->value_start < 0) 
+            if (delimeter_found && item_pos->value_start < 0) 
                 continue;
         }
 
         if ((c >= '0' && c <= '9') 
                 || (c >= 'a' && c <= 'z') 
                 || (c >= 'A' && c <= 'Z') 
-                || c == '_' || c == ',' || c == '"' || c == '.'
+                || c == '_' || c == ',' || c == '"' || c == '.' || c == '\\'
                 || c == ' ' || c == '\t') {
 
             if (item_pos->name_start < 0) 
                 item_pos->name_start = *pos - 1;
 
-            if (!delimeter_find)
+            if (!delimeter_found)
                 item_pos->name_end = *pos - 1;
 
-            if (delimeter_find && (item_pos->value_start < 0))
+            if (delimeter_found && (item_pos->value_start < 0))
                 item_pos->value_start = *pos - 1;
 
-            if (delimeter_find)
+            if (delimeter_found)
                 item_pos->value_end = *pos - 1;
 
         } else 
@@ -733,7 +780,7 @@ out_err:
 }
 
 /**
- *Simple iport scanner.
+ *Simple item scanner.
  *
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
@@ -774,13 +821,16 @@ static int cfg_items_data_scan(struct items_str_list_t *items_str_list,
  */
 static int item_line_parse(struct item_str_t *item_str, struct cfg_entry *ce)
 {
-    int i;
-    char c, p, f, l;
+    int i, escape_character_count, quotations_not_matches;
+    char c;
 
     //parse item name str.
     for (i = 0; i < item_str->name.len; i++) {
         c = item_str->name.data[i];
-        if (c == '"') 
+        if (!((c >= '0' && c <= '9')
+                || (c >= 'A' && c <= 'Z')
+                || (c >= 'a' && c <= 'z')
+                || c == '_' || c == '.'))
             goto out_err;
     }
 
@@ -788,18 +838,30 @@ static int item_line_parse(struct item_str_t *item_str, struct cfg_entry *ce)
         return 1;
 
     //parse item value str.
-    f = item_str->value.data[0];
-    l = item_str->value.data[item_str->value.len - 1];
-    if ((f == '"') != (l == '"'))
-        goto out_err;
-
-    for (i = 1; i < item_str->value.len - 1; i++) {
+    escape_character_count = 0;
+    quotations_not_matches = 0;
+    for (i = 0; i < item_str->value.len; i++) {
         c = item_str->value.data[i]; 
-        p = item_str->value.data[i-1];
-        
-        if (c == '"' && p != '\\')
-            goto out_err;
+        if (c == '\\') 
+            ++escape_character_count;
+        else {
+            /*quotations*/
+            if (c == '"' && (escape_character_count % 2 == 0)) {
+                if (i != 0 && (i != item_str->value.len - 1)) 
+                    goto out_err;
+
+                if (quotations_not_matches) 
+                    quotations_not_matches--;
+                else
+                    quotations_not_matches++;
+            }
+            escape_character_count = 0;
+        }
     }
+    if (quotations_not_matches) 
+        goto out_err;
+    if (escape_character_count % 2 != 0) 
+        goto out_err;
 
     return 1; 
 
@@ -811,7 +873,7 @@ out_err:
 }
 
 /**
- *Simple iport parser.
+ *Simple item parser.
  *
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
@@ -848,15 +910,54 @@ static void items_str_list_free(struct items_str_list_t * items_str_list)
 
 static int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
 {
-    if (str->len > 0) {
-        node->v_str = lkmalloc(str->len + 1);
-        if (!node->v_str) {
-            printk(KERN_ERR "No more memory!");
-            return 0;
-        }
-        memcpy(node->v_str, str->data, str->len);
-    } else 
+    char *c, *n, *dest;
+    int len = 0;
+
+    if (!str->data)
         return 0;
+
+    dest = lkmalloc(str->len + 1);
+    if (!dest) {
+        printk(KERN_ERR "No more memory!");
+        return 0;
+    }
+
+    c = str->data; 
+    if (*c == '"') { //Strip the first and last quotations
+        *c = '\0';
+        str->data[str->len - 1] = '\0';
+        str->len -= 2;
+        c++;
+    }
+    
+    for (; c && *c; c++) {
+        if (*c != '\\') {
+            dest[len++] = *c;
+        } else { //Check next char
+            n = c + 1;
+            switch (*n) {
+                case '\\':
+                    dest[len++] = '\\';
+                    break;
+                case 'r':
+                    dest[len++] = '\r';
+                    break;
+                case 'n':
+                    dest[len++] = '\n';
+                    break;
+                case 't':
+                    dest[len++] = '\t';
+                    break;
+                default:
+                    dest[len++] = *n;
+                    break;
+            }
+            c++;
+        }
+    }
+
+    node->v_str = dest;
+    node->v_strlen = len;
 
     return 1;
 }
@@ -883,7 +984,7 @@ static int cfg_item_set_bool_node(struct item_node_t *node, kconnp_str_t *str)
 }
 */
 
-static int cfg_items_entity_init(struct cfg_entry *ce)
+static int cfg_global_entity_init(struct cfg_entry *ce)
 {
     struct items_str_list_t items_str_list = {NULL, 0};
     struct item_node_t *p;
@@ -903,7 +1004,7 @@ static int cfg_items_entity_init(struct cfg_entry *ce)
     }
 
     if (!_hash_init((struct hash_table_t **)&ce->cfg_ptr, 0, 
-            hash_func_times33, item_dtor_func)) {
+            hash_func_times33, item_str_node_dtor_func)) {
         ret = 0;
         goto out_free;
     }
@@ -947,6 +1048,93 @@ out_hash:
     hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
     goto out_free;
 }
+
+static int cfg_prims_entity_init(struct cfg_entry *ce)
+{
+    struct items_str_list_t items_str_list = {NULL, 0};
+    struct item_str_t *q;
+    int res, ret = 1;
+
+    if ((res = cfg_items_data_scan(&items_str_list, ce)) <= 0) {
+        if (res < 0)  //error
+            ret = 0;
+        goto out_free;
+    }
+
+    if ((res = cfg_items_data_parse(&items_str_list, ce)) <= 0) {
+        if (res < 0) //error
+            ret = 0;
+        goto out_free;
+    }
+
+    if (!_hash_init((struct hash_table_t **)&ce->cfg_ptr, 0, 
+            hash_func_times33, item_dtor_func)) {
+        ret = 0;
+        goto out_free;
+    }
+    
+    q = items_str_list.list;
+    for (; q; q = q->next) {
+        struct item_node_t *prim_node;
+        struct hash_bucket_t *pos;
+        struct conn_node_t *conn_node;
+        int found = 0;
+
+        hash_for_each(wl->cfg_ptr, pos) {
+
+            conn_node = (struct conn_node_t *)hash_value(pos);
+            
+            if ((q->name.len == conn_node->conn_sn.len) 
+                    && !memcmp(q->name.data, conn_node->conn_sn.data, q->name.len)) {
+                prim_node = lkmalloc(sizeof(struct item_node_t)); 
+                if (!prim_node) {
+                    printk(KERN_ERR "No more memory!");
+                    ret = 0;
+                    goto out_hash;
+                }
+
+                if (q->value.len > MAX_PRIMITIVE_LEN || 
+                        !cfg_item_set_str_node(prim_node, &q->value)) {
+                    printk(KERN_ERR 
+                            "Error: Invalid primitives on line %d in file /etc/%s", 
+                            q->line, ce->f_name);
+                    lkmfree(prim_node);
+                    ret = 0;
+                    goto out_hash;
+                }
+
+                if (!hash_set((struct hash_table_t *)ce->cfg_ptr, 
+                            (const char *)q->name.data, q->name.len,
+                            (void *)prim_node, 0)) {
+                    ret = 0;
+                    goto out_hash;
+                }
+                printk(KERN_ERR "prims: %s, len: %d", prim_node->v_str, prim_node->v_strlen);
+
+                conn_node->prim_node = prim_node;
+
+                found = 1;
+            } 
+        }
+        
+        if (!found) {
+            printk(KERN_ERR 
+                    "Error: Unrecognized service name on line %d in file /etc/%s", 
+                    q->line, ce->f_name);
+            ret = 0;
+            goto out_hash;
+        }
+    }
+out_free:
+    items_str_list_free(&items_str_list);
+    return ret;
+
+out_hash:
+    ret = 0;
+    hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
+    goto out_free;
+}
+
 
 void cfg_items_entity_destroy(struct cfg_entry *ce)
 {
@@ -1075,7 +1263,7 @@ static int ip_aton(const char *ip_str, struct in_addr *iaddr)
  * 3.the current line to scan.
  * 4.store the iport pos.
  *
- *Allowed iport characters: 0-9 . * : [] - () A-Z |
+ *Allowed iport characters: 0-9 . * : [] - () A-Z a-z _ |
  *
  *Returns:
  * -1: line scan error, 0: line scan done, 1: line scan success.
@@ -1111,13 +1299,15 @@ static int iport_line_scan(struct cfg_entry *ce,
         if ((c >= '0' && c <= '9')  //valid char
                 || c == '.' || c == '*' || c == ':'
                 || c == '[' || c == ']' || c == '-'
+                || (c >= 'a' && c <= 'z')
                 || (c >= 'A' && c <= 'Z')
+                || c == '_'
                 || c == '(' || c == ')' || c == '|') {
 
             valid_chars_count++;
 
             if (c == ':') { //delimeter of ip and port.
-                after_colon = 1;
+                after_colon += 1;
                 continue;
             }
 
@@ -1127,14 +1317,19 @@ static int iport_line_scan(struct cfg_entry *ce,
             }
 
             /*Get iport pos*/
-            if (!after_colon && iport_pos->ip_start < 0)
-                iport_pos->ip_start = *pos - 1;
-            if (after_colon && iport_pos->ip_end < 0)
-                iport_pos->ip_end = *pos - 3; 
+            if (!after_colon && iport_pos->sn_start < 0) 
+                iport_pos->sn_start = *pos - 1;
+            if (after_colon == 1 && iport_pos->sn_end < 0)
+                iport_pos->sn_end = *pos - 3;
 
-            if (after_colon && iport_pos->port_start < 0)
+            if (after_colon == 1 && iport_pos->ip_start < 0)
+                iport_pos->ip_start = *pos - 1;
+            if (after_colon == 2 && iport_pos->ip_end < 0)
+                iport_pos->ip_end = *pos - 3;
+
+            if (after_colon == 2 && iport_pos->port_start < 0)
                 iport_pos->port_start = *pos - 1;
-            if (after_colon && !flags_begin)  //port part
+            if (after_colon == 2 && !flags_begin)  //port part
                 iport_pos->port_end = *pos - 1;
 
             if (flags_begin && iport_pos->flags_start < 0)
@@ -1150,13 +1345,11 @@ static int iport_line_scan(struct cfg_entry *ce,
     if (!valid_chars_count)
         return 0;
     
-    success = iport_pos->ip_end >= 0 && iport_pos->ip_start >= 0 
+    success = iport_pos->sn_end >= 0 && iport_pos->sn_start >= 0
+        && iport_pos->ip_end >= 0 && iport_pos->ip_start >= 0 
         && iport_pos->port_end >= 0 && iport_pos->port_start >= 0
         && (flags_begin ? 
-                (iport_pos->flags_end >= 0 && iport_pos->flags_start >= 0) : 1)
-        && (iport_pos->ip_end - iport_pos->ip_start) >= 0
-        && (iport_pos->port_end - iport_pos->port_start) >= 0
-        && (iport_pos->flags_end - iport_pos->flags_start) >= 0;
+                (iport_pos->flags_end >= 0 && iport_pos->flags_start >= 0) : 1);
 
     if (!success)
         goto out_err;
@@ -1210,15 +1403,17 @@ static int cfg_iports_data_scan(struct iports_str_list_t *iports_str_scanning_li
  */
 static int iport_line_parse(struct iport_str_t *iport_str, 
         char *flags_str, char *port_str, char *ip_str_or_prefix,
-        int *ip_range_start, int *ip_range_end)
+        int *ip_range_start, int *ip_range_end,
+        char *sn_str)
 {
     char *c;
-    int ip_strlen, port_strlen, flags_strlen;
+    int sn_strlen, ip_strlen, port_strlen, flags_strlen;
     char ip_range_str[2][4] = {{0, }, {0, }};
     char ip_fourth_str[4] = {0, };
     int i = 0, j = 0, k = 0, n = 0, dot_count = 0, flags_sum = 0;
     int range_start = 0, range_end = 0, range_dash = 0;
-    
+   
+    sn_strlen = strlen(iport_str->sn_str);
     ip_strlen = strlen(iport_str->ip_str);
     port_strlen = strlen(iport_str->port_str);
     flags_strlen = iport_str->flags_str ? strlen(iport_str->flags_str) : 0;
@@ -1346,6 +1541,33 @@ parse_going:
     } else
         return 0; 
 
+    /*parse service name*/
+    if (sn_strlen > (MAX_SN_PADDING_ZERO_LEN - 1)) {
+        printk(KERN_ERR 
+                "The service name length exceeds the max length %d", 
+                MAX_SN_PADDING_ZERO_LEN - 1);
+        return 0;
+    }
+
+    c = iport_str->sn_str;
+    if (c && (*c == '_' 
+            || (*c >= 'a' && *c <= 'z')
+            || (*c >= 'A' && *c <= 'Z'))) {
+        c++;
+    } else 
+        return 0;
+    for (; *c; c++) {
+        if (*c == '_' || (*c >= 'a' && *c <= 'z')
+          || (*c >= 'A' && *c <= 'Z') 
+          || (*c >= '0' && *c <= '9')) {
+            continue;
+        } else {
+            return 0;
+        }
+    }
+
+    strcpy(sn_str, iport_str->sn_str);
+
     return 1;
 }
 
@@ -1359,18 +1581,24 @@ static int cfg_iports_data_parse(struct iports_str_list_t *iports_str_parsing_li
         struct iports_str_list_t *iports_str_scanning_list, struct cfg_entry *ce) 
 {
     struct iport_str_t *p, *iport_str;
-    char *ip_str_or_prefix, *port_str;
+    char *sn_str, *ip_str_or_prefix, *port_str;
     char *flags_str;
     int ip_range_start, ip_range_end; //For parsing []
     int res;
 
     p = iports_str_scanning_list->list;
     for (; p; p = p->next) {
-        int ip_strlen, port_strlen, flags_strlen;
+        int sn_strlen, ip_strlen, port_strlen, flags_strlen;
 
+        sn_strlen = strlen(p->sn_str);
         ip_strlen = strlen(p->ip_str);
         port_strlen = strlen(p->port_str);
         flags_strlen = p->flags_str ? strlen(p->flags_str) : 0;
+        
+        sn_str = lkmalloc(sn_strlen + 1);
+        if (!sn_str) {
+            return -1;
+        }
 
         ip_str_or_prefix = lkmalloc(ip_strlen + 1); 
         if (!ip_str_or_prefix)
@@ -1395,18 +1623,21 @@ static int cfg_iports_data_parse(struct iports_str_list_t *iports_str_parsing_li
         ip_range_start = ip_range_end = 0;
         res = iport_line_parse(p, 
                 flags_str, port_str, ip_str_or_prefix, 
-                &ip_range_start, &ip_range_end);
+                &ip_range_start, &ip_range_end,
+                sn_str);
         if (!res)  //Parse node error.
             goto out_free;
 
         if (ip_range_end == 0) {
             
             NEW_IPORT_STR_NODE(iport_str, 
+                    strlen(sn_str) + 1,
                     strlen(ip_str_or_prefix) + 1, 
                     strlen(port_str) + 1,
                     flags_strlen ? flags_strlen + 1 : 0);
 
             INIT_IPORT_STR_NODE(iport_str, 
+                    sn_str, strlen(sn_str),
                     ip_str_or_prefix, strlen(ip_str_or_prefix), 
                     port_str, strlen(port_str),
                     flags_str, flags_strlen,
@@ -1428,11 +1659,13 @@ static int cfg_iports_data_parse(struct iports_str_list_t *iports_str_parsing_li
                 strcat(ip_str_tmp, ip_range_str);
 
                 NEW_IPORT_STR_NODE(iport_str, 
+                        strlen(sn_str) + 1,
                         strlen(ip_str_tmp) + 1, 
                         strlen(port_str) + 1,
                         flags_strlen ? flags_strlen + 1 : 0);
 
                 INIT_IPORT_STR_NODE(iport_str, 
+                        sn_str, strlen(sn_str),
                         ip_str_tmp, strlen(ip_str_tmp), 
                         port_str, strlen(port_str), 
                         flags_str, flags_strlen,
@@ -1518,10 +1751,15 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
         struct in_addr iaddr;
         char *flag;
         
+        printk(KERN_ERR "sn: %s, ip: %s, port: %s", p->sn_str, p->ip_str, p->port_str);
         memset(&iport_node, 0, sizeof(struct iport_t)); 
 
+        //service name init
+        strcpy(iport_node.sn.data, p->sn_str);
+        iport_node.sn.len = strlen(p->sn_str); 
+
         //ip init
-        if (strcmp(p->ip_str, "*") == 0) //Wildcard
+        if (!strcmp(p->ip_str, "*")) //Wildcard
             iport_node.ip = 0;
         else {
             if (!ip_aton(p->ip_str, &iaddr)) {
@@ -1552,7 +1790,7 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
         }
 
         if (!hash_set((struct hash_table_t *)ce->cfg_ptr, 
-                    (const char *)&iport_node, sizeof(struct iport_t), 
+                    (const char *)&iport_node, sizeof(struct iport_raw_t), 
                     &iport_node, sizeof(struct iport_t))){
             hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
             ret = 0;
@@ -1686,6 +1924,7 @@ static int cfg_white_list_entity_init(struct cfg_entry *ce)
         if (in_denied_list)
             continue;
         
+        memcpy(&conn_node.conn_sn, &iport_node->sn, sizeof(*(&iport_node->sn)));
         conn_node.conn_ip = iport_node->ip;
         conn_node.conn_port = iport_node->port;
         conn_node.conn_flags = iport_node->flags;
@@ -1823,6 +2062,36 @@ int cfg_conn_op(struct sockaddr *addr, int op_type, void *val)
 
         case KEEP_ALIVE_GET:
             *((typeof(conn_node->conn_keep_alive)*)val) = conn_node->conn_keep_alive;
+            break;
+
+        case CHECK_PRIMITIVE:
+            {
+                kconnp_str_t __user *b = (kconnp_str_t *)val;
+
+                if (!conn_node->prim_node 
+                        || (b->len != conn_node->prim_node->v_strlen)) {
+                    ret = 0;
+                    break;
+                } else {
+                    char buf[MAX_PRIMITIVE_LEN];
+
+                    if (b->len > MAX_PRIMITIVE_LEN) {
+                        ret = 0;
+                        break;
+                    }
+
+                    /*mem copy from user to kernel*/
+                    if (copy_from_user(buf, b->data, b->len)) {
+                        ret = 0;
+                        break;
+                    }
+
+                    if (!memcmp(buf, conn_node->prim_node->v_str, b->len)) {
+                        ret = 1;
+                        break;
+                    }
+                }
+            }
             break;
 
         default:

@@ -1,13 +1,14 @@
 # /etc/iports.deny: list of ip-ports that are _not_ allowed to access the kconnp.
 #
-# Per ip-port per line.
+# Per service:ip:port per line.
 #
-# Format: ip:port[flag]
+# Format: service:ip:port[flag]
+# 		  service:  Service name.
 #         ip:       Internet dotted decimal ip string or '*' wildcard.
-#         port:     Internet port number string (0 ~ 65535).
+#         port:     Internet port number string.
 #
-# Example:    *:22
-#             10.207.0.1:22
-#             10.207.0.[1-9]:22
+# Example: ssh:*:22
+#          ssh:10.207.0.1:22
+#          ssh:10.207.0.[1-9]:22
 
-*:22  #SSH port.
+ssh:*:22  #SSH port

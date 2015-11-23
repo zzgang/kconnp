@@ -18,7 +18,7 @@
         (p)->tnext = NULL;                  \
         (p)->tprev = ht->trav_tail;         \
         if ((ht)->trav_tail)                \
-            (ht)->trav_tail->tnext = p;      \
+            (ht)->trav_tail->tnext = p;     \
         (ht)->trav_tail = p;                \
     } while (0)
 

@@ -13,6 +13,9 @@ sys_shutdown_func_ptr_t orig_sys_shutdown = (void *)SYS_SHUTDOWN_EA;
 sys_close_func_ptr_t orig_sys_close = (void *)SYS_CLOSE_EA;
 sys_exit_func_ptr_t orig_sys_exit = (void *)SYS_EXIT_EA;
 sys_exit_func_ptr_t orig_sys_exit_group = (void *)SYS_EXIT_GROUP_EA;
+sys_write_func_ptr_t orig_sys_write = (void *)SYS_WRITE_EA;
+sys_send_func_ptr_t orig_sys_send = (void *)SYS_SEND_EA;
+sys_sendto_func_ptr_t orig_sys_sendto = (void *)SYS_SENDTO_EA;
 
 /*new sys calls*/
 #ifdef __NR_socketcall
@@ -20,16 +23,19 @@ static sys_socketcall_func_ptr_t new_sys_socketcall = connp_sys_socketcall;
 #else  //__NR_connect and __NR_shutdown
 static sys_connect_func_ptr_t new_sys_connect = connp_sys_connect;
 static sys_shutdown_func_ptr_t new_sys_shutdown = connp_sys_shutdown;
+static sys_send_func_ptr_t new_sys_send = connp_sys_send;
+static sys_sendto_func_ptr_t new_sys_sendto = connp_sys_sendto;
 #endif
 
 static sys_close_func_ptr_t new_sys_close = connp_sys_close;
 static sys_exit_func_ptr_t new_sys_exit = connp_sys_exit;
 static sys_exit_func_ptr_t new_sys_exit_group = connp_sys_exit_group;
+static sys_write_func_ptr_t new_sys_write = connp_sys_write;
 
 static int build_syscall_func_table(unsigned long *sys_call_table, int *nr_min, int *nr_max);
 
 static struct syscall_func_struct syscall_func[] = { //initial.
-#ifdef __NR_socketcall //usually for 32 bit.
+#ifdef __NR_socketcall //usually for 32 bits.
     {
         .name = "sys_socketcall", 
         .sym_addr = SYS_SOCKETCALL_EA, 
@@ -55,6 +61,22 @@ static struct syscall_func_struct syscall_func[] = { //initial.
         .new_sys_func = (void **)&new_sys_shutdown, 
         .orig_sys_func = (void **)&orig_sys_shutdown
     },
+    {
+        .name = "sys_send", 
+        .sym_addr = SYS_SEND_EA, 
+        .real_addr = 0, 
+        .nr = -1, 
+        .new_sys_func = (void **)&new_sys_send, 
+        .orig_sys_func = (void **)&orig_sys_send
+    },
+    {
+        .name = "sys_sendto", 
+        .sym_addr = SYS_SENDTO_EA, 
+        .real_addr = 0, 
+        .nr = -1, 
+        .new_sys_func = (void **)&new_sys_sendto, 
+        .orig_sys_func = (void **)&orig_sys_sendto
+    },
 #endif
     {
         .name = "sys_close", 
@@ -79,6 +101,14 @@ static struct syscall_func_struct syscall_func[] = { //initial.
         .nr = -1, 
         .new_sys_func = (void **)&new_sys_exit_group, 
         .orig_sys_func = (void **)&orig_sys_exit_group
+    },
+    {
+        .name = "sys_write", 
+        .sym_addr = SYS_WRITE_EA, 
+        .real_addr = 0, 
+        .nr = -1, 
+        .new_sys_func = (void **)&new_sys_write, 
+        .orig_sys_func = (void **)&orig_sys_write
     },
     {NULL, 0, 0, -1, NULL, NULL} //end tag.
 };

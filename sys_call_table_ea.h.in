@@ -9,5 +9,8 @@
 #define SYS_SHUTDOWN_EA %%SYS_SHUTDOWN_EA%%
 #define SYS_EXIT_GROUP_EA %%SYS_EXIT_GROUP_EA%%
 #define SYS_EXIT_EA %%SYS_EXIT_EA%%
+#define SYS_WRITE_EA %%SYS_WRITE_EA%%
+#define SYS_SEND_EA %%SYS_SEND_EA%%
+#define SYS_SENDTO_EA %%SYS_SENDTO_EA%%
 
 #endif
