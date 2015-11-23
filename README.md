@@ -9,7 +9,7 @@ The connection pool in linux kernel layer.
  * Host OR VM (KVM,XEN,Vmware, etc)
 
 ### Installation
-1. $git clone https://github.com/zzgang/kconnp.git
+1. $download src package from https://github.com/zzgang/kconnp/releases
 1. $cd kconnp
 1. $./configure
 1. $make 
