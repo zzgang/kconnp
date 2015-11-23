@@ -28,8 +28,7 @@ reload(){
 }
 
 start(){
-    insmod $kmconnp;
-    reload;
+    insmod $kmconnp && reload;
 }
 
 stop(){

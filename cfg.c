@@ -733,7 +733,7 @@ out_err:
 }
 
 /**
- *Simple iport scanner.
+ *Simple items scanner.
  *
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
@@ -766,7 +766,7 @@ static int cfg_items_data_scan(struct items_str_list_t *items_str_list,
 }
 
 /**
- *Simple cfg item line parser.
+ *Simple item line parser.
  *
  *Returns:
  *0: node parse error, 1: node parse success.
@@ -811,7 +811,7 @@ out_err:
 }
 
 /**
- *Simple iport parser.
+ *Simple items parser.
  *
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
@@ -855,6 +855,7 @@ static int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
             return 0;
         }
         memcpy(node->v_str, str->data, str->len);
+        node->v_strlen = str->len;
     } else 
         return 0;
 
@@ -1350,7 +1351,7 @@ parse_going:
 }
 
 /**
- *Simple iport parser.
+ *Simple iports parser.
  *
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
@@ -1552,7 +1553,7 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
         }
 
         if (!hash_set((struct hash_table_t *)ce->cfg_ptr, 
-                    (const char *)&iport_node, sizeof(struct iport_t), 
+                    (const char *)&iport_node, sizeof(struct iport_raw_t), 
                     &iport_node, sizeof(struct iport_t))){
             hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
             ret = 0;
