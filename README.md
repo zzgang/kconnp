@@ -32,7 +32,7 @@ kconnp (stats|ldcfg|start|stop|restart)
 
 ######Explains
 * The priority of black list is higher than white black list.
-* If the iport is specified，the connections will be pre-connectted.
+* If the iport is specified，the connections will be pre-connected.
 * If the connection is configured stateful (tag: (S))，each connection only be use one time before closing. 
 
 
