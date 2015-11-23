@@ -19,7 +19,7 @@ The connection pool in linux kernel layer.
 #####Commands
 kconnp (stats|ldcfg|start|stop|restart)
 * stats: output the statistics infomation
-* ldcfg: reload the config
+* reload: reload the config
 * start: start the service
 * stop: shutdown the service
 * restart: restart the service
