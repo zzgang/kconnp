@@ -780,7 +780,7 @@ out_err:
 }
 
 /**
- *Simple item scanner.
+ *Simple items scanner.
  *
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
@@ -813,7 +813,7 @@ static int cfg_items_data_scan(struct items_str_list_t *items_str_list,
 }
 
 /**
- *Simple cfg item line parser.
+ *Simple item line parser.
  *
  *Returns:
  *0: node parse error, 1: node parse success.
@@ -873,7 +873,7 @@ out_err:
 }
 
 /**
- *Simple item parser.
+ *Simple items parser.
  *
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
@@ -1255,7 +1255,7 @@ static int ip_aton(const char *ip_str, struct in_addr *iaddr)
 }
 
 /*
- *Simple scanner for iport line.
+ *Simple iport line scanner.
  *
  *Params:
  * 1.the cfg entry pointer.
@@ -1363,7 +1363,7 @@ out_err:
 }
 
 /**
- *Simple iport scanner.
+ *Simple iports scanner.
  *
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
@@ -1572,7 +1572,7 @@ parse_going:
 }
 
 /**
- *Simple iport parser.
+ *Simple iports parser.
  *
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
