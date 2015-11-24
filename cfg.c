@@ -137,7 +137,7 @@
     do {                                                                \
         memcpy((iport_str)->ip_str, ip_str_pass, ip_strlen);            \
         memcpy((iport_str)->port_str, port_str_pass, port_strlen);      \
-        if ((iport_str)->flags_str && flags_strlen)                     \
+        if ((iport_str)->flags_str)                                     \
             memcpy((iport_str)->flags_str, flags_str_pass, flags_strlen);   \
         (iport_str)->line = line_pass;                                  \
     } while (0)
@@ -146,6 +146,8 @@
     do {                                    \
         lkmfree((iport_str)->ip_str);       \
         lkmfree((iport_str)->port_str);     \
+        if ((iport_str)->flags_str)         \
+            lkmfree((iport_str)->flags_str);\
         lkmfree(iport_str);                 \
     } while (0)
 
