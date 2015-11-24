@@ -140,27 +140,29 @@
         }                                                       \
     } while (0)  
 
-#define INIT_IPORT_STR_NODE(iport_str,                                  \
-        sn_str_pass, sn_strlen,                                         \
-        ip_str_pass, ip_strlen,                                         \
-        port_str_pass, port_strlen,                                     \
-        flags_str_pass, flags_strlen,                                   \
-        line_pass)                                                      \
-    do {                                                                \
-        memcpy((iport_str)->sn_str, sn_str_pass, sn_strlen);            \
-        memcpy((iport_str)->ip_str, ip_str_pass, ip_strlen);            \
-        memcpy((iport_str)->port_str, port_str_pass, port_strlen);      \
-        if ((iport_str)->flags_str && flags_strlen)                     \
+#define INIT_IPORT_STR_NODE(iport_str,                                      \
+        sn_str_pass, sn_strlen,                                             \
+        ip_str_pass, ip_strlen,                                             \
+        port_str_pass, port_strlen,                                         \
+        flags_str_pass, flags_strlen,                                       \
+        line_pass)                                                          \
+    do {                                                                    \
+        memcpy((iport_str)->sn_str, sn_str_pass, sn_strlen);                \
+        memcpy((iport_str)->ip_str, ip_str_pass, ip_strlen);                \
+        memcpy((iport_str)->port_str, port_str_pass, port_strlen);          \
+        if ((iport_str)->flags_str)                                         \
             memcpy((iport_str)->flags_str, flags_str_pass, flags_strlen);   \
-        (iport_str)->line = line_pass;                                  \
+        (iport_str)->line = line_pass;                                      \
     } while (0)
 
-#define DESTROY_IPORT_STR_NODE(iport_str)   \
-    do {                                    \
-        lkmfree((iport_str)->sn_str);       \
-        lkmfree((iport_str)->ip_str);       \
-        lkmfree((iport_str)->port_str);     \
-        lkmfree(iport_str);                 \
+#define DESTROY_IPORT_STR_NODE(iport_str)                           \
+    do {                                                            \
+        lkmfree((iport_str)->sn_str);                               \
+        lkmfree((iport_str)->ip_str);                               \
+        lkmfree((iport_str)->port_str);                             \
+        if ((iport_str)->flags_str)                                 \
+            lkmfree((iport_str)->flags_str);                        \
+        lkmfree(iport_str);                                         \
     } while (0)
 
 #define INSERT_INTO_IPORTS_LIST(iports_list, iport) \
@@ -1092,9 +1094,10 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
                     ret = 0;
                     goto out_hash;
                 }
+                prim_node->cfg_item_set_node = cfg_item_set_str_node;
 
                 if (q->value.len > MAX_PRIMITIVE_LEN || 
-                        !cfg_item_set_str_node(prim_node, &q->value)) {
+                        !prim_node->cfg_item_set_node(prim_node, &q->value)) {
                     printk(KERN_ERR 
                             "Error: Invalid primitives on line %d in file /etc/%s", 
                             q->line, ce->f_name);
