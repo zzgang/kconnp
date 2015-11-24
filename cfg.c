@@ -2140,9 +2140,9 @@ void conn_stats_info_dump(void)
 {
     const char *conn_stat_str_fmt = 
 #if BITS_PER_LONG < 64
-        "%s:%u, Mode: %s, Hits: %d(%u.0%), Misses: %d(%u.0%)\n";
+        "Service: %s:%s:%u, Mode: %s, Hits: %d(%u.0%), Misses: %d(%u.0%)\n";
 #else
-        "%s:%u, Mode: %s, Hits: %ld(%u.0%), Misses: %ld(%u.0%)\n";
+        "Service: %s:%s:%u, Mode: %s, Hits: %ld(%u.0%), Misses: %ld(%u.0%)\n";
 #endif
     struct hash_bucket_t *pos;
     int offset = 0;
@@ -2172,6 +2172,7 @@ void conn_stats_info_dump(void)
         long all_count, misses_count, hits_count;
 #endif
         unsigned int misses_percent, hits_percent; 
+        char *sn_str;
         char *ip_ptr, ip_str[16] = {0, };
         char mode[16] = {0, };
         char buffer[128] = {0, };
@@ -2179,11 +2180,8 @@ void conn_stats_info_dump(void)
         
         conn_node = (struct conn_node_t *)hash_value(pos);
 
-        if (conn_node->conn_close_way == CLOSE_PASSIVE) 
-            strcpy(mode, "PASSIVE");
-        else
-            strcpy(mode, "POSITIVE");
- 
+        sn_str = conn_node->conn_sn.data;
+
         ip = conn_node->conn_ip;
         if (ip == 0) {
             strcpy(ip_str, "*");
@@ -2192,7 +2190,12 @@ void conn_stats_info_dump(void)
             ip_ptr = ip_ntoa(ip);
            
         port = ntohs(conn_node->conn_port);
-       
+
+        if (conn_node->conn_close_way == CLOSE_PASSIVE) 
+            strcpy(mode, "PASSIVE");
+        else
+            strcpy(mode, "POSITIVE");
+ 
         hits_count = lkm_atomic_read(&conn_node->conn_connected_hit_count);
         misses_count = lkm_atomic_read(&conn_node->conn_connected_miss_count);
         all_count = hits_count + misses_count;
@@ -2206,8 +2209,7 @@ void conn_stats_info_dump(void)
         }
 
         l = sprintf(buffer, conn_stat_str_fmt, 
-                ip_ptr, port, 
-                mode, 
+                sn_str, ip_ptr, port, mode, 
                 hits_count, hits_percent,
                 misses_count, misses_percent);
 
