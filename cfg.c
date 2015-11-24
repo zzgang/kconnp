@@ -1680,6 +1680,7 @@ static int cfg_iports_data_parse(struct iports_str_list_t *iports_str_parsing_li
         }
 
 out_free:
+        lkmfree(sn_str);
         lkmfree(ip_str_or_prefix);
         lkmfree(port_str);
         if (flags_str)
