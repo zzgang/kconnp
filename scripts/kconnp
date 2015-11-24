@@ -15,35 +15,45 @@ exit;
 kv=`uname -r`;
 kmconnp="/lib/modules/$kv/kernel/net/kconnp/kconnp.ko";
 kconnp_cfgs="kconnp.conf iports.allow iports.deny primitives.deny";
+kconnp_running="lsmod | grep '\bkconnp\b' > /dev/null";
 
 stats(){
-    cat /proc/kconnp/stats.info;
+    if (eval $kconnp_running) 
+    then
+        cat /proc/kconnp/stats.info;
+    else
+        echo "kconnp not running.";
+    fi
 }
 
 reload(){
-    for f in $kconnp_cfgs
-    do 
-        cat /etc/$f > /proc/kconnp/$f;
-    done;
+    if (eval $kconnp_running)
+    then
+        for f in $kconnp_cfgs
+        do 
+            cat /etc/$f > /proc/kconnp/$f;
+        done;
+    else
+        echo "kconnp not running.";
+    fi
 }
 
 start(){
-    if (lsmod | grep '\bkconnp\b' > /dev/null)
+    if (eval $kconnp_running)
     then
         echo "kconnp already running.";
         exit;
     else
-        insmod $kmconnp  && reload;
+        insmod $kmconnp && reload;
     fi
 }
 
 stop(){
-    if (lsmod | grep '\bkconnp\b' > /dev/null)
+    if (eval $kconnp_running)
     then
         rmmod $kmconnp; 
     else 
         echo "kconnp not running.";
-        exit;
     fi
 }
 
