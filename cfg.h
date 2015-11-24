@@ -107,12 +107,12 @@ typedef enum {
 struct item_node_t {
     //item node
     kconnp_str_t name;
-    
+
     kconnp_value_t value;
 #define v_strlen value.str.len
 #define v_str value.str.data
 #define v_lval value.lval
-
+    
     void *data;
 
     int (*cfg_item_set_node)(struct item_node_t *node, kconnp_str_t *str); 

@@ -1102,14 +1102,13 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
                     ret = 0;
                     goto out_hash;
                 }
-
+                
                 if (!hash_set((struct hash_table_t *)ce->cfg_ptr, 
                             (const char *)q->name.data, q->name.len,
                             (void *)prim_node, 0)) {
                     ret = 0;
                     goto out_hash;
                 }
-                printk(KERN_ERR "prims: %s, len: %d", prim_node->v_str, prim_node->v_strlen);
 
                 conn_node->prim_node = prim_node;
 
@@ -1751,7 +1750,6 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
         struct in_addr iaddr;
         char *flag;
         
-        printk(KERN_ERR "sn: %s, ip: %s, port: %s", p->sn_str, p->ip_str, p->port_str);
         memset(&iport_node, 0, sizeof(struct iport_t)); 
 
         //service name init

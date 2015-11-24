@@ -28,11 +28,23 @@ reload(){
 }
 
 start(){
-    insmod $kmconnp  && reload;
+    if (lsmod | grep '\bkconnp\b' > /dev/null)
+    then
+        echo "kconnp already running.";
+        exit;
+    else
+        insmod $kmconnp  && reload;
+    fi
 }
 
 stop(){
-    rmmod $kmconnp; 
+    if (lsmod | grep '\bkconnp\b' > /dev/null)
+    then
+        rmmod $kmconnp; 
+    else 
+        echo "kconnp not running.";
+        exit;
+    fi
 }
 
 restart(){
