@@ -148,6 +148,7 @@ int hash_add_or_set(struct hash_table_t *ht,
                 return 0;
             }
             UPDATE_VAL(ht, p, val, vlen);
+            return 1;
         }
     }
     
