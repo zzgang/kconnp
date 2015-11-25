@@ -44,7 +44,7 @@ int conn_spec_check_close_flag(struct sockaddr *address)
 
    conn_close_flag = 0;
 
-   cfg_allowd_iport_node_for_each_call(ip, port, do_conn_spec_check_close_flag); 
+   cfg_allowed_iport_node_for_each_call(ip, port, do_conn_spec_check_close_flag); 
 
    return conn_close_flag;
 }
@@ -95,7 +95,7 @@ int conn_inc_count(struct sockaddr *addr, int count_type)
    else if (count_type == CONNECTED_MISS_COUNT)
        conn_inc_count_func = do_conn_inc_connected_miss_count;
 
-   cfg_allowd_iport_node_for_each_call(ip, port, conn_inc_count_func); 
+   cfg_allowed_iport_node_for_each_call(ip, port, conn_inc_count_func); 
 
    return 1;
 }
@@ -250,9 +250,8 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
         goto ret_unlock;
     }
     
-
     if (servaddr->sa_family != AF_INET 
-            || !cfg_conn_acl_allowd(servaddr)) {
+            || !cfg_conn_acl_allowed(servaddr)) {
         ret = 0;
         goto ret_unlock;
     }

@@ -7,13 +7,14 @@
 #include "sys_call.h"
 #include "lkm_util.h"
 
-static inline int connp_move_addr_to_kernel(void __user *uaddr, int ulen, struct sockaddr *kaddr)
+static inline int connp_move_addr_to_kernel(void __user *uaddr, int ulen, 
+        struct sockaddr *kaddr)
 {
     if (ulen < 0 || ulen > sizeof(struct sockaddr_storage))
         return -EINVAL;
 
     if (ulen == 0)
-        return 0;
+        return 1;
 
     if (copy_from_user(kaddr, uaddr, ulen))
         return -EFAULT;
@@ -71,7 +72,9 @@ asmlinkage long connp_sys_connect(int fd,
     
     err = connp_move_addr_to_kernel(uservaddr, addrlen, (struct sockaddr *)&servaddr);
     if (err < 0)
-        return -EFAULT;
+        return err;
+    else if (err)
+        goto orig_connect;
     
     if ((err = fetch_conn_from_connp(fd, (struct sockaddr *)&servaddr))) {
         if (err == CONN_BLOCK)
@@ -80,6 +83,7 @@ asmlinkage long connp_sys_connect(int fd,
             return -EINPROGRESS;
     }
 
+orig_connect:
     return orig_sys_connect(fd, uservaddr, addrlen);
 }
 
