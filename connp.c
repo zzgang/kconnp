@@ -262,7 +262,6 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
         ret = 0;
         goto ret_unlock;
     }
-
     if (SOCKADDR_IP(&cliaddr) == htonl(INADDR_ANY)) { // address not bind before connect
         //get local sock client addr
         if (!getsocklocaladdr(sock, &cliaddr, servaddr)) {
