@@ -7,7 +7,8 @@
 #include "sys_call.h"
 #include "lkm_util.h"
 
-static inline int connp_move_addr_to_kernel(void __user *uaddr, int ulen, struct sockaddr *kaddr)
+static inline int connp_move_addr_to_kernel(void __user *uaddr, int ulen, 
+        struct sockaddr *kaddr)
 {
     if (ulen < 0 || ulen > sizeof(struct sockaddr_storage))
         return -EINVAL;
@@ -39,6 +40,17 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
                 return -EFAULT;
             err = connp_sys_shutdown(a[0], a[1]); 
             break;
+        case SYS_SEND:
+            if (copy_from_user(a, args, 4 * sizeof(a[0])))
+                return -EFAULT;
+            err = connp_sys_send(a[0], (void __user *)a[1], a[2], a[3]);
+            break;
+        case SYS_SENDTO:
+            if (copy_from_user(a, args, 6 * sizeof(a[0])))
+                return -EFAULT;
+            err = connp_sys_sendto(a[0], (void __user *)a[1], a[2], a[3],
+                            (struct sockaddr __user *)a[4], a[5]);
+            break;
         default:
             //Clean the stack in this function and jmp orig_sys_socketcall directly.
             asm volatile("leave\n\t"
@@ -59,12 +71,10 @@ asmlinkage long connp_sys_connect(int fd,
     int err;
     
     err = connp_move_addr_to_kernel(uservaddr, addrlen, (struct sockaddr *)&servaddr);
-    if (err) {
-        if (err < 0)
-            return err;
-        else 
-            goto orig_connect;
-    }
+    if (err < 0)
+        return err;
+    else if (err)
+        goto orig_connect;
     
     if ((err = fetch_conn_from_connp(fd, (struct sockaddr *)&servaddr))) {
         if (err == CONN_BLOCK)
@@ -79,8 +89,8 @@ orig_connect:
 
 asmlinkage long connp_sys_shutdown(int fd, int way)
 {
-    if (insert_into_connp_if_permitted(fd)) 
-        return orig_sys_close(fd); //only remove the fd of the file table.
+    if (insert_into_connp_if_permitted(fd))
+        return 0;
     else
         return orig_sys_shutdown(fd, way);
 }

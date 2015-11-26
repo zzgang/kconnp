@@ -160,7 +160,7 @@ break_unlock:                                                           \
 #define SOCK_IS_RECLAIM_PASSIVE(sb) (SOCK_IS_RECLAIM(sb) && !cfg_conn_is_positive(&(sb)->servaddr))
 
 #define SOCK_IS_PRECONNECT(sb) ((sb)->sock_create_way == SOCK_PRECONNECT)
-#define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowd(&(sb)->servaddr) && SOCK_IS_PRECONNECT(sb))
+#define SOCK_IS_NOT_SPEC_BUT_PRECONNECT(sb) (!cfg_conn_acl_spec_allowed(&(sb)->servaddr) && SOCK_IS_PRECONNECT(sb))
 
 #define sockp_sbs_check_list_init(num) \
     stack_init(&sockp_sbs_check_list, num, sizeof(struct socket_bucket *), WITH_MUTEX)
@@ -426,8 +426,7 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
         if (SKEY_MATCH(sk, p->sk)) {
 
             if (!p->sock_in_use) {//can't release it repeatedly!
-                printk(KERN_ERR "Free socket error!");
-                break;
+                goto break_out;
             }
 
             p->sock_in_use = 0; //clear "in use" tag.
@@ -435,6 +434,7 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
 
             INSERT_INTO_HLIST(HASH(&p->cliaddr, &p->servaddr), p);
 
+break_out:
             sb = p;
             
             break;
