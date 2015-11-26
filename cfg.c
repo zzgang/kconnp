@@ -1859,7 +1859,7 @@ unlock_ret:
     return;
 }
 
-void cfg_allowd_iport_node_for_each_call(unsigned int ip, unsigned short int port, 
+void cfg_allowed_iport_node_for_each_call(unsigned int ip, unsigned short int port, 
         void (*call_func)(void *data)) 
 {
     read_lock(&wl->cfg_rwlock);

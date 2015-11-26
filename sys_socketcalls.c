@@ -40,17 +40,7 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
                 return -EFAULT;
             err = connp_sys_shutdown(a[0], a[1]); 
             break;
-        case SYS_SEND:
-            if (copy_from_user(a, args, 4 * sizeof(a[0])))
-                return -EFAULT;
-            err = connp_sys_send(a[0], (void __user *)a[1], a[2], a[3]);
-            break;
-        case SYS_SENDTO:
-            if (copy_from_user(a, args, 6 * sizeof(a[0])))
-                return -EFAULT;
-            err = connp_sys_sendto(a[0], (void __user *)a[1], a[2], a[3],
-                            (struct sockaddr __user *)a[4], a[5]);
-            break;
+
         default:
             //Clean the stack in this function and jmp orig_sys_socketcall directly.
             asm volatile("leave\n\t"

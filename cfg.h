@@ -179,8 +179,8 @@ struct iport_pos_t {
 #define KEEP_ALIVE_SET          0x4
 #define KEEP_ALIVE_GET          0x5
 
-#define cfg_conn_acl_allowd(addr) cfg_conn_op(addr, ACL_CHECK, NULL)
-#define cfg_conn_acl_spec_allowd(addr) cfg_conn_op(addr, ACL_SPEC_CHECK, NULL)
+#define cfg_conn_acl_allowed(addr) cfg_conn_op(addr, ACL_CHECK, NULL)
+#define cfg_conn_acl_spec_allowed(addr) cfg_conn_op(addr, ACL_SPEC_CHECK, NULL)
 #define cfg_conn_is_positive(addr) cfg_conn_op(addr, POSITIVE_CHECK, NULL)
 #define cfg_conn_set_passive(addr) cfg_conn_op(addr, PASSIVE_SET, NULL)
 #define cfg_conn_set_keep_alive(addr, val) cfg_conn_op(addr, KEEP_ALIVE_SET, val)
@@ -190,7 +190,7 @@ extern int cfg_conn_op(struct sockaddr *addr, int op_type, void *val);
 
 extern void cfg_allowed_entries_for_each_call(void (*call_func)(void *data));
 
-extern void cfg_allowd_iport_node_for_each_call(unsigned int ip, unsigned short int port ,void (*call_func)(void *data));
+extern void cfg_allowed_iport_node_for_each_call(unsigned int ip, unsigned short int port ,void (*call_func)(void *data));
 
 extern int cfg_init(void);
 extern void cfg_destroy(void);
