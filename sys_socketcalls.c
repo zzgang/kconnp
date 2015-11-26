@@ -89,8 +89,8 @@ orig_connect:
 
 asmlinkage long connp_sys_shutdown(int fd, int way)
 {
-    if (insert_into_connp_if_permitted(fd)) 
-        return orig_sys_close(fd); //only remove the fd of the file table.
+    if (insert_into_connp_if_permitted(fd))
+        return 0;
     else
         return orig_sys_shutdown(fd, way);
 }
