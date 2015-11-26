@@ -7,7 +7,6 @@
 #ifdef __NR_socketcall
 sys_socketcall_func_ptr_t orig_sys_socketcall = (void *)SYS_SOCKETCALL_EA;
 #endif
-
 sys_connect_func_ptr_t orig_sys_connect = (void *)SYS_CONNECT_EA;
 sys_shutdown_func_ptr_t orig_sys_shutdown = (void *)SYS_SHUTDOWN_EA;
 sys_close_func_ptr_t orig_sys_close = (void *)SYS_CLOSE_EA;
