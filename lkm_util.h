@@ -58,6 +58,9 @@ struct pollfd_ex_t {
 
 #define BYTES_ALIGN(size) (((size) + (sizeof(long) - 1)) & ~(sizeof(long) - 1))
 
+#define IS_IPV4_SA(addr)    \
+    ((addr)->sa_family == AF_INET)
+
 #define SOCK_CLIENT_TAG (1U << 30)
 
 #define IS_CLIENT_SOCK(sock)                    \
@@ -72,6 +75,7 @@ struct pollfd_ex_t {
     if ((sock)->file)                           \
     (sock)->file->f_flags &= ~SOCK_CLIENT_TAG;  \
 } while (0)
+
 
 #define SK_ESTABLISHING(sk) \
     (sk->sk_state == TCP_SYN_SENT)

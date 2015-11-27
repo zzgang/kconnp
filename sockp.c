@@ -426,7 +426,8 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
         if (SKEY_MATCH(sk, p->sk)) {
 
             if (!p->sock_in_use) {//can't release it repeatedly!
-                goto break_out;
+                printk(KERN_ERR "Free SK error, SK is not in use.");
+                break;
             }
 
             p->sock_in_use = 0; //clear "in use" tag.
@@ -434,7 +435,6 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
 
             INSERT_INTO_HLIST(HASH(&p->cliaddr, &p->servaddr), p);
 
-break_out:
             sb = p;
             
             break;

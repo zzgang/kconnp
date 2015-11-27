@@ -38,6 +38,7 @@ struct conn_attr_t {
     } stats;
 };
 
+extern int connp_fd_allowed(int fd);
 extern int insert_into_connp_if_permitted(int fd);
 extern int fetch_conn_from_connp(int fd, struct sockaddr *);
 

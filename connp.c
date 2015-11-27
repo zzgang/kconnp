@@ -140,6 +140,33 @@ static inline int insert_into_connp(struct sockaddr *cliaddr, struct sockaddr *s
     return 0;
 }
 
+int connp_fd_allowed(int fd)
+{
+    struct socket *sock;
+    struct sockaddr cliaddr;
+    struct sockaddr servaddr;
+
+    if (!is_sock_fd(fd))
+        return 0;
+
+    sock = getsock(fd);
+    if (!sock 
+            || !IS_TCP_SOCK(sock) 
+            || !IS_CLIENT_SOCK(sock))
+        return 0;
+    
+    if (!getsockcliaddr(sock, &cliaddr) || !IS_IPV4_SA(&cliaddr)) 
+        return 0;
+
+    if (!getsockservaddr(sock, &servaddr) || !IS_IPV4_SA(&servaddr))
+        return 0;
+
+    if (!cfg_conn_is_positive(&servaddr))
+        return 0;
+
+    return 1;
+}
+
 int insert_into_connp_if_permitted(int fd)
 {
     struct socket *sock;
@@ -161,17 +188,10 @@ int insert_into_connp_if_permitted(int fd)
             || !IS_CLIENT_SOCK(sock))
         goto ret_fail;
 
-    if (!getsockcliaddr(sock, &cliaddr)) 
+    if (!getsockcliaddr(sock, &cliaddr) || !IS_IPV4_SA(&cliaddr)) 
         goto ret_fail;
 
-    if (!getsockservaddr(sock, &servaddr))
-        goto ret_fail;
-
-    //only stand for ipv4
-    if (cliaddr.sa_family != AF_INET) 
-        goto ret_fail;
-
-    if (servaddr.sa_family != AF_INET)
+    if (!getsockservaddr(sock, &servaddr) || !IS_IPV4_SA(&servaddr))
         goto ret_fail;
 
     if (!cfg_conn_is_positive(&servaddr))
@@ -226,7 +246,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
     }
     
 
-    if (servaddr->sa_family != AF_INET 
+    if (!IS_IPV4_SA(servaddr)
             || !cfg_conn_acl_allowed(servaddr)) {
         ret = 0;
         goto ret_unlock;
@@ -239,11 +259,13 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
     }
     if (SOCKADDR_IP(&cliaddr) == htonl(INADDR_ANY)) { // address not bind before connect
         //get local sock client addr
-        if (!getsocklocaladdr(sock, &cliaddr, servaddr)) {
+        if (!getsocklocaladdr(sock, &cliaddr, servaddr) || !IS_IPV4_SA(&cliaddr)) {
             ret = 0;
             goto ret_unlock;
         }
-
+    } else if (!IS_IPV4_SA(&cliaddr)) {
+        ret = 0;
+        goto ret_unlock;
     }
 
     if ((sb = apply_sk_from_sockp((struct sockaddr *)&cliaddr, servaddr))) {
