@@ -60,6 +60,9 @@ struct pollfd_ex_t {
 
 #define SOCK_CLIENT_TAG (1U << 30)
 
+#define IS_IPV4_SA(addr)    \
+    ((addr)->sa_family == AF_INET)
+
 #define IS_CLIENT_SOCK(sock)                    \
     ((sock)->file && ((sock)->file->f_flags & SOCK_CLIENT_TAG))
 

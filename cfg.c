@@ -1830,9 +1830,9 @@ static int cfg_iports_entity_reload(struct cfg_entry *ce)
 
     write_unlock(&ce->cfg_rwlock);
 
-    if (ret)
+    if (ret) /*reload white list*/
         ret = wl->entity_reload(wl);
-
+ 
     return ret;
 }
 
@@ -1968,6 +1968,9 @@ static int cfg_white_list_entity_reload(struct cfg_entry *ce)
     ret = ce->entity_init(ce); 
 
     write_unlock(&ce->cfg_rwlock);
+
+    if (ret) /*reload primitives list*/
+        ret = (&cfg->pl)->entity_reload(&cfg->pl);
 
     return ret;
 }
