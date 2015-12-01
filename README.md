@@ -29,6 +29,7 @@ kconnp (stats|ldcfg|start|stop|restart)
 * Global: /etc/kconnp.conf
 * White list for ACL: /etc/iports.allow
 * Black list for ACL: /etc/iports.deny
+* Communication Primitives: /etc/primitives.deny
 
 ######Explains
 * The priority of black list is higher than white black list.
