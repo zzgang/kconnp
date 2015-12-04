@@ -121,23 +121,28 @@ static inline int insert_socket_to_connp(struct sockaddr *cliaddr, struct sockad
 
 static inline int insert_into_connp(struct sockaddr *cliaddr, struct sockaddr *servaddr, struct socket *sock)
 {
-    int fc;
+    int ret = 0;
+    struct sock *sk = sock->sk;
 
-    fc = file_count_read(sock->file);
-    if (fc != 1)
-        return 0;
+    bh_lock_sock(sk);
 
     //To free
-    if (free_sk_to_sockp(sock->sk)) {
-        sock->sk = NULL; //Remove reference to avoid to destroy the sk.
-        return 1;
+    ret = free_sk_to_sockp(sk, NULL);
+    if (ret) {
+        if (ret > 0) //free success
+            sock->sk = NULL; //Remove reference to avoid destroying the sk.
+        goto out_release;
     }
     
     //To insert
-    if (insert_socket_to_connp(cliaddr, servaddr, sock))
-        return 1;
+    if (insert_socket_to_connp(cliaddr, servaddr, sock)) {
+        ret = 1;
+        goto out_release;
+    }
 
-    return 0;
+out_release:
+    bh_unlock_sock(sk);
+    return ret;
 }
 
 int check_if_ignore_primitives(int fd, const char __user * buf, size_t len)
@@ -213,6 +218,9 @@ int insert_into_connp_if_permitted(int fd)
             || !IS_CLIENT_SOCK(sock))
         goto ret_fail;
 
+    if (file_count_read(sock->file) != 1)
+        goto ret_fail;
+
     if (!getsockcliaddr(sock, &cliaddr) || !IS_IPV4_SA(&cliaddr)) 
         goto ret_fail;
 
@@ -228,6 +236,8 @@ int insert_into_connp_if_permitted(int fd)
     }
 
     err = insert_into_connp(&cliaddr, &servaddr, sock);
+    if (err < 0)
+        err = -EBADF;
     
     connp_runlock();
     return err;

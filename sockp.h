@@ -97,7 +97,7 @@ extern struct socket_bucket *apply_sk_from_sockp(struct sockaddr *, struct socka
 /**
  *Free a socket which is returned by 'apply_socket_from_sockp', return the bucket of this socket.
  */
-extern struct socket_bucket *free_sk_to_sockp(struct sock *);
+extern int free_sk_to_sockp(struct sock *, struct socket_bucket **);
 
 /**
  *Insert a new socket to sockp, return the new bucket of this socket.
