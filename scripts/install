@@ -5,11 +5,13 @@ LKM_INS_DIR="/lib/modules/$KV/kernel/net/kconnp"
 BIN_INS_DIR="/sbin"
 CFG_INS_DIR="/etc"
 CFG_FILES="kconnp.conf iports.allow iports.deny primitives.deny"
+VER=`cat "$PWD/version"`
+
 mkdir -p $LKM_INS_DIR
-cp -f $PWD/kconnp.ko $LKM_INS_DIR
-cp --preserve=mode -f $PWD/scripts/kconnp $BIN_INS_DIR
+cp -f "$PWD/kconnp.ko" $LKM_INS_DIR
+cat "$PWD/scripts/kconnp" | sed -e "s/%%VER%%/$VER/g" > $BIN_INS_DIR/kconnp
 for f in $CFG_FILES
 do
 [ -e $CFG_INS_DIR/$f ] && mv $CFG_INS_DIR/$f $CFG_INS_DIR/${f}.bak
-cp $PWD/cfg-files/$f $CFG_INS_DIR
+cp "$PWD/cfg-files/$f" $CFG_INS_DIR
 done
