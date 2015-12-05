@@ -109,7 +109,7 @@ static inline int insert_socket_to_connp(struct sockaddr *cliaddr, struct sockad
         return 0;
 
     task_fd_install(CONNP_DAEMON_TSKP, connpd_fd, sock->file);
-    file_count_inc(sock->file); //add file reference count.
+    file_refcnt_inc(sock->file); //add file reference count.
 
     if (!insert_sock_to_sockp(cliaddr, servaddr, sock, connpd_fd, SOCK_RECLAIM)) {
         connpd_close_pending_fds_in(connpd_fd);
@@ -121,23 +121,28 @@ static inline int insert_socket_to_connp(struct sockaddr *cliaddr, struct sockad
 
 static inline int insert_into_connp(struct sockaddr *cliaddr, struct sockaddr *servaddr, struct socket *sock)
 {
-    int fc;
+    int ret = 0;
+    struct sock *sk = sock->sk;
 
-    fc = file_count_read(sock->file);
-    if (fc != 1)
-        return 0;
+    bh_lock_sock(sk);
 
     //To free
-    if (free_sk_to_sockp(sock->sk)) {
-        sock->sk = NULL; //Remove reference to avoid to destroy the sk.
-        return 1;
+    ret = free_sk_to_sockp(sk, NULL); 
+    if (ret) {
+        if (ret > 0)
+            sock->sk = NULL; //Remove reference to avoid destroying the sk.
+        goto out_unlock; 
     }
     
     //To insert
-    if (insert_socket_to_connp(cliaddr, servaddr, sock))
-        return 1;
+    if (insert_socket_to_connp(cliaddr, servaddr, sock)) {
+        ret = 1;
+        goto out_unlock;
+    }
 
-    return 0;
+out_unlock:
+    bh_unlock_sock(sk); 
+    return ret;
 }
 
 int connp_fd_allowed(int fd)
@@ -203,6 +208,8 @@ int insert_into_connp_if_permitted(int fd)
     }
 
     err = insert_into_connp(&cliaddr, &servaddr, sock);
+    if (err < 0) 
+        err = -EBADF;
     
     connp_runlock();
     return err;
@@ -223,50 +230,37 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
     struct socket_bucket *sb;
     int ret = 0; 
     
-
     connp_rlock(); 
 
-    if (!CONNP_DAEMON_EXISTS()) {
-        ret = 0;
+    if (!CONNP_DAEMON_EXISTS())
         goto ret_unlock;
-    }
 
-    if (!is_sock_fd(fd)) {
-        ret = 0;
+    if (!is_sock_fd(fd))
         goto ret_unlock;
-    }
 
     sock = getsock(fd);
     if (!sock 
             || !sock->sk
             || !IS_TCP_SOCK(sock) 
-            || !IS_UNCONNECTED_SOCK(sock)) {
-        ret = 0;
+            || !IS_UNCONNECTED_SOCK(sock))
         goto ret_unlock;
-    }
-    
+   
+    if (file_refcnt_read(sock->file) != 1)
+        goto ret_unlock;
 
     if (!IS_IPV4_SA(servaddr)
-            || !cfg_conn_acl_allowed(servaddr)) {
-        ret = 0;
+            || !cfg_conn_acl_allowed(servaddr))
         goto ret_unlock;
-    }
 
     //check the client sock local address
-    if (!getsockcliaddr(sock, &cliaddr)) {
-        ret = 0;
+    if (!getsockcliaddr(sock, &cliaddr))
         goto ret_unlock;
-    }
     if (SOCKADDR_IP(&cliaddr) == htonl(INADDR_ANY)) { // address not bind before connect
         //get local sock client addr
-        if (!getsocklocaladdr(sock, &cliaddr, servaddr) || !IS_IPV4_SA(&cliaddr)) {
-            ret = 0;
+        if (!getsocklocaladdr(sock, &cliaddr, servaddr) || !IS_IPV4_SA(&cliaddr))
             goto ret_unlock;
-        }
-    } else if (!IS_IPV4_SA(&cliaddr)) {
-        ret = 0;
+    } else if (!IS_IPV4_SA(&cliaddr))
         goto ret_unlock;
-    }
 
     if ((sb = apply_sk_from_sockp((struct sockaddr *)&cliaddr, servaddr))) {
        

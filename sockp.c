@@ -312,7 +312,7 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *cliaddr, struct socka
            
             SOCKP_UNLOCK();
             
-            //Remove reference to avoid to destroy the sk in sockp.
+            //Remove reference to avoid polling events in sockp.
             spin_lock(&p->s_lock);
             p->sock->sk = NULL;
             spin_unlock(&p->s_lock);
@@ -410,10 +410,11 @@ shutdown:
 }
 
 /**
- *Free a socket which is applyed from sockp
+ *Free a sock which is applyed from sockp
  */
-struct socket_bucket *free_sk_to_sockp(struct sock *sk)
+int free_sk_to_sockp(struct sock *sk, struct socket_bucket **sbpp)
 {
+    int ret = 0;
     struct socket_bucket *p, *sb = NULL;
 
     SOCKP_LOCK();
@@ -426,17 +427,18 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
         if (SKEY_MATCH(sk, p->sk)) {
 
             if (!p->sock_in_use) {//can't release it repeatedly!
-                printk(KERN_ERR "Free SK error, SK is not in use.");
+                printk(KERN_ERR "Free sk error, sk is not in use.");
+                ret = -1;   
                 break;
             }
-
             p->sock_in_use = 0; //clear "in use" tag.
             p->last_used_jiffies = lkm_jiffies;
 
             INSERT_INTO_HLIST(HASH(&p->cliaddr, &p->servaddr), p);
 
             sb = p;
-            
+            ret = 1;
+
             break;
         }
 
@@ -447,10 +449,13 @@ struct socket_bucket *free_sk_to_sockp(struct sock *sk)
     SOCKP_UNLOCK();
 
     //Grafted to sock of sockp
-    if (sb)
+    if (sb) {
         sock_graft(sk, sb->sock);
+        if (sbpp) 
+            *sbpp = sb;
+    }
 
-    return sb;
+    return ret;
 }
 
 static inline int socket_buckets_pool_resize(void)
