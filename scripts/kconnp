@@ -2,20 +2,26 @@
 
 help(){
     cat <<EOF
-Kconnp actions:
-    stats
-    reload
-    start
-    stop
-    restart
+kconnp actions:
+    -v          : version info.
+    stats       : connections stats info.
+    reload      : reload the cfgs.
+    start       : start the kconnp.
+    stop        : stop the kconnp.
+    restart     : restart the kconnp.
 EOF
 exit;
 }
 
+VER=1.1.1
 kv=`uname -r`;
 kmconnp="/lib/modules/$kv/kernel/net/kconnp/kconnp.ko";
 kconnp_cfgs="kconnp.conf iports.allow iports.deny primitives.deny";
 kconnp_running="lsmod | grep '\bkconnp\b' > /dev/null";
+
+ver(){
+   echo $VER; 
+}
 
 stats(){
     if (eval $kconnp_running) 
@@ -72,6 +78,9 @@ fi
 while [ $# -gt 0 ]
 do
     case "$1" in
+        -v)
+            ver;
+            ;;
         stats)
             stats;
             ;;
