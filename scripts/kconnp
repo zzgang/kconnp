@@ -13,7 +13,7 @@ EOF
 exit;
 }
 
-VER=1.1.1
+VER=%%VER%%
 kv=`uname -r`;
 kmconnp="/lib/modules/$kv/kernel/net/kconnp/kconnp.ko";
 kconnp_cfgs="kconnp.conf iports.allow iports.deny primitives.deny";
