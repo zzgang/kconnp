@@ -186,22 +186,22 @@ static inline u64 lkm_jiffies_elapsed_from(u64 from)
     return elapsed_jiffies >= 0 ? elapsed_jiffies : (elapsed_jiffies + ULONG_MAX);
 }
 
-static inline int file_count_read(struct file *filp)
+static inline int file_refcnt_read(struct file *filp)
 {
     return lkm_atomic32_read(&filp->f_count);
 }
 
-static inline int file_count_inc(struct file *filp)
+static inline int file_refcnt_inc(struct file *filp)
 {
     return lkm_atomic32_add(&filp->f_count, 1);
 }
 
-static inline int file_count_dec(struct file *filp)
+static inline int file_refcnt_dec(struct file *filp)
 {
     return lkm_atomic32_sub(&filp->f_count, 1);
 }
 
-static inline void file_count_set(struct file *filp, int c)
+static inline void file_refcnt_set(struct file *filp, int c)
 {
     lkm_atomic32_set(&filp->f_count, c);
 }
