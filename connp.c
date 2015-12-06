@@ -293,7 +293,6 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
     if ((sb = apply_sk_from_sockp((struct sockaddr *)&cliaddr, servaddr))) {
        
         //Destroy the pre-create sk 
-        printk(KERN_ERR "destroy: %p", sock->sk->sk_prot->destroy);
         sk_destroy(sock->sk);
 
         sock_graft(sb->sk, sock);
