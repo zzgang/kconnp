@@ -9,3 +9,4 @@
 # Example: memcache "quit\r\n"
 
 memcache "quit\r\n" #Memcache communication primitive
+redis "QUIT\r\n"

@@ -18,3 +18,4 @@
 #          mysql:10.207.0.[1-9]:3306(S)
 
 memcache:*:11211 #Memcache port, Non-state connection
+redis:*:6379
