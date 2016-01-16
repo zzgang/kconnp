@@ -1,6 +1,9 @@
 #ifndef _KCONNP_H
 #define _KCONNP_H
 
+#define KCP_ERROR 0
+#define KCP_OK 1
+
 #define CONNECTION_LIMIT 10000
 
 #define CONST_STRING(str) {str, sizeof(str) - 1}
