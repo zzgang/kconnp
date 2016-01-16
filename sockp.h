@@ -102,8 +102,9 @@ extern int free_sk_to_sockp(struct sock *, struct socket_bucket **);
 /**
  *Insert a new socket to sockp, return the new bucket of this socket.
  */
-extern struct socket_bucket *insert_sock_to_sockp(struct sockaddr *, struct sockaddr *, 
-        struct socket *, int fd, sock_create_way_t create_way);
+extern int insert_sock_to_sockp(struct sockaddr *, struct sockaddr *, 
+        struct socket *, int fd, sock_create_way_t create_way, 
+        struct socket_bucket **sbpp);
 
 extern void shutdown_sock_list(shutdown_way_t shutdown_way);
 

@@ -78,10 +78,11 @@ static void do_create_connects(struct sockaddr_in *servaddr, int nums)
         if (!getsockcliaddr(sock, &cliaddr))
             break;
         
-        if (!insert_sock_to_sockp(&cliaddr, 
+        if (insert_sock_to_sockp(&cliaddr, 
                     (struct sockaddr *)servaddr,
                     sock, fd, 
-                    SOCK_PRECONNECT)) {
+                    SOCK_PRECONNECT, 
+                    NULL) != KCP_OK) {
             orig_sys_close(fd);
             break;
         } 

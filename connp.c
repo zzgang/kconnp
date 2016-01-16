@@ -100,48 +100,47 @@ int conn_inc_count(struct sockaddr *addr, int count_type)
    return 1;
 }
 
-static inline int insert_socket_to_connp(struct sockaddr *cliaddr, struct sockaddr *servaddr, struct socket *sock)
+static inline int insert_socket_to_connp(struct sockaddr *cliaddr, 
+        struct sockaddr *servaddr, 
+        struct socket *sock)
 {
+    int ret;
     int connpd_fd;
 
     connpd_fd = connpd_get_unused_fd();
     if (connpd_fd < 0)
-        return 0;
+        return KCP_ERROR;
 
     task_fd_install(CONNP_DAEMON_TSKP, connpd_fd, sock->file);
     file_refcnt_inc(sock->file); //add file reference count.
 
-    if (!insert_sock_to_sockp(cliaddr, servaddr, sock, connpd_fd, SOCK_RECLAIM)) {
+    ret = insert_sock_to_sockp(cliaddr, servaddr, sock, connpd_fd, SOCK_RECLAIM, NULL);
+    if (ret != KCP_OK) {
         connpd_close_pending_fds_in(connpd_fd);
-        return 0;
+        return ret;
     }
 
-    return 1;
+    return KCP_OK;
 }
 
-static inline int insert_into_connp(struct sockaddr *cliaddr, struct sockaddr *servaddr, struct socket *sock)
+static inline int insert_into_connp(struct sockaddr *cliaddr, struct sockaddr *servaddr, 
+        struct socket *sock)
 {
     int ret = 0;
     struct sock *sk = sock->sk;
 
-    bh_lock_sock(sk);
-
     //To free
     ret = free_sk_to_sockp(sk, NULL);
     if (ret) {
-        if (ret > 0) //free success
+        if (ret == KCP_OK) //free success
             sock->sk = NULL; //Remove reference to avoid destroying the sk.
-        goto out_unlock;
-    }
-    
-    //To insert
-    if (insert_socket_to_connp(cliaddr, servaddr, sock)) {
-        ret = 1;
-        goto out_unlock;
+        goto out_ret;
     }
 
-out_unlock:
-    bh_unlock_sock(sk);
+    //To insert
+    ret = insert_socket_to_connp(cliaddr, servaddr, sock);
+
+out_ret:
     return ret;
 }
 

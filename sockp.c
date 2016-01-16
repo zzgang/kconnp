@@ -410,7 +410,7 @@ shutdown:
 }
 
 /**
- *Free a sock which is applyed from sockp
+ *Free a sock which is applied from sockp
  */
 int free_sk_to_sockp(struct sock *sk, struct socket_bucket **sbpp)
 {
@@ -569,15 +569,24 @@ static struct socket_bucket *get_empty_slot(void)
 /**
  *Insert a new socket to sockp.
  */
-struct socket_bucket *insert_sock_to_sockp(struct sockaddr *cliaddr, 
+int insert_sock_to_sockp(struct sockaddr *cliaddr, 
         struct sockaddr *servaddr, 
         struct socket *s, int connpd_fd, 
-        sock_create_way_t create_way)
+        sock_create_way_t create_way,
+        struct socket_bucket **sbpp)
 {
-    struct socket_bucket *sb = NULL;
+    int ret = 0;
+    struct socket_bucket *p, *sb = NULL;
 
-    //printk(KERN_ERR "Insert\n");
     SOCKP_LOCK();
+
+    //Check if exists
+    p = SHASH(s->sk);
+    for (; p; p = p->sb_snext)
+        if (SKEY_MATCH(s->sk, p->sk)) {
+            ret = -1;
+            goto unlock_ret;
+        }
 
 #if LRU
     if (!(sb = get_empty_slot(cliaddr, servaddr))) 
@@ -599,7 +608,13 @@ struct socket_bucket *insert_sock_to_sockp(struct sockaddr *cliaddr,
 unlock_ret:
     SOCKP_UNLOCK();
 
-    return sb;
+    if (sb) {
+        if (sbpp)
+            *sbpp = sb;
+        ret = 1;
+    }
+
+    return ret;
 }
 
 int sockp_init()
