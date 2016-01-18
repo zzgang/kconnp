@@ -14,13 +14,13 @@
 
 //spin lock
 #define SOCKP_LOCK_T spinlock_t
-#define SOCKP_LOCK_INIT()  spin_lock_init(&ht.ht_lock)
-#define SOCKP_LOCK() spin_lock(&ht.ht_lock)
-#define SOCKP_UNLOCK() spin_unlock(&ht.ht_lock)
+#define SOCKP_LOCK_INIT()  spin_lock_init(&ht->ht_lock)
+#define SOCKP_LOCK() spin_lock(&ht->ht_lock)
+#define SOCKP_UNLOCK() spin_unlock(&ht->ht_lock)
 #define SOCKP_LOCK_DESTROY()
 
-#define HASH(cliaddr_ptr, servaddr_ptr) ht.hash_table[_hashfn((struct sockaddr_in *)(cliaddr_ptr), (struct sockaddr_in *)(servaddr_ptr))]
-#define SHASH(sk) ht.shash_table[_shashfn(sk)]
+#define HASH(cliaddr_ptr, servaddr_ptr) ht->hash_table[_hashfn((struct sockaddr_in *)(cliaddr_ptr), (struct sockaddr_in *)(servaddr_ptr))]
+#define SHASH(sk) ht->shash_table[_shashfn(sk)]
 
 #define KEY_MATCH(address_ptr11, address_ptr12, address_ptr21, address_ptr22) (SOCKADDR_IP(address_ptr11) == SOCKADDR_IP(address_ptr12) && SOCKADDR_PORT(address_ptr21)  == SOCKADDR_PORT(address_ptr22) && SOCKADDR_IP(address_ptr21) == SOCKADDR_IP(address_ptr22))
 #define SKEY_MATCH(sk_ptr1, sk_ptr2) (sk_ptr1 == sk_ptr2)
@@ -77,7 +77,7 @@
 
 #define IN_TLIST(bucket) ({                                             \
         struct socket_bucket *__p;                                      \
-        for (__p = ht.sb_trav_head; __p; __p = __p->sb_trav_next) {     \
+        for (__p = ht->sb_trav_head; __p; __p = __p->sb_trav_next) {     \
         LOOP_COUNT_SAFE_CHECK(__p);                                        \
         if (__p == (bucket))                                            \
         break;                                                          \
@@ -88,13 +88,13 @@
 #define INSERT_INTO_TLIST(bucket) \
     do {    \
         (bucket)->sb_trav_next = NULL; \
-        (bucket)->sb_trav_prev = ht.sb_trav_tail;  \
-        if (!ht.sb_trav_head)              \
-        ht.sb_trav_head = (bucket);    \
-        if (ht.sb_trav_tail)               \
-        ht.sb_trav_tail->sb_trav_next = (bucket);  \
-        ht.sb_trav_tail = (bucket); \
-        ht.elements_count++;        \
+        (bucket)->sb_trav_prev = ht->sb_trav_tail;  \
+        if (!ht->sb_trav_head)              \
+        ht->sb_trav_head = (bucket);    \
+        if (ht->sb_trav_tail)               \
+        ht->sb_trav_tail->sb_trav_next = (bucket);  \
+        ht->sb_trav_tail = (bucket); \
+        ht->elements_count++;        \
     } while(0)
 
 #define REMOVE_FROM_TLIST(bucket) \
@@ -103,11 +103,11 @@
         (bucket)->sb_trav_next->sb_trav_prev = (bucket)->sb_trav_prev; \
         if ((bucket)->sb_trav_prev) \
         (bucket)->sb_trav_prev->sb_trav_next = (bucket)->sb_trav_next; \
-        if ((bucket) == ht.sb_trav_head)  \
-        ht.sb_trav_head = (bucket)->sb_trav_next; \
-        if ((bucket) == ht.sb_trav_tail)   \
-        ht.sb_trav_tail = (bucket)->sb_trav_prev; \
-        ht.elements_count--;                        \
+        if ((bucket) == ht->sb_trav_head)  \
+        ht->sb_trav_head = (bucket)->sb_trav_next; \
+        if ((bucket) == ht->sb_trav_tail)   \
+        ht->sb_trav_tail = (bucket)->sb_trav_prev; \
+        ht->elements_count--;                        \
     } while(0)
 
 #define SOCKADDR_COPY(sockaddr_dest, sockaddr_src) memcpy((void *)sockaddr_dest, (void *)sockaddr_src, sizeof(struct sockaddr))
@@ -215,9 +215,9 @@ static struct {
     unsigned int elements_count;
 
     SOCKP_LOCK_T ht_lock;
-} ht;
+} *ht;
 
-static struct socket_bucket SB[NR_SOCKET_BUCKET];
+static struct socket_bucket *SB;
 
 struct stack_t *sockp_sbs_check_list;
 
@@ -338,7 +338,7 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
 
     SOCKP_LOCK();
     
-    p = ht.sb_trav_head;
+    p = ht->sb_trav_head;
     for (; p; p = p->sb_trav_next) {
 
         LOOP_COUNT_SAFE_CHECK(p);
@@ -512,14 +512,14 @@ static struct socket_bucket *get_empty_slot(void)
     if (!socket_buckets_pool_resize())
         return NULL;
     
-    p = ht.sb_free_p;
+    p = ht->sb_free_p;
 
     do {
 
         LOOP_COUNT_SAFE_CHECK(p);
 
         if (!p->sb_in_use) {
-            ht.sb_free_p = p->sb_free_next;
+            ht->sb_free_p = p->sb_free_next;
             LOOP_COUNT_RESET();
             return p;
         }
@@ -537,7 +537,7 @@ static struct socket_bucket *get_empty_slot(void)
 
         p = p->sb_free_next;
 
-    } while (p != ht.sb_free_p);
+    } while (p != ht->sb_free_p);
 
     LOOP_COUNT_RESET();
 
@@ -549,7 +549,7 @@ static struct socket_bucket *get_empty_slot(void)
             return NULL;
         }
 
-        ht.sb_free_p = lru->sb_free_next;
+        ht->sb_free_p = lru->sb_free_next;
 
         //It is safe because it is in every list already.
         REMOVE_FROM_HLIST(HASH(&lru->cliaddr, &lru->servaddr), lru);
@@ -621,11 +621,21 @@ int sockp_init()
 {
     struct socket_bucket *sb_tmp;
 
-    memset(SB, 0, sizeof(SB));
-    memset(&ht, 0, sizeof(ht));
+    SB = lkmalloc(NR_SOCKET_BUCKET * sizeof(struct socket_bucket *));
+    if (!SB) {
+        printk("No momeory!");
+        return KCP_ERROR;
+    } 
+    
+    ht = lkmalloc(sizeof(*ht));
+    if (!ht) {
+        lkmfree(SB);
+        printk("No memory");
+        return KCP_ERROR;
+    }
 
     //init sockp freelist.
-    ht.sb_free_p = sb_tmp = SB;
+    ht->sb_free_p = sb_tmp = SB;
 
     while (sb_tmp < SB + NR_SOCKET_BUCKET) {
         sb_tmp->sb_free_prev = sb_tmp - 1;
@@ -642,8 +652,11 @@ int sockp_init()
 
     SOCKP_LOCK_INIT();
     
-    if (!sockp_sbs_check_list_init(NR_SOCKET_BUCKET))
+    if (!sockp_sbs_check_list_init(NR_SOCKET_BUCKET)) {
+        lkmfree(ht);
+        lkmfree(SB);
         return 0;
+    }
 
     return 1;
 }
@@ -654,5 +667,7 @@ int sockp_init()
 void sockp_destroy(void)
 {
     sockp_sbs_check_list_destroy();
+    lkmfree(ht);
+    lkmfree(SB);
     SOCKP_LOCK_DESTROY();
 }
