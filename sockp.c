@@ -621,9 +621,9 @@ int sockp_init()
 {
     struct socket_bucket *sb_tmp;
 
-    SB = lkmalloc(NR_SOCKET_BUCKET * sizeof(struct socket_bucket *));
+    SB = lkmalloc(NR_SOCKET_BUCKET * sizeof(struct socket_bucket));
     if (!SB) {
-        printk("No momeory!");
+        printk("No momory!");
         return KCP_ERROR;
     } 
     
@@ -641,7 +641,7 @@ int sockp_init()
         sb_tmp->sb_free_prev = sb_tmp - 1;
         sb_tmp->sb_free_next = sb_tmp + 1;
 
-        spin_lock_init(&(sb_tmp)->s_lock);
+        spin_lock_init(&sb_tmp->s_lock);
 
         sb_tmp++;
     }
@@ -653,6 +653,7 @@ int sockp_init()
     SOCKP_LOCK_INIT();
     
     if (!sockp_sbs_check_list_init(NR_SOCKET_BUCKET)) {
+        SOCKP_LOCK_DESTROY();
         lkmfree(ht);
         lkmfree(SB);
         return 0;
@@ -667,7 +668,7 @@ int sockp_init()
 void sockp_destroy(void)
 {
     sockp_sbs_check_list_destroy();
+    SOCKP_LOCK_DESTROY();
     lkmfree(ht);
     lkmfree(SB);
-    SOCKP_LOCK_DESTROY();
 }
