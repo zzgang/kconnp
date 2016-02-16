@@ -621,7 +621,7 @@ int sockp_init()
 {
     struct socket_bucket *sb_tmp;
 
-    SB = lkmalloc(NR_SOCKET_BUCKET * sizeof(struct socket_bucket *));
+    SB = lkmalloc(NR_SOCKET_BUCKET * sizeof(struct socket_bucket));
     if (!SB) {
         printk("No momeory!");
         return KCP_ERROR;
@@ -653,6 +653,7 @@ int sockp_init()
     SOCKP_LOCK_INIT();
     
     if (!sockp_sbs_check_list_init(NR_SOCKET_BUCKET)) {
+        SOCKP_LOCK_DESTROY();
         lkmfree(ht);
         lkmfree(SB);
         return 0;
@@ -667,7 +668,7 @@ int sockp_init()
 void sockp_destroy(void)
 {
     sockp_sbs_check_list_destroy();
+    SOCKP_LOCK_DESTROY();
     lkmfree(ht);
     lkmfree(SB);
-    SOCKP_LOCK_DESTROY();
 }
