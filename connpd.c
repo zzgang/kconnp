@@ -125,7 +125,7 @@ static void connp_wait_events_or_timout(void)
         pfdt.pollfd.fd = (*sb)->connpd_fd;
         pfdt.pollfd.events = POLLRDHUP;
         pfdt.pollfd.revents = 0;
-        pfdt.data = *sb;
+        pfdt.data = (*sb);
         pfdt.poll_func = connpd_do_poll;
 
         pollfd_array->set(pollfd_array, &pfdt, idx++);
@@ -169,6 +169,10 @@ static int connpd_func(void *data)
     lkm_setrlimit(RLIMIT_NOFILE, new_rlim);
     
     allow_signal(NOTIFY_SIG);
+   
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 2, 0)
+    init_waitqueue_head(&current->files->resize_wait);
+#endif
 
     for(;;) {
 
