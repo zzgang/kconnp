@@ -912,23 +912,31 @@ static void items_str_list_free(struct items_str_list_t * items_str_list)
 
 static int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
 {
-    char *c, *n, *dest;
+    char *c, *n, *src, *dest;
     int len = 0;
 
     if (!str->data)
         return 0;
 
-    dest = lkmalloc(str->len + 1);
-    if (!dest) {
+    src = lkmalloc(str->len + 1);
+    if (!src) {
         printk(KERN_ERR "No more memory!");
         return 0;
     }
 
-    c = str->data; 
+    dest = lkmalloc(str->len + 1);
+    if (!dest) {
+        lkmfree(src);
+        printk(KERN_ERR "No more memory!");
+        return 0;
+    }
+    
+    memcpy(src, str->data, str->len);
+
+    c = src; 
     if (*c == '"') { //Strip the first and last quotations
         *c = '\0';
-        str->data[str->len - 1] = '\0';
-        str->len -= 2;
+        src[str->len - 1] = '\0';
         c++;
     }
     
@@ -960,6 +968,8 @@ static int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
 
     node->v_str = dest;
     node->v_strlen = len;
+
+    lkmfree(src);
 
     return 1;
 }
@@ -1105,7 +1115,7 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
                     ret = 0;
                     goto out_hash;
                 }
-                
+
                 if (!hash_set((struct hash_table_t *)ce->cfg_ptr, 
                             (const char *)q->name.data, q->name.len,
                             (void *)prim_node, 0)) {
