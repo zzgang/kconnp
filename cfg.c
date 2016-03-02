@@ -1065,6 +1065,9 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
 {
     struct items_str_list_t items_str_list = {NULL, 0};
     struct item_str_t *q;
+    struct hash_bucket_t *pos;
+    struct conn_node_t *conn_node;
+    struct item_node_t *prim_node;
     int res, ret = 1;
 
     if ((res = cfg_items_data_scan(&items_str_list, ce)) <= 0) {
@@ -1087,23 +1090,22 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
     
     q = items_str_list.list;
     for (; q; q = q->next) {
-        struct item_node_t *prim_node;
-        struct hash_bucket_t *pos;
-        struct conn_node_t *conn_node;
         int found = 0;
 
         hash_for_each(wl->cfg_ptr, pos) {
 
             conn_node = (struct conn_node_t *)hash_value(pos);
-            
+
             if ((q->name.len == conn_node->conn_sn.len) 
                     && !memcmp(q->name.data, conn_node->conn_sn.data, q->name.len)) {
+
                 prim_node = lkmalloc(sizeof(struct item_node_t)); 
                 if (!prim_node) {
                     printk(KERN_ERR "No more memory!");
                     ret = 0;
                     goto out_hash;
                 }
+
                 prim_node->cfg_item_set_node = cfg_item_set_str_node;
 
                 if (q->value.len > MAX_PRIMITIVE_LEN || 
@@ -1123,12 +1125,10 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
                     goto out_hash;
                 }
 
-                conn_node->prim_node = prim_node;
-
                 found = 1;
             } 
         }
-        
+
         if (!found) {
             printk(KERN_ERR 
                     "Error: Unrecognized service name on line %d in file /etc/%s", 
@@ -1137,6 +1137,20 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
             goto out_hash;
         }
     }
+
+    //init the prim_node ptr of iport white list to improve performance.
+    hash_for_each(wl->cfg_ptr, pos) {
+        
+        conn_node = (struct conn_node_t *)hash_value(pos);
+
+        if(hash_find((struct hash_table_t *)ce->cfg_ptr, 
+                    (const char *)conn_node->conn_sn.data, conn_node->conn_sn.len, 
+                    (void **)&prim_node)) {
+
+            conn_node->prim_node = prim_node;
+        }
+    }
+
 out_free:
     items_str_list_free(&items_str_list);
     return ret;
@@ -1146,7 +1160,6 @@ out_hash:
     hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
     goto out_free;
 }
-
 
 void cfg_items_entity_destroy(struct cfg_entry *ce)
 {
