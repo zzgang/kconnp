@@ -169,6 +169,10 @@ static int connpd_func(void *data)
     lkm_setrlimit(RLIMIT_NOFILE, new_rlim);
     
     allow_signal(NOTIFY_SIG);
+   
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 2, 0)
+    init_waitqueue_head(&current->files->resize_wait);
+#endif
 
     for(;;) {
 
