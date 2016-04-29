@@ -1070,6 +1070,10 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
     struct item_node_t *prim_node;
     int res, ret = 1;
 
+
+    if (!wl->cfg_ptr) //check white list
+        return 1;
+
     if ((res = cfg_items_data_scan(&items_str_list, ce)) <= 0) {
         if (res < 0)  //error
             ret = 0;
@@ -1087,7 +1091,7 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
         ret = 0;
         goto out_free;
     }
-    
+
     q = items_str_list.list;
     for (; q; q = q->next) {
         int found = 0;
@@ -1137,7 +1141,7 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
             goto out_hash;
         }
     }
-
+    
     //init the prim_node ptr of iport white list to improve performance.
     hash_for_each(wl->cfg_ptr, pos) {
         
@@ -1791,7 +1795,8 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
                 printk(KERN_ERR 
                         "Error: Convert iport str error on line %d in file /etc/%s",
                         p->line, ce->f_name);
-                hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
+                if (ce->cfg_ptr) 
+                    hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
                 ret = 0;
                 goto out_free;
             }
@@ -1994,6 +1999,7 @@ static int cfg_white_list_entity_reload(struct cfg_entry *ce)
 
     if (ret) /*reload primitives list*/
         ret = (&cfg->pl)->entity_reload(&cfg->pl);
+       
 
     return ret;
 }
