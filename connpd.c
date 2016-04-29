@@ -174,6 +174,10 @@ static int connpd_func(void *data)
     init_waitqueue_head(&current->files->resize_wait);
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 2, 0)
+        init_waitqueue_head(&current->files->resize_wait);
+#endif
+
     for(;;) {
 
         if (kthread_should_stop()) {
