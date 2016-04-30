@@ -77,28 +77,20 @@ else
     echo "Check kernel sysmap file for building LKM... yes";
 fi
 
-if ! (which pcregrep 1>/dev/null) && echo "Check system command pcregrep... no";
-then
-    echo "Check system command pcregrep... no";
-    exit
-else
-    echo "Check system command pcregrep... yes";
-fi
-
 #######################
 #Generate sys calls ea.
 #######################
 
-sys_call_table_ea=`pcregrep '\bsys_call_table\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
-sys_socketcall_ea=`pcregrep '\bsys_socketcall\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
-sys_connect_ea=`pcregrep '\bsys_connect\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
-sys_close_ea=`pcregrep '\bsys_close\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
-sys_shutdown_ea=`pcregrep '\bsys_shutdown\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
-sys_exit_group_ea=`pcregrep '\bsys_exit_group\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
-sys_exit_ea=`pcregrep '\bsys_exit\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
-sys_write_ea=`pcregrep '\bsys_write\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
-sys_send_ea=`pcregrep '\bsys_send\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
-sys_sendto_ea=`pcregrep '\bsys_sendto\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_call_table_ea=`grep '\bsys_call_table\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_socketcall_ea=`grep '\bsys_socketcall\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_connect_ea=`grep '\bsys_connect\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_close_ea=`grep '\bsys_close\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_shutdown_ea=`grep '\bsys_shutdown\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_exit_group_ea=`grep '\bsys_exit_group\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_exit_ea=`grep '\bsys_exit\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_write_ea=`grep '\bsys_write\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_send_ea=`grep '\bsys_send\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_sendto_ea=`grep '\bsys_sendto\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
 
 cat sys_call_table_ea.h.in |
 sed -e "s/%%SYS_CALL_TABLE_EA%%/0x${sys_call_table_ea}/" |
