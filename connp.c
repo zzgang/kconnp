@@ -190,7 +190,7 @@ int connp_fd_allowed(int fd)
     if (!getsockservaddr(sock, &servaddr) || !IS_IPV4_SA(&servaddr))
         return 0;
 
-    if (!cfg_conn_is_positive(&servaddr))
+    if (!cfg_conn_acl_allowed(&servaddr))
         return 0;
 
     return 1;
