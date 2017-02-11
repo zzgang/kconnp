@@ -112,7 +112,7 @@ typedef atomic_t lkm_atomic_t;
 #define lkm_atomic_sub(v, a) lkm_atomic32_sub(v, a)
 #define lkm_atomic_set(v, a) lkm_atomic32_set(v, a)
 
-#elif BITS_PER_LONG == 64 //64bits
+#elif BITS_PER_LONG == 64 //64 bits
 
 typedef atomic64_t lkm_atomic_t;
 #define lkm_atomic_read(v) lkm_atomic64_read(v)

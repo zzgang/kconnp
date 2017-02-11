@@ -102,7 +102,8 @@ int conn_inc_count(struct sockaddr *addr, int count_type)
 
 static inline int insert_socket_to_connp(struct sockaddr *cliaddr, 
         struct sockaddr *servaddr, 
-        struct socket *sock)
+        struct socket *sock, 
+        int pre_insert)
 {
     int ret;
     int connpd_fd;
@@ -114,7 +115,7 @@ static inline int insert_socket_to_connp(struct sockaddr *cliaddr,
     task_fd_install(CONNP_DAEMON_TSKP, connpd_fd, sock->file);
     file_refcnt_inc(sock->file); //add file reference count.
 
-    ret = insert_sock_to_sockp(cliaddr, servaddr, sock, connpd_fd, SOCK_RECLAIM, NULL);
+    ret = insert_sock_to_sockp(cliaddr, servaddr, sock, connpd_fd, SOCK_RECLAIM, NULL, pre_insert);
     if (ret != KCP_OK) {
         connpd_close_pending_fds_in(connpd_fd);
         return ret;
@@ -138,7 +139,7 @@ static inline int insert_into_connp(struct sockaddr *cliaddr, struct sockaddr *s
     }
 
     //To insert
-    ret = insert_socket_to_connp(cliaddr, servaddr, sock);
+    ret = insert_socket_to_connp(cliaddr, servaddr, sock, 0);
 
 out_ret:
     return ret;
@@ -168,6 +169,7 @@ int check_if_ignore_primitives(int fd, const char __user * buf, size_t len)
     return cfg_conn_check_primitive(&servaddr, (void *)&b);
 
 }
+
 
 int connp_fd_allowed(int fd)
 {
@@ -277,10 +279,8 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
         goto ret_unlock;
 
     //check the client sock local address
-    if (!getsockcliaddr(sock, &cliaddr)) {
-        ret = 0;
+    if (!getsockcliaddr(sock, &cliaddr))
         goto ret_unlock;
-    }
 
     if (SOCKADDR_IP(&cliaddr) == htonl(INADDR_ANY)) { // address not bind before connect
         //get local sock client addr
@@ -304,8 +304,12 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
             ret = CONN_BLOCK;
         
         conn_inc_connected_hit_count(servaddr); 
-    } else
+    } else {
+        if(cfg_conn_get_auth_procedure(servaddr))
+            insert_socket_to_connp(&cliaddr, servaddr, sock, 1); //pre-insert
+        
         conn_inc_connected_miss_count(servaddr);
+    }
 
     SET_CLIENT_FLAG(sock);
 

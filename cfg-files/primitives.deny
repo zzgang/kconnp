@@ -1,4 +1,4 @@
-# /etc/primitives.deny: list of service primitive pairs that are not allowed to be sended to the server peer.
+# /etc/kconnp/primitives.deny: list of service primitive pairs that are not allowed to be sended to the server peer.
 #
 # Per service primitive per line.
 #

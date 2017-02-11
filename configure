@@ -91,6 +91,9 @@ sys_exit_ea=`grep '\bsys_exit\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x
 sys_write_ea=`grep '\bsys_write\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
 sys_send_ea=`grep '\bsys_send\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
 sys_sendto_ea=`grep '\bsys_sendto\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_read_ea=`grep '\bsys_read\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_recv_ea=`grep '\bsys_recv\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_recvfrom_ea=`grep '\bsys_recvfrom\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
 
 cat sys_call_table_ea.h.in |
 sed -e "s/%%SYS_CALL_TABLE_EA%%/0x${sys_call_table_ea}/" |
@@ -102,7 +105,10 @@ sed -e "s/%%SYS_EXIT_GROUP_EA%%/0x${sys_exit_group_ea}/" |
 sed -e "s/%%SYS_EXIT_EA%%/0x${sys_exit_ea}/"  | 
 sed -e "s/%%SYS_WRITE_EA%%/0x${sys_write_ea}/" | 
 sed -e "s/%%SYS_SEND_EA%%/0x${sys_send_ea}/" | 
-sed -e "s/%%SYS_SENDTO_EA%%/0x${sys_sendto_ea}/" > sys_call_table_ea.h;
+sed -e "s/%%SYS_SENDTO_EA%%/0x${sys_sendto_ea}/" 
+sed -e "s/%%SYS_READ_EA%%/0x${sys_read_ea}/" | 
+sed -e "s/%%SYS_RECV_EA%%/0x${sys_recv_ea}/" | 
+sed -e "s/%%SYS_RECVFROM_EA%%/0x${sys_recvfrom_ea}/" > sys_call_table_ea.h;
 
 NO_OMIT_FRAME_POINTER=""
 

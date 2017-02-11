@@ -31,7 +31,13 @@
 #define shutdown_timeout_sock_list() shutdown_sock_list(SHUTDOWN_IDLE)
 
 typedef enum {
-    SOCK_RECLAIM = 0,
+    SOCK_NEW,
+    SOCK_AUTH,
+    SOCK_CONNECTED
+} sock_status_t;
+
+typedef enum {
+    SOCK_RECLAIM,
     SOCK_PRECONNECT
 } sock_create_way_t;
 
@@ -72,6 +78,20 @@ struct socket_bucket {
     struct socket_bucket *sb_free_next;
 
     int connpd_fd; /*attached fd of the connpd*/
+    
+    /*auth procedures for stateful connection*/
+    struct {
+        unsigned int cfg_generation;
+#define auth_generation auth.cfg_generation
+        auth_status_t status;
+#define auth_status auth.status
+        struct auth_stage *procedure;
+#define auth_procedure auth.procedure
+        struct auth_stage *procedure_tail;
+#define auth_procedure_tail auth.procedure_tail
+        struct auth_stage *stage;
+#define auth_stage auth.stage
+    } auth;
 
     spinlock_t s_lock; //sb spin lock
 };
@@ -104,7 +124,7 @@ extern int free_sk_to_sockp(struct sock *, struct socket_bucket **);
  */
 extern int insert_sock_to_sockp(struct sockaddr *, struct sockaddr *, 
         struct socket *, int fd, sock_create_way_t create_way, 
-        struct socket_bucket **sbpp);
+        struct socket_bucket **sbpp, int pre_insert);
 
 extern void shutdown_sock_list(shutdown_way_t shutdown_way);
 

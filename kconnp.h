@@ -14,6 +14,11 @@ typedef struct {
     int len;
 } kconnp_str_t;
 
+typedef struct kconnp_str_link {
+    kconnp_str_t str;
+    struct kconnp_str_link *next;
+} kconnp_str_link_t;
+
 typedef union {
     long lval;
     kconnp_str_t str;

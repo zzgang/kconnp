@@ -1,5 +1,5 @@
-#ifndef _SYS_CALL_H
-#define _SYS_CALL_H
+#ifndef __SYS_CALL_H
+#define __SYS_CALL_H
 
 #include <linux/linkage.h>
 #include <linux/socket.h>
@@ -28,8 +28,12 @@ typedef asmlinkage long (*sys_connect_func_ptr_t)(int fd, struct sockaddr __user
 typedef asmlinkage long (*sys_shutdown_func_ptr_t)(int fd, int way);
 typedef asmlinkage long (*sys_close_func_ptr_t)(int fd);
 typedef asmlinkage long (*sys_exit_func_ptr_t)(int error_code);
-typedef asmlinkage ssize_t (*sys_write_func_ptr_t)(int fd, const char __user * buf, size_t count);
-typedef asmlinkage long (*sys_sendto_func_ptr_t)(int sockfd, const void __user * buf, size_t len, int flags, const struct sockaddr __user * addr, int addrlen);
+
+typedef asmlinkage ssize_t (*sys_write_func_ptr_t)(int fd, const char __user *buf, size_t count);
+typedef asmlinkage ssize_t (*sys_sendto_func_ptr_t)(int sockfd, const void __user *buf, size_t len, int flags, const struct sockaddr __user *addr, int addrlen);
+
+typedef asmlinkage ssize_t (*sys_read_func_ptr_t)(int fd, const char __user *buf, size_t count);
+typedef asmlinkage ssize_t (*sys_recvfrom_func_ptr_t)(int sockfd, const void __user *buf, ssize_t len, int flags, const struct sockaddr __user *addr, int addrlen);
 
 extern sys_connect_func_ptr_t orig_sys_connect;
 extern sys_shutdown_func_ptr_t orig_sys_shutdown;
@@ -38,12 +42,16 @@ extern sys_exit_func_ptr_t orig_sys_exit;
 extern sys_exit_func_ptr_t orig_sys_exit_group;
 extern sys_write_func_ptr_t orig_sys_write;
 extern sys_sendto_func_ptr_t orig_sys_sendto;
+extern sys_read_func_ptr_t orig_sys_read;
+extern sys_recvfrom_func_ptr_t orig_sys_recvfrom;
 
 #ifdef __NR_socketcall
 typedef asmlinkage long (*sys_socketcall_func_ptr_t)(int call, unsigned long __user *args);
 typedef asmlinkage long (*sys_send_func_ptr_t)(int sockfd, const void __user * buf, size_t len, int flags);
+typedef asmlinkage long (*sys_recv_func_ptr_t)(int sockfd, const void __user * buf, size_t len, int flags);
 extern sys_socketcall_func_ptr_t orig_sys_socketcall;
 extern sys_send_func_ptr_t orig_sys_send;
+extern sys_recv_func_ptr_t orig_sys_recv;
 #endif
 
 asmlinkage long connp_sys_connect(int fd, struct sockaddr __user *, int addrlen);
@@ -53,10 +61,15 @@ asmlinkage long connp_sys_exit(int error_code);
 asmlinkage long connp_sys_exit_group(int error_code);
 asmlinkage ssize_t connp_sys_write(int fd, const char __user * buf, size_t count);
 asmlinkage long connp_sys_sendto(int sockfd, const void __user * buf, size_t len, int flags, const struct sockaddr __user * dest_addr, int addrlen);
+asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count);
+asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, ssize_t len, int flags, const struct sockaddr __user *addr, int addrlen);
+
+
 
 #ifdef __NR_socketcall
 asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args);
 asmlinkage long connp_sys_send(int sockfd, const void __user * buf, size_t len, int flags);
+asmlinkage long connp_sys_recv(int sockfd, const void __user * buf, size_t len, int flags);
 #endif
 
 #endif

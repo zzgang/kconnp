@@ -1,4 +1,4 @@
-# /etc/iports.allow: list of ip-ports that are allowed to access the kconnp.
+# /etc/kconnp/iports.allow: list of ip-ports that are allowed to access the kconnp.
 #
 # Per service:ip:port per line.
 #

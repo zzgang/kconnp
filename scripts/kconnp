@@ -16,7 +16,7 @@ exit;
 VER=%%VER%%
 kv=`uname -r`;
 kmconnp="/lib/modules/$kv/kernel/net/kconnp/kconnp.ko";
-kconnp_cfgs="kconnp.conf iports.allow iports.deny primitives.deny";
+kconnp_cfgs="kconnp.conf iports.allow iports.deny primitives.deny auth.conf";
 kconnp_running="lsmod | grep '\bkconnp\b' > /dev/null";
 
 ver(){
@@ -37,7 +37,7 @@ reload(){
     then
         for f in $kconnp_cfgs
         do 
-            cat /etc/$f > /proc/kconnp/$f;
+            cat /etc/kconnp/$f > /proc/kconnp/$f;
         done;
     else
         echo "kconnp not running.";

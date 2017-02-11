@@ -6,6 +6,7 @@
 #include "connp.h"
 #include "hash.h"
 #include "kconnp.h"
+#include "auth.h"
 
 #define CFG_BASE_DIR_NAME "kconnp"
 
@@ -16,7 +17,8 @@ struct cfg_entry {
     unsigned int raw_len; /*the data length read from the procfile*/
     char *raw_ptr; /*cfg raw data pointer*/ 
     void *cfg_ptr; /*handle the cfg storage*/
-    time_t mtime;
+    time_t mtime; /*modify time*/
+    unsigned int generation; /*increase the generation after reloading the cfg.*/
     rwlock_t cfg_rwlock;
 
     /*proc r/w funcs*/
@@ -61,6 +63,11 @@ struct cfg_dir {
 #define pl prim_list
 #define pl_ptr prim_list.cfg_ptr
 #define pl_rwlock prim_list.cfg_rwlock
+    struct cfg_entry auth_procedure;
+#define auth auth_procedure
+#define auth_generation auth_procedure.generation
+#define auth_ptr auth_procedure.cfg_ptr
+#define auth_rwlock auth_procedure.cfg_rwlock
     struct cfg_entry stats_info;
 #define st stats_info
 #define st_ptr stats_info.raw_ptr
@@ -118,6 +125,8 @@ struct item_node_t {
     int (*cfg_item_set_node)(struct item_node_t *node, kconnp_str_t *str); 
 };
 #define MAX_PRIMITIVE_LEN 64
+#define MAX_AUTH_PROCEDURE_LEN 128
+#define MAX_AUTH_PROCEDURE_PART_LEN 32
 #define MAX_SN_PADDING_ZERO_LEN 33 /*real max length is (MAX_SN_PADDING_NULL_LEN - 1)*/
 struct iport_t {
     //Ip and port must be first elements
@@ -144,6 +153,7 @@ struct conn_node_t {
 
     /*direct access*/
     struct item_node_t *prim_node; 
+    struct auth_stage *auth_procedure;
 
     struct conn_attr_t conn_attrs;
 #define conn_close_way conn_attrs.close_way_attrs.close_way
@@ -195,6 +205,7 @@ struct iport_pos_t {
 #define KEEP_ALIVE_SET          0x4
 #define KEEP_ALIVE_GET          0x5
 #define CHECK_PRIMITIVE         0x6
+#define AUTH_PROCEDURE_GET      0x7
 
 #define cfg_conn_acl_allowed(addr) cfg_conn_op(addr, ACL_CHECK, NULL)
 #define cfg_conn_acl_spec_allowed(addr) cfg_conn_op(addr, ACL_SPEC_CHECK, NULL)
@@ -203,6 +214,11 @@ struct iport_pos_t {
 #define cfg_conn_set_keep_alive(addr, val) cfg_conn_op(addr, KEEP_ALIVE_SET, val)
 #define cfg_conn_get_keep_alive(addr, val) cfg_conn_op(addr, KEEP_ALIVE_GET, val)
 #define cfg_conn_check_primitive(addr, val) cfg_conn_op(addr, CHECK_PRIMITIVE, val)
+#define cfg_conn_get_auth_procedure(addr) ({        \
+    struct auth_stage **val;                        \
+    if (!cfg_conn_op(addr, AUTH_PROCEDURE_GET, val)) \
+        *val = NULL;                                \
+    *val;})
 
 extern int cfg_conn_op(struct sockaddr *addr, int op_type, void *val);
 

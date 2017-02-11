@@ -37,6 +37,7 @@ struct conn_attr_t {
 };
 
 extern int check_if_ignore_primitives(int fd, const char __user * buf, size_t len);
+extern int check_if_ignore_auth_procedure(int fd, const char __user * buf, size_t len);
 extern int connp_fd_allowed(int fd);
 extern int insert_into_connp_if_permitted(int fd);
 extern int fetch_conn_from_connp(int fd, struct sockaddr *);
