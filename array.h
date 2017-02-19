@@ -1,5 +1,5 @@
-#ifndef _ARRAY_H_
-#define _ARRAY_H_
+#ifndef __ARRAY_H_
+#define __ARRAY_H_
 
 #include "lkm_util.h"
 
