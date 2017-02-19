@@ -78,7 +78,7 @@ extern asmlinkage long connp_sys_recv(int sockfd, const void __user * buf, size_
 
 #define jmp_orig_sys_call(orig_sys_call)       \
 ({      \
-    int err;            \
+    int err; /*dummy*/           \
     asm volatile("leave\n\t"            \
             "jmp *%1\n\t"               \
             :"=a"(err)                  \
