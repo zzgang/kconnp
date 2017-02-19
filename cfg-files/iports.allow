@@ -19,3 +19,4 @@
 
 memcache:*:11211 #Memcache port, Non-state connection
 redis:*:6379
+mysql:*:3306

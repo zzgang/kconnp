@@ -13,6 +13,8 @@
 
 #define MAX_SYS_CALL_NUM 2048
 
+struct pollfd;
+
 struct syscall_func_struct {
     char *name; //sys call name.
     unsigned long sym_addr; // Get from symbol map file.
@@ -34,6 +36,7 @@ typedef asmlinkage ssize_t (*sys_sendto_func_ptr_t)(int sockfd, const void __use
 
 typedef asmlinkage ssize_t (*sys_read_func_ptr_t)(int fd, const char __user *buf, size_t count);
 typedef asmlinkage ssize_t (*sys_recvfrom_func_ptr_t)(int sockfd, const void __user *buf, ssize_t len, int flags, const struct sockaddr __user *addr, int addrlen);
+typedef asmlinkage long (*sys_poll_func_ptr_t)(struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs);
 
 extern sys_connect_func_ptr_t orig_sys_connect;
 extern sys_shutdown_func_ptr_t orig_sys_shutdown;
@@ -44,6 +47,7 @@ extern sys_write_func_ptr_t orig_sys_write;
 extern sys_sendto_func_ptr_t orig_sys_sendto;
 extern sys_read_func_ptr_t orig_sys_read;
 extern sys_recvfrom_func_ptr_t orig_sys_recvfrom;
+extern sys_poll_func_ptr_t orig_sys_poll;
 
 #ifdef __NR_socketcall
 typedef asmlinkage long (*sys_socketcall_func_ptr_t)(int call, unsigned long __user *args);
@@ -54,22 +58,32 @@ extern sys_send_func_ptr_t orig_sys_send;
 extern sys_recv_func_ptr_t orig_sys_recv;
 #endif
 
-asmlinkage long connp_sys_connect(int fd, struct sockaddr __user *, int addrlen);
-asmlinkage long connp_sys_shutdown(int fd, int way);
-asmlinkage long connp_sys_close(int fd);
-asmlinkage long connp_sys_exit(int error_code);
-asmlinkage long connp_sys_exit_group(int error_code);
-asmlinkage ssize_t connp_sys_write(int fd, const char __user * buf, size_t count);
-asmlinkage long connp_sys_sendto(int sockfd, const void __user * buf, size_t len, int flags, const struct sockaddr __user * dest_addr, int addrlen);
-asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count);
-asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, ssize_t len, int flags, const struct sockaddr __user *addr, int addrlen);
-
-
+extern asmlinkage long connp_sys_connect(int fd, struct sockaddr __user *, int addrlen);
+extern asmlinkage long connp_sys_shutdown(int fd, int way);
+extern asmlinkage long connp_sys_close(int fd);
+extern asmlinkage long connp_sys_exit(int error_code);
+extern asmlinkage long connp_sys_exit_group(int error_code);
+extern asmlinkage ssize_t connp_sys_write(int fd, const char __user * buf, size_t count);
+extern asmlinkage long connp_sys_sendto(int sockfd, const void __user * buf, size_t len, int flags, const struct sockaddr __user * dest_addr, int addrlen);
+extern asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count);
+extern asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t len, int flags, const struct sockaddr __user *addr, int addrlen);
+extern asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
+                    long timeout_msecs);
 
 #ifdef __NR_socketcall
-asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args);
-asmlinkage long connp_sys_send(int sockfd, const void __user * buf, size_t len, int flags);
-asmlinkage long connp_sys_recv(int sockfd, const void __user * buf, size_t len, int flags);
+extern asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args);
+extern asmlinkage long connp_sys_send(int sockfd, const void __user * buf, size_t len, int flags);
+extern asmlinkage long connp_sys_recv(int sockfd, const void __user * buf, size_t len, int flags);
 #endif
+
+#define jmp_orig_sys_call(orig_sys_call)       \
+({      \
+    int err;            \
+    asm volatile("leave\n\t"            \
+            "jmp *%1\n\t"               \
+            :"=a"(err)                  \
+            :"m"(orig_sys_call));       \
+    err;            \
+ })
 
 #endif

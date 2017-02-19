@@ -19,6 +19,7 @@ sys_write_func_ptr_t orig_sys_write = (void *)SYS_WRITE_EA;
 sys_read_func_ptr_t orig_sys_read = (void *)SYS_READ_EA;
 sys_sendto_func_ptr_t orig_sys_sendto = (void *)SYS_SENDTO_EA;
 sys_recvfrom_func_ptr_t orig_sys_recvfrom = (void *)SYS_RECVFROM_EA;
+sys_poll_func_ptr_t orig_sys_poll = (void *)SYS_POLL_EA;
 
 /*new sys calls*/
 #ifdef __NR_socketcall
@@ -34,7 +35,8 @@ static sys_close_func_ptr_t new_sys_close = connp_sys_close;
 static sys_exit_func_ptr_t new_sys_exit = connp_sys_exit;
 static sys_exit_func_ptr_t new_sys_exit_group = connp_sys_exit_group;
 static sys_write_func_ptr_t new_sys_write = connp_sys_write;
-static sys_read_func_ptr_t new_sys_write = connp_sys_read;
+static sys_read_func_ptr_t new_sys_read = connp_sys_read;
+static sys_poll_func_ptr_t new_sys_poll = connp_sys_poll;
 
 static int build_syscall_func_table(unsigned long *sys_call_table, int *nr_min, int *nr_max);
 
@@ -122,6 +124,14 @@ static struct syscall_func_struct syscall_func[] = { //initial.
         .nr = -1, 
         .new_sys_func = (void **)&new_sys_read, 
         .orig_sys_func = (void **)&orig_sys_read
+    },
+    {
+        .name = "sys_poll",
+        .sym_addr = SYS_POLL_EA,
+        .real_addr = 0,
+        .nr = -1,
+        .new_sys_func = (void **)&new_sys_poll,
+        .orig_sys_func = (void **)&orig_sys_poll
     },
 
     {NULL, 0, 0, -1, NULL, NULL} //end tag.

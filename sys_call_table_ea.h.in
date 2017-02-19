@@ -16,4 +16,6 @@
 #define SYS_RECV_EA %%SYS_RECV_EA%%
 #define SYS_RECVFROM_EA %%SYS_RECVFROM_EA%%
 
+#define SYS_POLL_EA %%SYS_POLL_EA%%
+
 #endif

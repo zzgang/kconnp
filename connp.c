@@ -9,6 +9,7 @@
 #include "sockp.h"
 #include "connp.h"
 #include "connpd.h"
+#include "auth.h"
 
 rwlock_t connp_rwlock; //global connp r/w lock;
 
@@ -18,7 +19,7 @@ static void do_conn_inc_idle_count(void *data);
 static void do_conn_inc_connected_miss_count(void *data);
 static void do_conn_inc_connected_hit_count(void *data);
 
-static inline int insert_socket_to_connp(struct sockaddr *, struct sockaddr *, struct socket *);
+static inline int insert_socket_to_connp(struct sockaddr *, struct sockaddr *, struct socket *, int pre_insert);
 static inline int insert_into_connp(struct sockaddr *, struct sockaddr *, struct socket *);
 
 static inline void deferred_destroy(void);
@@ -134,7 +135,8 @@ static inline int insert_into_connp(struct sockaddr *cliaddr, struct sockaddr *s
     ret = free_sk_to_sockp(sk, NULL);
     if (ret) {
         if (ret == KCP_OK) //free success
-            sock->sk = NULL; //Remove reference to avoid destroying the sk.
+            if (file_refcnt_read(sock->file) == 1) 
+                sock->sk = NULL; //Remove reference to avoid destroying the sk.
         goto out_ret;
     }
 
@@ -145,7 +147,7 @@ out_ret:
     return ret;
 }
 
-int check_if_ignore_primitives(int fd, const char __user * buf, size_t len)
+int check_if_ignore_primitives(int fd, const char __user *buf, size_t len)
 {
     struct socket *sock;
     struct sockaddr servaddr;
@@ -219,7 +221,13 @@ int insert_into_connp_if_permitted(int fd)
             || !IS_CLIENT_SOCK(sock))
         goto ret_fail;
 
-    if (file_refcnt_read(sock->file) != 1)
+    if (file_refcnt_read(sock->file) == 2) {
+        struct socket_bucket *sb = get_just_preinsert_auth_sb(sock->sk);
+        if (!sb) 
+            goto ret_fail;
+        else 
+            printk(KERN_ERR "find just preinsert auth sb!");
+    } else if (file_refcnt_read(sock->file) != 1)
         goto ret_fail;
 
     if (!getsockcliaddr(sock, &cliaddr) || !IS_IPV4_SA(&cliaddr)) 

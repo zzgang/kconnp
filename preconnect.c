@@ -82,7 +82,8 @@ static void do_create_connects(struct sockaddr_in *servaddr, int nums)
                     (struct sockaddr *)servaddr,
                     sock, fd, 
                     SOCK_PRECONNECT, 
-                    NULL) != KCP_OK) {
+                    NULL,
+                    0) != KCP_OK) {
             orig_sys_close(fd);
             break;
         } 

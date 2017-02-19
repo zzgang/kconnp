@@ -115,16 +115,16 @@
 
 #define AUTH_PROCEDURE_INIT(sb)   \
     do {                           \
-        (sb)->auth_generation = cfg->auth_generation;   \
-        (sb)->auth_status = AUTH_NEW;   \
-        (sb)->auth_procedure = NULL;    \
-        (sb)->auth_stage = NULL;    \
-        (sb)->auth_next = NULL; \
+        (sb)->cfg_generation = cfg->auth_generation;   \
+        (sb)->auth_procedure_status = AUTH_NEW;   \
+        (sb)->auth_procedure_head = NULL;    \
+        (sb)->auth_procedure_tail = NULL;    \
+        (sb)->auth_procedure_stage = NULL;    \
     } while (0);
 
-#define AUTH_PROCEDURE_DESTROY(sb) 
-do {
-   auth_procedure_destroy(sb->auth_procedure); 
+#define AUTH_PROCEDURE_DESTROY(sb) \
+do {        \
+   auth_procedure_destroy((sb)->auth_procedure_head); \
 } while (0);
 
 #define INIT_SB(sb, s, fd, way)   \
@@ -304,6 +304,7 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *cliaddr, struct socka
         LOOP_COUNT_SAFE_CHECK(p);
 
         if (KEY_MATCH(cliaddr, &p->cliaddr, servaddr, &p->servaddr)) {
+            printk(KERN_ERR "apply find start! sock_in_use: %d, sock_close_now: %d, sock-sk: %d, avaialbe: %d, passive: %d", p->sock_in_use, p->sock_close_now, !p->sock->sk, sock_is_not_available(p), SOCK_IS_RECLAIM_PASSIVE(p));
 
             if (p->sock_in_use 
                     || p->sock_close_now
@@ -311,6 +312,8 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *cliaddr, struct socka
                     || sock_is_not_available(p) 
                     || SOCK_IS_RECLAIM_PASSIVE(p))
                 continue;
+
+            printk(KERN_ERR "apply find end!");
 
             if (p->sk != p->sock->sk) {
                 printk(KERN_ERR "SK of sock changed!");
@@ -409,6 +412,10 @@ shutdown:
                 break;
             }
 
+            //check if authentication sock.
+            if (p->auth_procedure_head) 
+                auth_procedure_destroy(p->auth_procedure_head);
+
             if (IN_HLIST(HASH(&p->cliaddr, &p->servaddr), p))
                 REMOVE_FROM_HLIST(HASH(&p->cliaddr, &p->servaddr), p);
             REMOVE_FROM_SHLIST(SHASH(p->sk), p);
@@ -423,6 +430,40 @@ shutdown:
     LOOP_COUNT_RESET();
     
     SOCKP_UNLOCK();
+}
+
+struct socket_bucket *get_sock_sb(struct sock *sk, int sock_type)
+{
+    struct socket_bucket *p, *sb = NULL;
+
+    SOCKP_LOCK();
+
+    p = SHASH(sk);
+    for(; p; p = p->sb_snext)
+        if (SKEY_MATCH(sk, p->sk)) {
+            sb = p;
+            break;
+        }
+
+    SOCKP_UNLOCK();
+
+    if (!sb) 
+        return NULL;
+
+    switch(sock_type) {
+        case AUTH_SOCK_SB:
+            if (sb->auth_procedure_status > AUTH_NEW)
+                return sb;
+            break;
+        case JUST_PREINSERT_AUTH_SOCK_SB:
+            if (!sb->uc && sb->auth_procedure_status > AUTH_NEW) //not been applied
+            return sb;
+            break;
+        default:
+            break;
+    }
+
+    return sb;
 }
 
 /**
@@ -448,13 +489,13 @@ int free_sk_to_sockp(struct sock *sk, struct socket_bucket **sbpp)
                 break;
             }
 
-            if ((p->auth_status >= AUTH_PROCESSING) && (p->auth_status != AUTH_SUCCESS)) {
+            if ((p->auth_procedure_status >= AUTH_PROCESSING) && (p->auth_procedure_status != AUTH_SUCCESS)) {
                 AUTH_PROCEDURE_DESTROY(p);
                 p->sock_close_now = 1;
                 notify(CONNP_DAEMON_TSKP); //collection at once.
             }
             
-            p->auth_stage = p->auth_procedure;//reset
+            p->auth_procedure_stage = p->auth_procedure_head;//reset
 
             p->sock_in_use = 0; //clear "in use" tag.
             p->last_used_jiffies = lkm_jiffies;
@@ -475,6 +516,7 @@ int free_sk_to_sockp(struct sock *sk, struct socket_bucket **sbpp)
 
     //Grafted to sock of sockp
     if (sb) {
+        printk(KERN_ERR "free success!");
         sock_graft(sk, sb->sock);
         if (sbpp) 
             *sbpp = sb;
@@ -577,8 +619,8 @@ static struct socket_bucket *get_empty_slot(void)
         ht->sb_free_p = lru->sb_free_next;
 
         //It is safe because it is in all link list already.
-        if (lru->auth_status != AUTH_NEW) 
-            AUTH_PROCEDURE_DESTROY(sb);
+        if (lru->auth_procedure_status != AUTH_NEW) 
+            AUTH_PROCEDURE_DESTROY(lru);
 
         REMOVE_FROM_HLIST(HASH(&lru->cliaddr, &lru->servaddr), lru);
         REMOVE_FROM_SHLIST(SHASH(lru->sk), lru);
@@ -631,7 +673,7 @@ int insert_sock_to_sockp(struct sockaddr *cliaddr,
     SOCKADDR_COPY(&sb->servaddr, servaddr);
 
     if (pre_insert) {
-        sb->auth_status = AUTH_PROCESSING;
+        sb->auth_procedure_status = AUTH_PROCESSING;
         sb->sock_in_use = 1; //set in use flag to authentication.
     } else 
         INSERT_INTO_HLIST(HASH(&sb->cliaddr, &sb->servaddr), sb);

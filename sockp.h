@@ -3,13 +3,14 @@
  *Date 05/27/2012
  *Author Zhigang Zhang <zzgang2008@gmail.com>
  */
-#ifndef _SOCKP_H
-#define _SOCKP_H
+#ifndef __SOCKP_H
+#define __SOCKP_H
 
 #include <linux/in.h> /*define struct sockaddr_in*/
 #include <linux/net.h> /*define struct socket*/
 #include <net/tcp_states.h>
 #include "stack.h"
+#include "auth.h"
 
 #define SOCKP_DEBUG 0
 
@@ -79,19 +80,19 @@ struct socket_bucket {
 
     int connpd_fd; /*attached fd of the connpd*/
     
-    /*auth procedures for stateful connection*/
+    /*add auth procedure for stateful connection*/
     struct {
-        unsigned int cfg_generation;
-#define auth_generation auth.cfg_generation
+        unsigned int generation; //initial from cfg generation!
+#define cfg_generation auth_procedure.generation
         auth_status_t status;
-#define auth_status auth.status
-        struct auth_stage *procedure;
-#define auth_procedure auth.procedure
+#define auth_procedure_status auth_procedure.status
+        struct auth_stage *procedure_head;
+#define auth_procedure_head auth_procedure.procedure_head
         struct auth_stage *procedure_tail;
-#define auth_procedure_tail auth.procedure_tail
+#define auth_procedure_tail auth_procedure.procedure_tail
         struct auth_stage *stage;
-#define auth_stage auth.stage
-    } auth;
+#define auth_procedure_stage auth_procedure.stage
+    } auth_procedure;
 
     spinlock_t s_lock; //sb spin lock
 };
@@ -114,6 +115,13 @@ extern void set_sock_close_now(struct socket *sock, typeof(((struct socket_bucke
  */
 extern struct socket_bucket *apply_sk_from_sockp(struct sockaddr *, struct sockaddr *);
 
+#define AUTH_SOCK_SB 1
+#define JUST_PREINSERT_AUTH_SOCK_SB 2
+
+#define get_auth_sb(sk) get_sock_sb(sk, AUTH_SOCK_SB)
+#define get_just_preinsert_auth_sb(sk) get_sock_sb(sk, JUST_PREINSERT_AUTH_SOCK_SB)
+extern struct socket_bucket *get_sock_sb(struct sock *sk, int sock_type);
+
 /**
  *Free a socket which is returned by 'apply_socket_from_sockp', return the bucket of this socket.
  */
@@ -125,6 +133,7 @@ extern int free_sk_to_sockp(struct sock *, struct socket_bucket **);
 extern int insert_sock_to_sockp(struct sockaddr *, struct sockaddr *, 
         struct socket *, int fd, sock_create_way_t create_way, 
         struct socket_bucket **sbpp, int pre_insert);
+
 
 extern void shutdown_sock_list(shutdown_way_t shutdown_way);
 

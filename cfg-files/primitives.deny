@@ -10,3 +10,4 @@
 
 memcache "quit\r\n" #Memcache communication primitive
 redis "QUIT\r\n"
+mysql "\1\0\0\0\1"
