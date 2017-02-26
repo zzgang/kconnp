@@ -76,14 +76,67 @@ extern asmlinkage long connp_sys_send(int sockfd, const void __user * buf, size_
 extern asmlinkage long connp_sys_recv(int sockfd, const void __user * buf, size_t len, int flags);
 #endif
 
-#define jmp_orig_sys_call(orig_sys_call)       \
-({      \
-    int err; /*dummy*/           \
-    asm volatile("leave\n\t"            \
-            "jmp *%1\n\t"               \
-            :"=a"(err)                  \
-            :"m"(orig_sys_call));       \
-    err;            \
- })
+#if BITS_PER_LONG == 32
+
+#define AX %%eax
+#define BX %%ebx
+#define CX %%ecx
+#define DX %%edx
+#define SI %%esi
+#define DI %%edi
+#define SP %%esp
+#define BP %%ebp
+
+#else /*64 bits*/
+
+#define AX %%rax
+#define BX %%rbx
+#define CX %%rcx
+#define DX %%rdx
+#define SI %%rsi
+#define DI %%rdi
+#define SP %%rsp
+#define BP %%rbp
+
+#endif
+
+#define ASM_INSTRUCTION  \
+         push AX; \
+         push DX;   \
+         push CX;  \
+         push SI;  \
+         push DI; \
+         mov %0, AX; \
+         mov BP, CX;    \
+         sub SP, CX;    \
+         sar %2, CX;      \
+         add $0x1, CX;      \
+         mov SP, SI;    \
+         mov SP, DI;    \
+         sub %1, DI;     \
+         s_%=:mov (SI), DX;  \
+         mov DX, (DI);        \
+         add %1, SI;       \
+         add %1, DI;     \
+         loop s_%=;               \
+         mov AX, (BP);         \
+         sub %1, SP;         \
+         sub %1, BP;         \
+         pop DI;           \
+         pop SI;           \
+         pop CX;           \
+         pop DX;            \
+         pop AX;           \
+ 
+
+#define jmp_orig_call_pass(orig_sys_call, ...)    \
+    ({                            \
+     asm volatile(#__VA_ARGS__       \
+         :                       \
+         :"m"(orig_sys_call), "i"(sizeof(long)), "i"(sizeof(long)/2));   \
+     0;})
+
+#define jmp_orig_sys_call(orig_sys_call, asm_instruction) \
+    jmp_orig_call_pass(orig_sys_call, asm_instruction)
 
 #endif

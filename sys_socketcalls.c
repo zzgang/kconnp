@@ -63,7 +63,7 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
                             (struct sockaddr __user *)a[4], a[5]);
             break;
         default:
-            err = jmp_orig_sys_call(orig_sys_socketcall);
+            return jmp_orig_sys_call(orig_sys_socketcall, ASM_INSTRUCTION);
             break;
     }
 
@@ -91,7 +91,7 @@ asmlinkage long connp_sys_connect(int fd,
     }
 
 orig_connect:
-    return orig_sys_connect(fd, uservaddr, addrlen);
+    return jmp_orig_sys_call(orig_sys_connect, ASM_INSTRUCTION);
 }
 
 asmlinkage long connp_sys_shutdown(int fd, int way)
@@ -99,7 +99,7 @@ asmlinkage long connp_sys_shutdown(int fd, int way)
     if (connp_fd_allowed(fd))
         return 0;
     else
-        return orig_sys_shutdown(fd, way);
+        return jmp_orig_sys_call(orig_sys_shutdown, ASM_INSTRUCTION);
 }
 
 asmlinkage ssize_t connp_sys_write(int fd, const char __user *buf, size_t count)
@@ -113,7 +113,7 @@ asmlinkage ssize_t connp_sys_write(int fd, const char __user *buf, size_t count)
         }
     }
 
-    return orig_sys_write(fd, buf, count);
+    return jmp_orig_sys_call(orig_sys_write, ASM_INSTRUCTION);
 }
 
 asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count)
@@ -122,7 +122,7 @@ asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count)
     if (cnt) 
         return cnt;
 
-    return orig_sys_read(fd, buf, count);
+    return jmp_orig_sys_call(orig_sys_read, ASM_INSTRUCTION);
 }
 
 #ifdef __NR_socketcall
@@ -162,7 +162,7 @@ asmlinkage long connp_sys_sendto(int sockfd, const void __user *buf, size_t len,
             return cnt;
     }
 
-    return orig_sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
+    return jmp_orig_sys_call(orig_sys_sendto, ASM_INSTRUCTION);
 }
 
 asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
@@ -172,7 +172,7 @@ asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t
     if (cnt) 
         return cnt;
 
-    return orig_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+    return jmp_orig_sys_call(orig_sys_recvfrom, ASM_INSTRUCTION);
 }
 
 asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
@@ -198,5 +198,5 @@ asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
     }
 
 orig_poll:
-    return jmp_orig_sys_call(orig_sys_poll);
+    return jmp_orig_sys_call(orig_sys_poll, ASM_INSTRUCTION);
 }
