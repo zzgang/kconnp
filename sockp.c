@@ -304,7 +304,7 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *cliaddr, struct socka
         LOOP_COUNT_SAFE_CHECK(p);
 
         if (KEY_MATCH(cliaddr, &p->cliaddr, servaddr, &p->servaddr)) {
-            printk(KERN_ERR "apply find start! sock_in_use: %d, sock_close_now: %d, sock-sk: %d, avaialbe: %d, passive: %d", p->sock_in_use, p->sock_close_now, !p->sock->sk, sock_is_not_available(p), SOCK_IS_RECLAIM_PASSIVE(p));
+            //printk(KERN_ERR "apply find start! sock_in_use: %d, sock_close_now: %d, sock-sk: %d, avaialbe: %d, passive: %d", p->sock_in_use, p->sock_close_now, !p->sock->sk, sock_is_not_available(p), SOCK_IS_RECLAIM_PASSIVE(p));
 
             if (p->sock_in_use 
                     || p->sock_close_now
@@ -313,7 +313,7 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *cliaddr, struct socka
                     || SOCK_IS_RECLAIM_PASSIVE(p))
                 continue;
 
-            printk(KERN_ERR "apply find end!");
+            //printk(KERN_ERR "apply find end!");
 
             if (p->sk != p->sock->sk) {
                 printk(KERN_ERR "SK of sock changed!");
@@ -454,10 +454,14 @@ struct socket_bucket *get_sock_sb(struct sock *sk, int sock_type)
         case AUTH_SOCK_SB:
             if (sb->auth_procedure_status > AUTH_NEW)
                 return sb;
+            else 
+                return NULL;
             break;
         case JUST_PREINSERT_AUTH_SOCK_SB:
             if (!sb->uc && sb->auth_procedure_status > AUTH_NEW) //not been applied
-            return sb;
+                return sb;
+            else
+                return NULL;
             break;
         default:
             break;
@@ -516,7 +520,7 @@ int free_sk_to_sockp(struct sock *sk, struct socket_bucket **sbpp)
 
     //Grafted to sock of sockp
     if (sb) {
-        printk(KERN_ERR "free success!");
+        //printk(KERN_ERR "free success!");
         sock_graft(sk, sb->sock);
         if (sbpp) 
             *sbpp = sb;

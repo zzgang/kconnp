@@ -32,7 +32,9 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
         case SYS_CONNECT:
             if (copy_from_user(a, args, 3 * sizeof(a[0])))
                 return -EFAULT;
-            err = connp_sys_connect(a[0], (struct sockaddr __user *)a[1], a[2]);
+            err = socketcall_sys_connect(a[0], (struct sockaddr __user *)a[1], a[2]);
+            if (err > 0)
+                goto orig_socketcall;
             break;
 
         case SYS_SHUTDOWN:
@@ -40,29 +42,43 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
                 return -EFAULT;
             err = connp_sys_shutdown(a[0], a[1]); 
             break;
+
         case SYS_SEND:
             if (copy_from_user(a, args, 4 * sizeof(a[0])))
                 return -EFAULT;
-            err = connp_sys_send(a[0], (void __user *)a[1], a[2], a[3]);
+            err = socketcall_sys_send(a[0], (void __user *)a[1], a[2], a[3]);
+            if (!err)
+                goto orig_socketcall;
             break;
+
         case SYS_SENDTO:
             if (copy_from_user(a, args, 6 * sizeof(a[0])))
                 return -EFAULT;
-            err = connp_sys_sendto(a[0], (void __user *)a[1], a[2], a[3],
+            err = socketcall_sys_sendto(a[0], (void __user *)a[1], a[2], a[3],
                             (struct sockaddr __user *)a[4], a[5]);
+            if (!err) 
+                goto orig_socketcall;
             break;
+
         case SYS_RECV:
             if (copy_from_user(a, args, 4 * sizeof(a[0])))
                 return -EFAULT;
-            err = connp_sys_recv(a[0], (void __user *)a[1], a[2], a[3]);
+            err = socketcall_sys_recv(a[0], (void __user *)a[1], a[2], a[3]);
+            if (!err)
+                goto orig_socketcall;
             break;
+
         case SYS_RECVFROM:
             if (copy_from_user(a, args, 6 * sizeof(a[0])))
                 return -EFAULT;
-            err = connp_sys_recvfrom(a[0], (void __user *)a[1], a[2], a[3],
+            err = socketcall_sys_recvfrom(a[0], (void __user *)a[1], a[2], a[3],
                             (struct sockaddr __user *)a[4], a[5]);
+            if (!err)
+                goto orig_socketcall;
             break;
+
         default:
+orig_socketcall:
             return jmp_orig_sys_call(orig_sys_socketcall, ASM_INSTRUCTION);
             break;
     }
@@ -71,8 +87,8 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
 }
 #endif
 
-asmlinkage long connp_sys_connect(int fd, 
-        struct sockaddr __user * uservaddr, int addrlen)
+inline long socketcall_sys_connect(int fd, 
+        struct sockaddr __user * uservaddr, int addrlen) 
 {
     struct sockaddr_storage servaddr;
     int err;
@@ -80,8 +96,6 @@ asmlinkage long connp_sys_connect(int fd,
     err = connp_move_addr_to_kernel(uservaddr, addrlen, (struct sockaddr *)&servaddr);
     if (err < 0)
         return err;
-    else if (err)
-        goto orig_connect;
     
     if ((err = fetch_conn_from_connp(fd, (struct sockaddr *)&servaddr))) {
         if (err == CONN_BLOCK)
@@ -89,8 +103,17 @@ asmlinkage long connp_sys_connect(int fd,
         else if (err == CONN_NONBLOCK)
             return -EINPROGRESS;
     }
+   
+    return 1; 
+}
 
-orig_connect:
+asmlinkage long connp_sys_connect(int fd, 
+        struct sockaddr __user * uservaddr, int addrlen)
+{
+    int err = socketcall_sys_connect(fd, uservaddr, addrlen);
+    if (err <= 0)
+        return err;
+        
     return jmp_orig_sys_call(orig_sys_connect, ASM_INSTRUCTION);
 }
 
@@ -126,7 +149,7 @@ asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count)
 }
 
 #ifdef __NR_socketcall
-asmlinkage long connp_sys_send(int sockfd, const void __user *buf, size_t len, int flags)
+asmlinkage long socketcall_sys_send(int sockfd, const void __user *buf, size_t len, int flags)
 {
     if (check_if_ignore_primitives(sockfd, buf, len))
         return len;
@@ -137,20 +160,20 @@ asmlinkage long connp_sys_send(int sockfd, const void __user *buf, size_t len, i
             return cnt;
     }
 
-    return orig_sys_send(sockfd, buf, len, flags);
+    return 0;
 }
 
-asmlinkage long connp_sys_recv(int sockfd, const void __user *buf, size_t len, int flags)
+asmlinkage long socketcall_sys_recv(int sockfd, const void __user *buf, size_t len, int flags)
 {
     long cnt = check_if_ignore_auth_procedure(sockfd, buf, len, 'r');
     if (cnt) 
         return cnt;
 
-    return orig_sys_recv(sockfd, buf, len, flags);
+    return 0;
 }
 #endif
 
-asmlinkage long connp_sys_sendto(int sockfd, const void __user *buf, size_t len, 
+inline long socketcall_sys_sendto(int sockfd, const void __user *buf, size_t len, 
                 int flags, const struct sockaddr __user *dest_addr, int addrlen)
 {
     if (check_if_ignore_primitives(sockfd, buf, len))
@@ -162,15 +185,37 @@ asmlinkage long connp_sys_sendto(int sockfd, const void __user *buf, size_t len,
             return cnt;
     }
 
+    return 0;
+}
+
+
+asmlinkage long connp_sys_sendto(int sockfd, const void __user *buf, size_t len, 
+                int flags, const struct sockaddr __user *dest_addr, int addrlen)
+{
+    int err = socketcall_sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
+    if (err)
+        return err;
+
     return jmp_orig_sys_call(orig_sys_sendto, ASM_INSTRUCTION);
 }
 
-asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
+inline ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
                 int flags, const struct sockaddr __user *src_addr, int addrlen)
 {
     long cnt = check_if_ignore_auth_procedure(sockfd, buf, len, 'r');
     if (cnt) 
         return cnt;
+
+    return 0;
+}
+
+
+asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
+                int flags, const struct sockaddr __user *src_addr, int addrlen)
+{
+    int err = socketcall_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+    if (err)
+        return err;
 
     return jmp_orig_sys_call(orig_sys_recvfrom, ASM_INSTRUCTION);
 }

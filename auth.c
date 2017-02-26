@@ -50,7 +50,7 @@ int check_if_ignore_auth_procedure(int fd, const char __user *buf, size_t len,
         return 0;
     }
     
-    printk(KERN_ERR "debug io_type entry: %d", io_type);
+    //printk(KERN_ERR "debug io_type entry: %d", io_type);
 
     if (sb->auth_procedure_status == AUTH_PROCESSING) {
         struct conn_node_t *conn_node = cfg_conn_get_node(&servaddr);
@@ -191,6 +191,7 @@ out_auth_processing:
                 return 0;
             }
             
+            //printk(KERN_ERR "user len: %d, info_len: %d\n", len, sb->auth_procedure_stage->info.len);
             if (copy_to_user((void *)buf, sb->auth_procedure_stage->info.data, sb->auth_procedure_stage->info.len)) {
                 printk(KERN_ERR "Auth procedure copy data error!");
                 return 0;

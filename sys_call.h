@@ -26,7 +26,7 @@ struct syscall_func_struct {
 
 extern int connp_set_syscall(int flag);
 
-typedef asmlinkage long (*sys_connect_func_ptr_t)(int fd, struct sockaddr __user *, int addrlen);
+typedef asmlinkage  long (*sys_connect_func_ptr_t)(int fd, struct sockaddr __user *, int addrlen);
 typedef asmlinkage long (*sys_shutdown_func_ptr_t)(int fd, int way);
 typedef asmlinkage long (*sys_close_func_ptr_t)(int fd);
 typedef asmlinkage long (*sys_exit_func_ptr_t)(int error_code);
@@ -72,8 +72,11 @@ extern asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int n
 
 #ifdef __NR_socketcall
 extern asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args);
-extern asmlinkage long connp_sys_send(int sockfd, const void __user * buf, size_t len, int flags);
-extern asmlinkage long connp_sys_recv(int sockfd, const void __user * buf, size_t len, int flags);
+extern asmlinkage long socketcall_sys_send(int sockfd, const void __user * buf, size_t len, int flags);
+extern asmlinkage long socketcall_sys_recv(int sockfd, const void __user * buf, size_t len, int flags);
+extern inline long socketcall_sys_connect(int fd, struct sockaddr __user *, int addrlen);
+extern inline long socketcall_sys_sendto(int sockfd, const void __user * buf, size_t len, int flags, const struct sockaddr __user * dest_addr, int addrlen);
+extern inline ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf, size_t len, int flags, const struct sockaddr __user *addr, int addrlen);
 #endif
 
 #if BITS_PER_LONG == 32
