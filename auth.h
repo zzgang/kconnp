@@ -29,7 +29,7 @@ static inline void auth_procedure_destroy(struct auth_stage *procedure_head)
     while(p) {
         if (p->info.data) 
             lkmfree(p->info.data);
-        printk(KERN_ERR "cfg_destory type: %d", p->type);
+        //printk(KERN_ERR "cfg_destroy type: %d", p->type);
         q = p->next;
         lkmfree(p);
         p = q;

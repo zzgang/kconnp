@@ -4,6 +4,7 @@
 #include <linux/linkage.h>
 #include <linux/socket.h>
 #include <linux/unistd.h>
+#include "sockp.h"
 
 #define SYSCALL_REPLACE (1 << 0)
 #define SYSCALL_RESTORE (1 << 1)
@@ -13,7 +14,9 @@
 
 #define MAX_SYS_CALL_NUM 2048
 
-struct pollfd;
+extern spinlock_t syscall_lock;
+
+struct pollfd; 
 
 struct syscall_func_struct {
     char *name; //sys call name.
@@ -74,10 +77,12 @@ extern asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int n
 extern asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args);
 extern asmlinkage long socketcall_sys_send(int sockfd, const void __user * buf, size_t len, int flags);
 extern asmlinkage long socketcall_sys_recv(int sockfd, const void __user * buf, size_t len, int flags);
+#endif
+
 extern inline long socketcall_sys_connect(int fd, struct sockaddr __user *, int addrlen);
 extern inline long socketcall_sys_sendto(int sockfd, const void __user * buf, size_t len, int flags, const struct sockaddr __user * dest_addr, int addrlen);
 extern inline ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf, size_t len, int flags, const struct sockaddr __user *addr, int addrlen);
-#endif
+inline long socketcall_sys_shutdown(int fd, int way);
 
 #if BITS_PER_LONG == 32
 
@@ -104,42 +109,48 @@ extern inline ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf
 #endif
 
 #define ASM_INSTRUCTION  \
-         push AX; \
-         push DX;   \
+         push AX;       \
+         push BX;   \
          push CX;  \
-         push SI;  \
-         push DI; \
-         mov %0, AX; \
+         push DX;   \
+         mov SP, BX; \
          mov BP, CX;    \
          sub SP, CX;    \
          sar %2, CX;      \
          add $0x1, CX;      \
-         mov SP, SI;    \
-         mov SP, DI;    \
-         sub %1, DI;     \
-         s_%=:mov (SI), DX;  \
-         mov DX, (DI);        \
-         add %1, SI;       \
-         add %1, DI;     \
+         s_%=:pop DX;  \
+         sub %1, SP; \
+         push DX;       \
+         add %3, SP;        \
          loop s_%=;               \
-         mov AX, (BP);         \
+         mov %0, AX; \
+         push AX;       \
+         mov BX, SP; \
          sub %1, SP;         \
          sub %1, BP;         \
-         pop DI;           \
-         pop SI;           \
-         pop CX;           \
          pop DX;            \
-         pop AX;           \
+         pop CX;           \
+         pop BX;            \
+         pop AX;            \
  
 
 #define jmp_orig_call_pass(orig_sys_call, ...)    \
     ({                            \
+     unsigned long cpu_flags;       \
+     spin_lock_irqsave(&syscall_lock, cpu_flags);           \
      asm volatile(#__VA_ARGS__       \
          :                       \
-         :"m"(orig_sys_call), "i"(sizeof(long)), "i"(sizeof(long)/2));   \
+         :"m"(orig_sys_call), "i"(sizeof(long)), "i"(sizeof(long)/2), "i"(sizeof(long) * 2));   \
+     spin_unlock_irqrestore(&syscall_lock, cpu_flags); \
      0;})
 
 #define jmp_orig_sys_call(orig_sys_call, asm_instruction) \
     jmp_orig_call_pass(orig_sys_call, asm_instruction)
+
+
+static inline void syscall_lock_init(void) 
+{
+    spin_lock_init(&syscall_lock);
+}
 
 #endif

@@ -3,6 +3,8 @@
 #include "sys_call.h"
 #include "lkm_util.h"
 
+spinlock_t syscall_lock;
+
 /*original sys calls*/
 #ifdef __NR_socketcall
 sys_socketcall_func_ptr_t orig_sys_socketcall = (void *)SYS_SOCKETCALL_EA;

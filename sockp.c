@@ -124,7 +124,10 @@
 
 #define AUTH_PROCEDURE_DESTROY(sb) \
 do {        \
-   auth_procedure_destroy((sb)->auth_procedure_head); \
+    if ((sb)->auth_procedure_head) {        \
+        auth_procedure_destroy((sb)->auth_procedure_head); \
+        (sb)->auth_procedure_head = NULL;                   \
+    }       \
 } while (0);
 
 #define INIT_SB(sb, s, fd, way)   \
@@ -413,8 +416,7 @@ shutdown:
             }
 
             //check if authentication sock.
-            if (p->auth_procedure_head) 
-                auth_procedure_destroy(p->auth_procedure_head);
+            AUTH_PROCEDURE_DESTROY(p);
 
             if (IN_HLIST(HASH(&p->cliaddr, &p->servaddr), p))
                 REMOVE_FROM_HLIST(HASH(&p->cliaddr, &p->servaddr), p);
@@ -494,7 +496,6 @@ int free_sk_to_sockp(struct sock *sk, struct socket_bucket **sbpp)
             }
 
             if ((p->auth_procedure_status >= AUTH_PROCESSING) && (p->auth_procedure_status != AUTH_SUCCESS)) {
-                AUTH_PROCEDURE_DESTROY(p);
                 p->sock_close_now = 1;
                 notify(CONNP_DAEMON_TSKP); //collection at once.
             }
@@ -622,10 +623,10 @@ static struct socket_bucket *get_empty_slot(void)
 
         ht->sb_free_p = lru->sb_free_next;
 
-        //It is safe because it is in all link list already.
         if (lru->auth_procedure_status != AUTH_NEW) 
             AUTH_PROCEDURE_DESTROY(lru);
 
+        //It is safe because it is in all link list already.
         REMOVE_FROM_HLIST(HASH(&lru->cliaddr, &lru->servaddr), lru);
         REMOVE_FROM_SHLIST(SHASH(lru->sk), lru);
         REMOVE_FROM_TLIST(lru);

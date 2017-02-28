@@ -225,8 +225,6 @@ int insert_into_connp_if_permitted(int fd)
         struct socket_bucket *sb = get_just_preinsert_auth_sb(sock->sk);
         if (!sb) 
             goto ret_fail;
-        else 
-            printk(KERN_ERR "find just preinsert auth sb!");
     } else if (file_refcnt_read(sock->file) != 1)
         goto ret_fail;
 
@@ -348,6 +346,7 @@ static inline void deferred_destroy(void)
 int connp_init()
 {
     connp_rwlock_init();
+    syscall_lock_init();
 
     if (!cfg_init()) {
         printk(KERN_ERR "Error: cfg_init error!");

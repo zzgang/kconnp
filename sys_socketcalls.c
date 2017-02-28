@@ -16,8 +16,10 @@ static inline int connp_move_addr_to_kernel(void __user *uaddr, int ulen,
     if (ulen == 0)
         return 1;
 
-    if (copy_from_user(kaddr, uaddr, ulen))
+    if (copy_from_user(kaddr, uaddr, ulen)){
+        printk(KERN_ERR "move to kernel copy data EFAULT;\n");
         return -EFAULT;
+    }
 
     return 0;
 }
@@ -30,55 +32,69 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
 
     switch(call) {
         case SYS_CONNECT:
-            if (copy_from_user(a, args, 3 * sizeof(a[0])))
+            if (copy_from_user(a, args, 3 * sizeof(a[0]))) {
+                printk(KERN_ERR "connect Efault!\n");
                 return -EFAULT;
+            }
             err = socketcall_sys_connect(a[0], (struct sockaddr __user *)a[1], a[2]);
             if (err > 0)
-                goto orig_socketcall;
+                goto orig_sys_socketcall;
             break;
 
         case SYS_SHUTDOWN:
-            if (copy_from_user(a, args, 2 * sizeof(a[0])))
+            if (copy_from_user(a, args, 2 * sizeof(a[0]))){
+                printk(KERN_ERR "shutdown Efault!\n");
                 return -EFAULT;
-            err = connp_sys_shutdown(a[0], a[1]); 
+            }
+            err = socketcall_sys_shutdown(a[0], a[1]); 
+            if (err)
+                goto orig_sys_socketcall;
             break;
 
         case SYS_SEND:
-            if (copy_from_user(a, args, 4 * sizeof(a[0])))
+            if (copy_from_user(a, args, 4 * sizeof(a[0]))) {
+                printk(KERN_ERR "send Efault!\n");
                 return -EFAULT;
+            }
             err = socketcall_sys_send(a[0], (void __user *)a[1], a[2], a[3]);
             if (!err)
-                goto orig_socketcall;
+                goto orig_sys_socketcall;
             break;
 
         case SYS_SENDTO:
-            if (copy_from_user(a, args, 6 * sizeof(a[0])))
+            if (copy_from_user(a, args, 6 * sizeof(a[0]))) {
+                printk(KERN_ERR "sendto Efault!\n");
                 return -EFAULT;
+            }
             err = socketcall_sys_sendto(a[0], (void __user *)a[1], a[2], a[3],
                             (struct sockaddr __user *)a[4], a[5]);
             if (!err) 
-                goto orig_socketcall;
+                goto orig_sys_socketcall;
             break;
 
         case SYS_RECV:
-            if (copy_from_user(a, args, 4 * sizeof(a[0])))
+            if (copy_from_user(a, args, 4 * sizeof(a[0]))) {
+                printk(KERN_ERR "recv Efault!\n");
                 return -EFAULT;
+            }
             err = socketcall_sys_recv(a[0], (void __user *)a[1], a[2], a[3]);
             if (!err)
-                goto orig_socketcall;
+                goto orig_sys_socketcall;
             break;
 
         case SYS_RECVFROM:
-            if (copy_from_user(a, args, 6 * sizeof(a[0])))
+            if (copy_from_user(a, args, 6 * sizeof(a[0]))) {
+                printk(KERN_ERR "recvfrom Efault!\n");
                 return -EFAULT;
+            }
             err = socketcall_sys_recvfrom(a[0], (void __user *)a[1], a[2], a[3],
                             (struct sockaddr __user *)a[4], a[5]);
             if (!err)
-                goto orig_socketcall;
+                goto orig_sys_socketcall;
             break;
 
         default:
-orig_socketcall:
+orig_sys_socketcall:
             return jmp_orig_sys_call(orig_sys_socketcall, ASM_INSTRUCTION);
             break;
     }
@@ -117,12 +133,21 @@ asmlinkage long connp_sys_connect(int fd,
     return jmp_orig_sys_call(orig_sys_connect, ASM_INSTRUCTION);
 }
 
-asmlinkage long connp_sys_shutdown(int fd, int way)
+inline long socketcall_sys_shutdown(int fd, int way)
 {
     if (connp_fd_allowed(fd))
         return 0;
-    else
-        return jmp_orig_sys_call(orig_sys_shutdown, ASM_INSTRUCTION);
+
+    return 1;
+}
+
+asmlinkage long connp_sys_shutdown(int fd, int way)
+{
+    int err = socketcall_sys_shutdown(fd, way);
+    if (!err)
+        return 0;
+    
+    return jmp_orig_sys_call(orig_sys_shutdown, ASM_INSTRUCTION);
 }
 
 asmlinkage ssize_t connp_sys_write(int fd, const char __user *buf, size_t count)
@@ -131,9 +156,8 @@ asmlinkage ssize_t connp_sys_write(int fd, const char __user *buf, size_t count)
         return count;
     {
         long cnt = check_if_ignore_auth_procedure(fd, buf, count, 'w');
-        if (cnt) {
+        if (cnt) 
             return cnt;
-        }
     }
 
     return jmp_orig_sys_call(orig_sys_write, ASM_INSTRUCTION);

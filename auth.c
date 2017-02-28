@@ -116,8 +116,8 @@ int check_if_ignore_auth_procedure(int fd, const char __user *buf, size_t len,
                     lkmfree(auth_stage->info.data);
                     lkmfree(auth_stage);
                     return 0;
-                } else 
-                    printk(KERN_ERR "Corresponding\n");
+                } /*else 
+                    printk(KERN_ERR "Corresponding\n");*/
 
                 auth_stage->info.len = count;
                 
