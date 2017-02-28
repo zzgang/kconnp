@@ -49,6 +49,13 @@ int check_if_ignore_auth_procedure(int fd, const char __user *buf, size_t len,
         sb->auth_procedure_status = AUTH_FAIL;
         return 0;
     }
+
+    if (io_type == 'i') {
+        if (sb->auth_procedure_status == AUTH_SUCCESS)
+            return POLLIN;
+        else 
+            return 0;
+    }
     
     //printk(KERN_ERR "debug io_type entry: %d", io_type);
 
@@ -76,20 +83,7 @@ int check_if_ignore_auth_procedure(int fd, const char __user *buf, size_t len,
             return 0;
         }
 
-        if (io_type == 'i') { //strip the POLLIN
-            struct auth_stage *auth_stage;
-            auth_stage = lkmalloc(sizeof(*auth_stage));
-            if (!auth_stage) {
-                printk(KERN_ERR "No more memory!");
-                sb->auth_procedure_status = AUTH_FAIL;
-                return 0;
-            }
-            auth_stage->type = 'i';
-            INSERT_INTO_AUTH_PROCEDURE(sb, auth_stage);
-            
-            ret = 0;
-            goto out_auth_processing;
-        } else if (io_type == 'r') { //read
+        if (io_type == 'r') { //read
             unsigned int count;
             count = orig_sys_read(fd, buf, len); 
             if (count) {
@@ -181,11 +175,7 @@ out_auth_processing:
             return 0;
         }
 
-        if (io_type == 'i') { //POLLIN
-            //issue POLLIN
-            ret = POLLIN;
-            goto out_auth_success;
-        } else if (io_type == 'r') {
+        if (io_type == 'r') {
             if (!sb->auth_procedure_stage->info.len) {
                 printk(KERN_ERR "Auth procedure data for reading is empty!");
                 return 0;

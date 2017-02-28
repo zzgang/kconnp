@@ -1098,7 +1098,7 @@ static int cfg_item_set_auth_node(struct item_node_t *node, kconnp_str_t *str)
             }
             
             for(; *cp; cp++) {
-                if (*cp == 'r' || *cp == 'w' || *cp == 'i')  {
+                if (*cp == 'r' || *cp == 'w')  {
                     auth_stage->type = *cp;
                 } else {
                     if (*cp == '(' || *cp == ')')
@@ -1358,10 +1358,8 @@ static int auth_procedure_parse(kconnp_str_t *auth_procedure)
     }
     for(; i < strlen; i++) {
         char c = auth_procedure->data[i];
-        if (!(c == 'i' || c == 'w' || c == 'r')) {
-            printk(KERN_ERR "ceshi0");
+        if (!(c == 'w' || c == 'r'))
             return 0;
-        }
         else {
            int cc = 0; //io type.
            int lc = 0;
