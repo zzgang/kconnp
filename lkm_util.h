@@ -3,8 +3,8 @@
  * 
  */
 
-#ifndef _LKM_UTIL_H
-#define _LKM_UTIL_H
+#ifndef LKM_UTIL_H
+#define LKM_UTIL_H
 
 #include <linux/version.h>
 #include <linux/file.h>

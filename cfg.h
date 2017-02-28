@@ -1,5 +1,5 @@
-#ifndef _CFG_H
-#define _CFG_H
+#ifndef CFG_H
+#define CFG_H
 
 #include <linux/socket.h>
 #include <linux/proc_fs.h>

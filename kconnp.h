@@ -1,5 +1,5 @@
-#ifndef _KCONNP_H
-#define _KCONNP_H
+#ifndef KCONNP_H
+#define KCONNP_H
 
 #define KCP_ERROR 0
 #define KCP_OK 1

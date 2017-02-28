@@ -1,5 +1,5 @@
-#ifndef __SYS_CALL_H
-#define __SYS_CALL_H
+#ifndef SYS_CALL_H
+#define SYS_CALL_H
 
 #include <linux/linkage.h>
 #include <linux/socket.h>

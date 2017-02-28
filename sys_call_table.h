@@ -1,5 +1,5 @@
-#ifndef _SYS_CALL_TABLE_H
-#define _SYS_CALL_TABLE_H
+#ifndef SYS_CALL_TABLE_H
+#define SYS_CALL_TABLE_H
 
 #include "sys_call_table_ea.h"
 

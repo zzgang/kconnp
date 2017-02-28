@@ -3,8 +3,8 @@
  *Date 05/27/2012
  *Author Zhigang Zhang <zzgang2008@gmail.com>
  */
-#ifndef __SOCKP_H
-#define __SOCKP_H
+#ifndef SOCKP_H
+#define SOCKP_H
 
 #include <linux/in.h> /*define struct sockaddr_in*/
 #include <linux/net.h> /*define struct socket*/

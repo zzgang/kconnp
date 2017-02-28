@@ -1,5 +1,5 @@
-#ifndef _CONNPD_H
-#define _CONNPD_H
+#ifndef CONNPD_H
+#define CONNPD_H
 
 #include <linux/spinlock.h>
 

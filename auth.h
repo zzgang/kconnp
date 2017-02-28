@@ -1,5 +1,5 @@
-#ifndef __AUTH_H
-#define __AUTH_H
+#ifndef AUTH_H
+#define AUTH_H
 
 #include "kconnp.h"
 #include "lkm_util.h"
