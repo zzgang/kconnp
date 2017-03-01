@@ -1350,7 +1350,7 @@ static int auth_char_check(char c)
 
 static int auth_procedure_parse(kconnp_str_t *auth_procedure) 
 {
-    //i,w,r(...)
+    //w,r(...)
     int i = 0, strlen = auth_procedure->len;
     if (auth_procedure->data[0] == '"') {
        i = 1; 

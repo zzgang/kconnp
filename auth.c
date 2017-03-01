@@ -45,7 +45,8 @@ int check_if_ignore_auth_procedure(int fd, const char __user *buf, size_t len,
     if (sb->auth_procedure_head && !sb->auth_procedure_stage) 
         return 0;
 
-    if (sb->cfg_generation != cfg->auth_generation) {
+    if (sb->cfg_generation != cfg->auth_generation 
+            && sb->auth_procedure_status != AUTH_SUCCESS) {
         sb->auth_procedure_status = AUTH_FAIL;
         return 0;
     }
