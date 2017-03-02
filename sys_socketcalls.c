@@ -129,8 +129,10 @@ asmlinkage long connp_sys_connect(int fd,
     int err;
     SYS_CALL_START();
     err = socketcall_sys_connect(fd, uservaddr, addrlen);
-    if (err <= 0)
+    if (err <= 0) {
+        SYS_CALL_END();
         return err;
+    }
         
     return jmp_orig_sys_call(orig_sys_connect, ASM_INSTRUCTION);
 }
@@ -148,8 +150,10 @@ asmlinkage long connp_sys_shutdown(int fd, int way)
     int err;
     SYS_CALL_START();
     err = socketcall_sys_shutdown(fd, way);
-    if (!err)
+    if (!err) {
+        SYS_CALL_END();
         return 0;
+    }
     
     return jmp_orig_sys_call(orig_sys_shutdown, ASM_INSTRUCTION);
 }
@@ -157,12 +161,18 @@ asmlinkage long connp_sys_shutdown(int fd, int way)
 asmlinkage ssize_t connp_sys_write(int fd, const char __user *buf, size_t count)
 {
     SYS_CALL_START();
-    if (check_if_ignore_primitives(fd, buf, count))
+    
+    if (check_if_ignore_primitives(fd, buf, count)) {
+        SYS_CALL_END();
         return count;
+    }
+
     {
         long cnt = check_if_ignore_auth_procedure(fd, buf, count, 'w');
-        if (cnt) 
+        if (cnt) {
+            SYS_CALL_END();
             return cnt;
+        }
     }
 
     return jmp_orig_sys_call(orig_sys_write, ASM_INSTRUCTION);
@@ -173,8 +183,10 @@ asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count)
     long cnt;
     SYS_CALL_START();
     cnt = check_if_ignore_auth_procedure(fd, buf, count, 'r');
-    if (cnt) 
+    if (cnt) {
+        SYS_CALL_END();
         return cnt;
+    }
 
     return jmp_orig_sys_call(orig_sys_read, ASM_INSTRUCTION);
 }
@@ -226,8 +238,10 @@ asmlinkage long connp_sys_sendto(int sockfd, const void __user *buf, size_t len,
     int err;
     SYS_CALL_START();
     err = socketcall_sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
-    if (err)
+    if (err) {
+        SYS_CALL_END();
         return err;
+    }
 
     return jmp_orig_sys_call(orig_sys_sendto, ASM_INSTRUCTION);
 }
@@ -249,8 +263,10 @@ asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t
     int err;
     SYS_CALL_START();
     err = socketcall_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
-    if (err)
+    if (err) {
+        SYS_CALL_END();
         return err;
+    }
 
     return jmp_orig_sys_call(orig_sys_recvfrom, ASM_INSTRUCTION);
 }
@@ -274,6 +290,7 @@ asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
             if (__put_user(pfd, ufds))
                 goto orig_poll;
 
+            SYS_CALL_END();
             return 1;
         }
     }
