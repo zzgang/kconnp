@@ -106,14 +106,12 @@ inline long socketcall_sys_shutdown(int fd, int way);
             push %%rsi;\
             push %%rdx; \
             push %%rcx; \
-            push %%rax; \
             push %%r8;  \
             push %%r9;"::);
 
 #define SYS_CALL_END()  \
     asm volatile("pop %%r9; \
             pop %%r8;   \
-            pop %%rax;  \
             pop %%rcx;  \
             pop %%rdx;  \
             pop %%rsi;  \
