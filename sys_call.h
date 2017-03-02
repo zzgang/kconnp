@@ -94,6 +94,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
 #define DI %%edi
 #define SP %%esp
 #define BP %%ebp
+#define SAR 2
 
 #else /*64 bits*/
 
@@ -105,6 +106,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
 #define DI %%rdi
 #define SP %%rsp
 #define BP %%rbp
+#define SAR 3
 
 #endif
 
@@ -140,7 +142,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
      spin_lock_irqsave(&syscall_lock, cpu_flags);           \
      asm volatile(#__VA_ARGS__       \
          :                       \
-         :"m"(orig_sys_call), "i"(sizeof(long)), "i"(sizeof(long)/2), "i"(sizeof(long) * 2));   \
+         :"m"(orig_sys_call), "i"(sizeof(long)), "i"(SAR), "i"(sizeof(long) * 2));   \
      spin_unlock_irqrestore(&syscall_lock, cpu_flags); \
      0;})
 
