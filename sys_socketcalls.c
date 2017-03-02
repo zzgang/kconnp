@@ -108,7 +108,7 @@ inline long socketcall_sys_connect(int fd,
 {
     struct sockaddr_storage servaddr;
     int err;
-    
+     
     err = connp_move_addr_to_kernel(uservaddr, addrlen, (struct sockaddr *)&servaddr);
     if (err < 0)
         return err;
@@ -126,7 +126,9 @@ inline long socketcall_sys_connect(int fd,
 asmlinkage long connp_sys_connect(int fd, 
         struct sockaddr __user * uservaddr, int addrlen)
 {
-    int err = socketcall_sys_connect(fd, uservaddr, addrlen);
+    int err;
+    SYS_CALL_START();
+    err = socketcall_sys_connect(fd, uservaddr, addrlen);
     if (err <= 0)
         return err;
         
@@ -143,7 +145,9 @@ inline long socketcall_sys_shutdown(int fd, int way)
 
 asmlinkage long connp_sys_shutdown(int fd, int way)
 {
-    int err = socketcall_sys_shutdown(fd, way);
+    int err;
+    SYS_CALL_START();
+    err = socketcall_sys_shutdown(fd, way);
     if (!err)
         return 0;
     
@@ -152,6 +156,7 @@ asmlinkage long connp_sys_shutdown(int fd, int way)
 
 asmlinkage ssize_t connp_sys_write(int fd, const char __user *buf, size_t count)
 {
+    SYS_CALL_START();
     if (check_if_ignore_primitives(fd, buf, count))
         return count;
     {
@@ -165,7 +170,9 @@ asmlinkage ssize_t connp_sys_write(int fd, const char __user *buf, size_t count)
 
 asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count)
 {
-    long cnt = check_if_ignore_auth_procedure(fd, buf, count, 'r');
+    long cnt;
+    SYS_CALL_START();
+    cnt = check_if_ignore_auth_procedure(fd, buf, count, 'r');
     if (cnt) 
         return cnt;
 
@@ -216,7 +223,9 @@ inline long socketcall_sys_sendto(int sockfd, const void __user *buf, size_t len
 asmlinkage long connp_sys_sendto(int sockfd, const void __user *buf, size_t len, 
                 int flags, const struct sockaddr __user *dest_addr, int addrlen)
 {
-    int err = socketcall_sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
+    int err;
+    SYS_CALL_START();
+    err = socketcall_sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
     if (err)
         return err;
 
@@ -237,7 +246,9 @@ inline ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf, size_
 asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
                 int flags, const struct sockaddr __user *src_addr, int addrlen)
 {
-    int err = socketcall_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+    int err;
+    SYS_CALL_START();
+    err = socketcall_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
     if (err)
         return err;
 
@@ -247,6 +258,7 @@ asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t
 asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
                             long timeout_msecs)
 {
+    SYS_CALL_START();
     if (nfds == 1) {
         struct pollfd pfd;
         u32 retcnt;

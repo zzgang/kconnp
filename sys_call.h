@@ -86,6 +86,9 @@ inline long socketcall_sys_shutdown(int fd, int way);
 
 #if BITS_PER_LONG == 32
 
+#define SYS_CALL_START() 
+#define SYS_CALL_END()
+
 #define AX %%eax
 #define BX %%ebx
 #define CX %%ecx
@@ -97,6 +100,25 @@ inline long socketcall_sys_shutdown(int fd, int way);
 #define SAR 2
 
 #else /*64 bits*/
+
+#define SYS_CALL_START()    \
+    asm volatile(\
+            "push %%rdi; \
+            push %%rsi;\
+            push %%rdx; \
+            push %%rcx; \
+            push %%rax; \
+            push %%r8;  \
+            push %%r9;  \
+            ");
+#define SYS_CALL_END()  \
+    asm volatile("pop %%r9; \
+            pop %%r8;   \
+            pop %%rax;  \
+            pop %%rcx;  \
+            pop %%rdx;  \
+            pop %%rsi;  \
+            pop %%rdi;"); 
 
 #define AX %%rax
 #define BX %%rbx
@@ -144,6 +166,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
          :                       \
          :"m"(orig_sys_call), "i"(sizeof(long)), "i"(SAR), "i"(sizeof(long) * 2));   \
      spin_unlock_irqrestore(&syscall_lock, cpu_flags); \
+     SYS_CALL_END();    \
      0;})
 
 #define jmp_orig_sys_call(orig_sys_call, asm_instruction) \

@@ -4,6 +4,7 @@
 
 asmlinkage long connp_sys_close(int fd)
 {
+    SYS_CALL_START();
     insert_into_connp_if_permitted(fd);
 
     return jmp_orig_sys_call(orig_sys_close, ASM_INSTRUCTION);
