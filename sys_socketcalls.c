@@ -278,9 +278,9 @@ asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
     if (nfds == 1) {
         struct pollfd pfd;
         u32 retcnt;
-        if (copy_from_user(&pfd, ufds, sizeof(struct pollfd))) {
+        if (copy_from_user(&pfd, ufds, sizeof(struct pollfd)))
             goto orig_poll;
-        }
+
         if (!(pfd.events & POLLIN)) 
             goto orig_poll;
 

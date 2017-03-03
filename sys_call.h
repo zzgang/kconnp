@@ -89,6 +89,9 @@ inline long socketcall_sys_shutdown(int fd, int way);
 #define SYS_CALL_START() 
 #define SYS_CALL_END()
 
+#define BP_SP_SAVE()
+#define BP_SP_RESTORE()
+
 #define AX %%eax
 #define BX %%ebx
 #define CX %%ecx
@@ -101,21 +104,31 @@ inline long socketcall_sys_shutdown(int fd, int way);
 
 #else /*64 bits*/
 
-#define SYS_CALL_START()    \
-    asm volatile("push %%rdi; \
-            push %%rsi;\
-            push %%rdx; \
-            push %%rcx; \
-            push %%r8;  \
-            push %%r9;"::);
+#define BP_SP_SAVE()    \
+    asm volatile("mov %%ebp, %%r15;  \
+                  mov %%esp, %%ebp;":::"%r15");
 
-#define SYS_CALL_END()  \
-    asm volatile("pop %%r9; \
-            pop %%r8;   \
-            pop %%rcx;  \
-            pop %%rdx;  \
-            pop %%rsi;  \
-            pop %%rdi;"::); 
+#define BP_SP_RESOTRE() \
+    asm volatile("mov %%ebp, %%esp; \
+                  mov %%r15, %%ebp;":::);
+
+#define SYS_CALL_START()        \
+    asm volatile("push %%rdi;   \
+            push %%rsi;         \
+            push %%rdx;         \
+            push %%rcx;         \
+            push %%r8;          \
+            push %%r9;":::);    \
+    BP_SP_SAVE();
+
+#define SYS_CALL_END()          \
+    BP_SP_RESOTRE();            \
+    asm volatile("pop %%r9;     \
+            pop %%r8;           \
+            pop %%rcx;          \
+            pop %%rdx;          \
+            pop %%rsi;          \
+            pop %%rdi;":::); 
 
 #define AX %%rax
 #define BX %%rbx
@@ -158,6 +171,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
 #define jmp_orig_call_pass(orig_sys_call, ...)    \
     ({                            \
      unsigned long cpu_flags;       \
+     BP_SP_RESTORE();               \
      spin_lock_irqsave(&syscall_lock, cpu_flags);           \
      asm volatile(#__VA_ARGS__       \
          :                       \
