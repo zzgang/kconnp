@@ -170,7 +170,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
 #define jmp_orig_call_pass(orig_sys_call, ...)    \
     ({                            \
      unsigned long cpu_flags;       \
-     BP_SP_RESTORE();               \
+     BP_RESTORE();               \
      spin_lock_irqsave(&syscall_lock, cpu_flags);           \
      asm volatile(#__VA_ARGS__       \
          :                       \
