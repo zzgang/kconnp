@@ -105,12 +105,12 @@ inline long socketcall_sys_shutdown(int fd, int way);
 #else /*64 bits*/
 
 #define BP_SP_SAVE()    \
-    asm volatile("mov %%ebp, %%r15;  \
-                  mov %%esp, %%ebp;":::"%r15");
+    asm volatile("mov %%rbp, %%r15;  \
+                  mov %%rsp, %%rbp;":::"%r15");
 
-#define BP_SP_RESOTRE() \
-    asm volatile("mov %%ebp, %%esp; \
-                  mov %%r15, %%ebp;":::);
+#define BP_SP_RESTORE() \
+    asm volatile("mov %%rbp, %%rsp; \
+                  mov %%r15, %%rbp;":::);
 
 #define SYS_CALL_START()        \
     asm volatile("push %%rdi;   \
@@ -122,7 +122,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
     BP_SP_SAVE();
 
 #define SYS_CALL_END()          \
-    BP_SP_RESOTRE();            \
+    BP_SP_RESTORE()            \
     asm volatile("pop %%r9;     \
             pop %%r8;           \
             pop %%rcx;          \
