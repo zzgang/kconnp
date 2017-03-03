@@ -132,7 +132,7 @@ extern int free_sk_to_sockp(struct sock *, struct socket_bucket **);
  */
 extern int insert_sock_to_sockp(struct sockaddr *, struct sockaddr *, 
         struct socket *, int fd, sock_create_way_t create_way, 
-        struct socket_bucket **sbpp, int pre_insert);
+        struct socket_bucket **sbpp, int pre_insert_auth_sock);
 
 
 extern void shutdown_sock_list(shutdown_way_t shutdown_way);

@@ -649,7 +649,7 @@ int insert_sock_to_sockp(struct sockaddr *cliaddr,
         struct socket *s, int connpd_fd, 
         sock_create_way_t create_way,
         struct socket_bucket **sbpp,
-        int pre_insert)
+        int pre_insert_auth_sock)
 {
     int ret = 0;
     struct socket_bucket *p, *sb = NULL;
@@ -677,7 +677,7 @@ int insert_sock_to_sockp(struct sockaddr *cliaddr,
     SOCKADDR_COPY(&sb->cliaddr, cliaddr);
     SOCKADDR_COPY(&sb->servaddr, servaddr);
 
-    if (pre_insert) {
+    if (pre_insert_auth_sock) {
         sb->auth_procedure_status = AUTH_PROCESSING;
         sb->sock_in_use = 1; //set in use flag to authentication.
     } else 

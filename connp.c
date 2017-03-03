@@ -19,7 +19,7 @@ static void do_conn_inc_idle_count(void *data);
 static void do_conn_inc_connected_miss_count(void *data);
 static void do_conn_inc_connected_hit_count(void *data);
 
-static inline int insert_socket_to_connp(struct sockaddr *, struct sockaddr *, struct socket *, int pre_insert);
+static inline int insert_socket_to_connp(struct sockaddr *, struct sockaddr *, struct socket *, int pre_insert_auth_sock);
 static inline int insert_into_connp(struct sockaddr *, struct sockaddr *, struct socket *);
 
 static inline void deferred_destroy(void);
@@ -104,7 +104,7 @@ int conn_inc_count(struct sockaddr *addr, int count_type)
 static inline int insert_socket_to_connp(struct sockaddr *cliaddr, 
         struct sockaddr *servaddr, 
         struct socket *sock, 
-        int pre_insert)
+        int pre_insert_auth_sock)
 {
     int ret;
     int connpd_fd;
@@ -116,7 +116,7 @@ static inline int insert_socket_to_connp(struct sockaddr *cliaddr,
     task_fd_install(CONNP_DAEMON_TSKP, connpd_fd, sock->file);
     file_refcnt_inc(sock->file); //add file reference count.
 
-    ret = insert_sock_to_sockp(cliaddr, servaddr, sock, connpd_fd, SOCK_RECLAIM, NULL, pre_insert);
+    ret = insert_sock_to_sockp(cliaddr, servaddr, sock, connpd_fd, SOCK_RECLAIM, NULL, pre_insert_auth_sock);
     if (ret != KCP_OK) {
         connpd_close_pending_fds_in(connpd_fd);
         return ret;
