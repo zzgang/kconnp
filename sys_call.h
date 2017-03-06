@@ -147,9 +147,11 @@ inline long socketcall_sys_shutdown(int fd, int way);
 
 #define jmp_orig_sys_call6(orig_sys_call, arg1, arg2, arg3, arg4, arg5, arg6)   \
     ({          \
-     asm volatile("jmp *%0;"    \
+     asm volatile("mov %5, %%r8;    \
+         mov %6, %%r9;    \
+         jmp *%0;"    \
          :                 \
-         :"m"(orig_sys_call),"D"(arg1),"S"(arg2),"d"(arg3),"c"(arg4),"r8"(arg5),"r9"(arg6)    \
+         :"m"(orig_sys_call),"D"(arg1),"S"(arg2),"d"(arg3),"c"(arg4),"m"(arg5),"m"(arg6)    \
          :);           \
      0;});
 
