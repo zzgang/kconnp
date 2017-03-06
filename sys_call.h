@@ -120,7 +120,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
     BP_SAVE();
 
 #define SYS_CALL_END()      \
-            BP_RESTORE();
+            BP_RESTORE();   \
             asm volatile("sub $0x30, %%rsp;":::);
 
 #define SYS_CALL_STACK_RESTORE()          \
