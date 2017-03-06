@@ -127,7 +127,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
          :                 \
          :"m"(orig_sys_call),"D"(arg1)    \
          :);           \
-     0});
+     0;});
 
 #define jmp_orig_sys_call2(orig_sys_call, arg1, arg2) \
     ({          \
@@ -135,7 +135,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
          :                 \
          :"m"(orig_sys_call),"D"(arg1),"S"(arg2)    \
          :);           \
-     0});
+     0;});
 
 #define jmp_orig_sys_call3(orig_sys_call, arg1, arg2, arg3) \
     ({          \
@@ -143,7 +143,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
          :                 \
          :"m"(orig_sys_call),"D"(arg1),"S"(arg2),"d"(arg3)     \
          :);           \
-     0});
+     0;});
 
 #define jmp_orig_sys_call6(orig_sys_call, arg1, arg2, arg3, arg4, arg5, arg6)   \
     ({          \
@@ -151,7 +151,7 @@ inline long socketcall_sys_shutdown(int fd, int way);
          :                 \
          :"m"(orig_sys_call),"D"(arg1),"S"(arg2),"d"(arg3),"c"(arg4),"r8"(arg5),"r9"(arg6)    \
          :);           \
-     0});
+     0;});
 
 #endif
 
