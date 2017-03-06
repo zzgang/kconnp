@@ -131,10 +131,11 @@ esac
 
 echo "Check machine type... $machine_type yes";
 
+NO_OMIT_FRAME_POINTER="export CONFIG_FRAME_POINTER=ON"
 
-if [ "$machine_type" = "x86_32" ]
+if [ "$machine_type" = "x86_64" ]
 then
-    NO_OMIT_FRAME_POINTER="export CONFIG_FRAME_POINTER=ON"
+    EXTRA_CFLAGS="EXTRA_CFLAGS += -ffixed-rbp"
 fi
 
 cat > Makefile <<MF
@@ -142,6 +143,7 @@ obj-m = kconnp.o
 kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o preconnect.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o auth.o hash.o cfg.o lkm_util.o
 
 $NO_OMIT_FRAME_POINTER
+$EXTRA_CFLAGS
 
 all:
 	make -C $kmbd SUBDIRS=\$(PWD) modules
