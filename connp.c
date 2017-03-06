@@ -346,7 +346,6 @@ static inline void deferred_destroy(void)
 int connp_init()
 {
     connp_rwlock_init();
-    syscall_lock_init();
 
     if (!cfg_init()) {
         printk(KERN_ERR "Error: cfg_init error!");

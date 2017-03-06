@@ -2549,7 +2549,7 @@ void conn_stats_info_dump(void)
     struct hash_bucket_t *pos;
     int offset = 0;
 
-    if (NOW_SECS - wl->mtime < DUMP_INTERVAL)
+    if (cfg->st_len && (NOW_SECS - wl->mtime < DUMP_INTERVAL))
         return;
 
     write_lock(&cfg->st_rwlock);

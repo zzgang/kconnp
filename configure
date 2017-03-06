@@ -131,11 +131,10 @@ esac
 
 echo "Check machine type... $machine_type yes";
 
-NO_OMIT_FRAME_POINTER="export CONFIG_FRAME_POINTER=ON"
 
-if [ "$machine_type" = "x86_64" ]
+if [ "$machine_type" = "x86_32" ]
 then
-    EXTRA_CFLAGS="EXTRA_CFLAGS += -ffixed-r15"
+    NO_OMIT_FRAME_POINTER="export CONFIG_FRAME_POINTER=ON"
 fi
 
 cat > Makefile <<MF
