@@ -89,8 +89,10 @@ inline long socketcall_sys_shutdown(int fd, int way);
 #define SYS_CALL_END()
 
 #define BP_SAVE()
-#define BP_RESTORE()
-
+#define BP_RESTORE()            \
+        preempt_disable();      \
+        local_irq_disable();
+            
 #define AX %%eax
 #define BX %%ebx
 #define CX %%ecx
