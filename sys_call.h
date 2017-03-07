@@ -84,77 +84,105 @@ inline long socketcall_sys_shutdown(int fd, int way);
 
 #if BITS_PER_LONG == 32
 
-#define jmp_orig_sys_call(orig_sys_call)    \
-        ({                          \
-         preempt_enable();          \
-         local_irq_disable();      \
-         asm ("push %%eax;       \
-         push %%ebx;   \
-         push %%ecx;  \
-         push %%edx;   \
-         mov %%esp, %%ebx; \
-         mov %%ebp, %%ecx;    \
-         sub %%esp, %%ecx;    \
-         sar %2, %%ecx;      \
-         add $0x1, %%ecx;      \
-         s_%=:pop %%edx;  \
-         sub %1, %%esp; \
-         push %%edx;       \
-         add %3, %%esp;        \
-         loop s_%=;               \
-         mov %0, %%eax; \
-         push %%eax;       \
-         mov %%ebx, %%esp; \
-         sub %1, %%esp;         \
-         sub %1, %%ebp;         \
-         pop %%edx;            \
-         pop %%ecx;           \
-         pop %%ebx;            \
-         pop %%eax;"            \
-         :      \
-         :"m"(orig_sys_call), "i"(sizeof(long)), "i"(2), "i"(sizeof(long) * 2));   \
-        local_irq_enable();   \
-        preempt_disable();     \
-        0;});
+#define SYS_CALL_START() 
+#define SYS_CALL_STACK_RESTORE() 
+#define SYS_CALL_END()
+
+#define BP_SAVE()
+#define BP_RESTORE()
+
+#define AX %%eax
+#define BX %%ebx
+#define CX %%ecx
+#define DX %%edx
+#define SI %%esi
+#define DI %%edi
+#define SP %%esp
+#define BP %%ebp
+#define SAR 2
 
 #else /*64 bits*/
 
-//rdi rsi rdx rcx r8 r9
+#define BP_SAVE()    \
+    asm volatile("mov %%rbp, %%r15;  \
+                  mov %%rsp, %%rbp;":::"%r15");
 
-#define jmp_orig_sys_call1(orig_sys_call, arg1) \
-    ({          \
-     asm volatile("jmp *%0;"    \
-         :                 \
-         :"m"(orig_sys_call),"D"(arg1)    \
-         :);           \
-     0;});
+#define BP_RESTORE() \
+    asm volatile("mov %%r15, %%rbp;":::);
 
-#define jmp_orig_sys_call2(orig_sys_call, arg1, arg2) \
-    ({          \
-     asm volatile("jmp *%0;"    \
-         :                 \
-         :"m"(orig_sys_call),"D"(arg1),"S"(arg2)    \
-         :);           \
-     0;});
+#define SYS_CALL_START()        \
+    asm volatile("push %%rdi;   \
+            push %%rsi;         \
+            push %%rdx;         \
+            push %%rcx;         \
+            push %%r8;          \
+            push %%r9;":::);    \
+    BP_SAVE();
 
-#define jmp_orig_sys_call3(orig_sys_call, arg1, arg2, arg3) \
-    ({          \
-     asm volatile("jmp *%0;"    \
-         :                 \
-         :"m"(orig_sys_call),"D"(arg1),"S"(arg2),"d"(arg3)     \
-         :);           \
-     0;});
+#define SYS_CALL_END()      \
+            asm volatile("sub $0x30, %%esp;":::);
 
-#define jmp_orig_sys_call6(orig_sys_call, arg1, arg2, arg3, arg4, arg5, arg6)   \
-    ({          \
-     asm volatile("mov %5, %%r8;    \
-         mov %6, %%r9;    \
-         jmp *%0;"    \
-         :                 \
-         :"m"(orig_sys_call),"D"(arg1),"S"(arg2),"d"(arg3),"c"(arg4),"m"(arg5),"m"(arg6)    \
-         :);           \
-     0;});
+#define SYS_CALL_STACK_RESTORE()          \
+    BP_RESTORE()            \
+    asm volatile("pop %%r9;     \
+            pop %%r8;           \
+            pop %%rcx;          \
+            pop %%rdx;          \
+            pop %%rsi;          \
+            pop %%rdi;":::); 
+
+#define AX %%rax
+#define BX %%rbx
+#define CX %%rcx
+#define DX %%rdx
+#define SI %%rsi
+#define DI %%rdi
+#define SP %%rsp
+#define BP %%rbp
+#define SAR 3
 
 #endif
+
+#define ASM_INSTRUCTION  \
+         push AX;       \
+         push BX;   \
+         push CX;  \
+         push DX;   \
+         mov SP, BX; \
+         mov BP, CX;    \
+         sub SP, CX;    \
+         sar %2, CX;      \
+         add $0x1, CX;      \
+         s_%=:pop DX;  \
+         sub %1, SP; \
+         push DX;       \
+         add %3, SP;        \
+         loop s_%=;               \
+         mov %0, AX; \
+         push AX;       \
+         mov BX, SP; \
+         sub %1, SP;         \
+         sub %1, BP;         \
+         pop DX;            \
+         pop CX;           \
+         pop BX;            \
+         pop AX;            \
+ 
+
+#define jmp_orig_call_pass(orig_sys_call, ...)    \
+    ({                            \
+     BP_RESTORE();               \
+     preempt_disable();         \
+     local_irq_disable();       \
+     asm volatile(#__VA_ARGS__       \
+         :                       \
+         :"m"(orig_sys_call), "i"(sizeof(long)), "i"(SAR), "i"(sizeof(long) * 2));   \
+     local_irq_enable();    \
+     preempt_enable();      \
+     SYS_CALL_STACK_RESTORE();    \
+     0;})
+
+#define jmp_orig_sys_call(orig_sys_call, asm_instruction) \
+    jmp_orig_call_pass(orig_sys_call, asm_instruction)
 
 #endif

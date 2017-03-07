@@ -95,7 +95,7 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
 
         default:
 orig_sys_socketcall:
-            return jmp_orig_sys_call(orig_sys_socketcall);
+            return jmp_orig_sys_call(orig_sys_socketcall, ASM_INSTRUCTION);
             break;
     }
 
@@ -127,17 +127,14 @@ asmlinkage long connp_sys_connect(int fd,
         struct sockaddr __user * uservaddr, int addrlen)
 {
     int err;
+    SYS_CALL_START();
     err = socketcall_sys_connect(fd, uservaddr, addrlen);
     if (err <= 0) {
+        SYS_CALL_END();
         return err;
     }
         
-    return 
-#if BITS_PER_LONG == 32
-        jmp_orig_sys_call(orig_sys_connect);
-#else
-        jmp_orig_sys_call3(orig_sys_connect, fd, uservaddr, addrlen);
-#endif
+    return jmp_orig_sys_call(orig_sys_connect, ASM_INSTRUCTION);
 }
 
 inline long socketcall_sys_shutdown(int fd, int way)
@@ -151,50 +148,47 @@ inline long socketcall_sys_shutdown(int fd, int way)
 asmlinkage long connp_sys_shutdown(int fd, int way)
 {
     int err;
+    SYS_CALL_START();
     err = socketcall_sys_shutdown(fd, way);
-    if (!err)
+    if (!err) {
+        SYS_CALL_END();
         return 0;
+    }
     
-    return 
-#if BITS_PER_LONG == 32
-        jmp_orig_sys_call(orig_sys_shutdown);
-#else
-        jmp_orig_sys_call2(orig_sys_shutdown, fd, way);  
-#endif
+    return jmp_orig_sys_call(orig_sys_shutdown, ASM_INSTRUCTION);
 }
 
 asmlinkage ssize_t connp_sys_write(int fd, const char __user *buf, size_t count)
 {
-    if (check_if_ignore_primitives(fd, buf, count))
+    SYS_CALL_START();
+    
+    if (check_if_ignore_primitives(fd, buf, count)) {
+        SYS_CALL_END();
         return count;
+    }
 
     {
         long cnt = check_if_ignore_auth_procedure(fd, buf, count, 'w');
-        if (cnt) 
+        if (cnt) {
+            SYS_CALL_END();
             return cnt;
+        }
     }
 
-    return 
-#if BITS_PER_LONG == 32
-        jmp_orig_sys_call(orig_sys_write);
-#else 
-        jmp_orig_sys_call3(orig_sys_write, fd, buf, count);
-#endif
+    return jmp_orig_sys_call(orig_sys_write, ASM_INSTRUCTION);
 }
 
 asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count)
 {
     long cnt;
+    SYS_CALL_START();
     cnt = check_if_ignore_auth_procedure(fd, buf, count, 'r');
-    if (cnt)
+    if (cnt) {
+        SYS_CALL_END();
         return cnt;
+    }
 
-    return 
-#if BITS_PER_LONG == 32 
-        jmp_orig_sys_call(orig_sys_read);
-#else
-        jmp_orig_sys_call3(orig_sys_read, fd, buf, count);
-#endif
+    return jmp_orig_sys_call(orig_sys_read, ASM_INSTRUCTION);
 }
 
 #ifdef __NR_socketcall
@@ -242,16 +236,14 @@ asmlinkage long connp_sys_sendto(int sockfd, const void __user *buf, size_t len,
                 int flags, const struct sockaddr __user *dest_addr, int addrlen)
 {
     int err;
+    SYS_CALL_START();
     err = socketcall_sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
-    if (err) 
+    if (err) {
+        SYS_CALL_END();
         return err;
+    }
 
-    return 
-#if BITS_PER_LONG == 32
-        jmp_orig_sys_call(orig_sys_sendto);
-#else
-        jmp_orig_sys_call6(orig_sys_sendto, sockfd, buf, len, flags, dest_addr, addrlen);
-#endif
+    return jmp_orig_sys_call(orig_sys_sendto, ASM_INSTRUCTION);
 }
 
 inline ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
@@ -269,21 +261,20 @@ asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t
                 int flags, const struct sockaddr __user *src_addr, int addrlen)
 {
     int err;
+    SYS_CALL_START();
     err = socketcall_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
-    if (err) 
+    if (err) {
+        SYS_CALL_END();
         return err;
+    }
 
-    return 
-#if BITS_PER_LONG == 32
-        jmp_orig_sys_call(orig_sys_recvfrom);
-#else
-        jmp_orig_sys_call6(orig_sys_recvfrom, sockfd, buf, len, flags, src_addr, addrlen);
-#endif
+    return jmp_orig_sys_call(orig_sys_recvfrom, ASM_INSTRUCTION);
 }
 
 asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
                             long timeout_msecs)
 {
+    SYS_CALL_START();
     if (nfds == 1) {
         struct pollfd pfd;
         u32 retcnt;
@@ -299,15 +290,11 @@ asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
             if (__put_user(pfd, ufds))
                 goto orig_poll;
 
+            SYS_CALL_END();
             return 1;
         }
     }
 
 orig_poll:
-    return 
-#if BITS_PER_LONG == 32
-        jmp_orig_sys_call(orig_sys_poll);
-#else
-        jmp_orig_sys_call3(orig_sys_poll, ufds, nfds, timeout_msecs);
-#endif
+    return jmp_orig_sys_call(orig_sys_poll, ASM_INSTRUCTION);
 }
