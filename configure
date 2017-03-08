@@ -113,7 +113,7 @@ sed -e "s/%%SYS_RECVFROM_EA%%/0x${sys_recvfrom_ea}/" |
 sed -e "s/%%SYS_POLL_EA%%/0x${sys_poll_ea}/" > sys_call_table_ea.h;
 
 NO_OMIT_FRAME_POINTER=""
-EXTRA_CFLAGS=""
+TRA_CFLAGS=""
 
 machine_type=`uname -m | sed -e 's/^i[0-9]86$/x86_32/'`
 
@@ -135,7 +135,7 @@ NO_OMIT_FRAME_POINTER="export CONFIG_FRAME_POINTER=ON"
 
 if [ "$machine_type" = "x86_64" ]
 then
-    EXTRA_CFLAGS="EXTRA_CFLAGS += -ffixed-rbp"
+    EXTRA_CFLAGS="EXTRA_CFLAGS += -ffixed-r15"
 fi
 
 cat > Makefile <<MF
