@@ -121,8 +121,6 @@ inline long socketcall_sys_shutdown(int fd, int way);
  
 
 #define SYS_CALL_END()      \
-            local_irq_enable();       \
-            preempt_enable();         \
             BP_RESTORE();   \
             asm volatile("add $0x30, %%rsp;":::);
 
@@ -172,13 +170,14 @@ inline long socketcall_sys_shutdown(int fd, int way);
          pop AX;            \
 
 #define jmp_orig_call_pass(orig_sys_call, ...)    \
-    ({                            \
+    ({                          \
+     unsigned long cpu_flags;   \
      BP_RESTORE();               \
-     local_irq_disable();           \
+     local_irq_save(cpu_flags);           \
      asm volatile(#__VA_ARGS__       \
          :                       \
          :"m"(orig_sys_call), "i"(sizeof(long)), "i"(SAR), "i"(sizeof(long) * 2));   \
-     local_irq_enable();    \
+     local_irq_restore(cpu_flags);    \
      SYS_CALL_STACK_RESTORE();    \
      0;})
 
