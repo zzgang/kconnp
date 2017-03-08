@@ -105,24 +105,26 @@ inline long socketcall_sys_shutdown(int fd, int way);
 
 #define BP_SAVE()    \
     asm volatile("mov %%rbp, %%r15;  \
-                  mov %%rsp, %%rbp;":::"%r15");
+                  mov %%rsp, %%rbp;":::);
 
 #define BP_RESTORE() \
     asm volatile("mov %%r15, %%rbp;":::);
 
 #define SYS_CALL_START()        \
-    asm volatile("push %%rdi;   \
+    asm volatile("push %%r15;   \
+            push %%rdi;   \
             push %%rsi;         \
             push %%rdx;         \
             push %%rcx;         \
             push %%r8;          \
             push %%r9;":::);    \
-    BP_SAVE();                  \
+    BP_SAVE();                
  
 
 #define SYS_CALL_END()      \
             BP_RESTORE();   \
-            asm volatile("add $0x30, %%rsp;":::);
+            asm volatile("add $0x30, %%rsp;\
+                          pop %%r15;":::);
 
 #define SYS_CALL_STACK_RESTORE()          \
     asm volatile("pop %%r9;     \
@@ -130,7 +132,8 @@ inline long socketcall_sys_shutdown(int fd, int way);
             pop %%rcx;          \
             pop %%rdx;          \
             pop %%rsi;          \
-            pop %%rdi;":::); 
+            pop %%rdi;          \
+            pop %%r15;":::); 
 
 #define AX %%rax
 #define BX %%rbx
@@ -173,11 +176,13 @@ inline long socketcall_sys_shutdown(int fd, int way);
     ({                          \
      unsigned long cpu_flags;   \
      BP_RESTORE();               \
+     preempt_disable();         \
      local_irq_save(cpu_flags);           \
      asm volatile(#__VA_ARGS__       \
          :                       \
          :"m"(orig_sys_call), "i"(sizeof(long)), "i"(SAR), "i"(sizeof(long) * 2));   \
      local_irq_restore(cpu_flags);    \
+     preempt_enable();                  \
      SYS_CALL_STACK_RESTORE();    \
      0;})
 
