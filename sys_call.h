@@ -176,13 +176,11 @@ inline long socketcall_sys_shutdown(int fd, int way);
     ({                          \
      unsigned long cpu_flags;   \
      BP_RESTORE();               \
-     preempt_disable();         \
      local_irq_save(cpu_flags);           \
      asm volatile(#__VA_ARGS__       \
          :                       \
          :"m"(orig_sys_call), "i"(sizeof(long)), "i"(SAR), "i"(sizeof(long) * 2));   \
      local_irq_restore(cpu_flags);    \
-     preempt_enable();                  \
      SYS_CALL_STACK_RESTORE();    \
      0;})
 

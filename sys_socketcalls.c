@@ -286,7 +286,7 @@ asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
 
         retcnt = check_if_ignore_auth_procedure(pfd.fd, NULL, 0, 'i'); //POLLIN
         if (retcnt) {
-            pfd.revents &= POLLIN;
+            pfd.revents |= POLLIN;
             if (__put_user(pfd, ufds))
                 goto orig_poll;
 
