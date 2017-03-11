@@ -7,23 +7,6 @@
 #include "sys_call.h"
 #include "lkm_util.h"
 
-static inline int connp_move_addr_to_kernel(void __user *uaddr, int ulen, 
-        struct sockaddr *kaddr)
-{
-    if (ulen < 0 || ulen > sizeof(struct sockaddr_storage))
-        return -EINVAL;
-
-    if (ulen == 0)
-        return 1;
-
-    if (copy_from_user(kaddr, uaddr, ulen)){
-        printk(KERN_ERR "move to kernel copy data EFAULT;\n");
-        return -EFAULT;
-    }
-
-    return 0;
-}
-
 #ifdef __NR_socketcall /*32 bits*/
 asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
 {
@@ -95,103 +78,17 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
 
         default:
 orig_sys_socketcall:
-            return jmp_orig_sys_call(orig_sys_socketcall, ASM_INSTRUCTION);
+            __asm__ __volatile__("leave\n\t"
+                    "jmp *%0"
+                    :
+                    :"m"(orig_sys_socketcall));
+            return 0;//dummy
             break;
     }
 
     return err;
 }
-#endif
 
-inline long socketcall_sys_connect(int fd, 
-        struct sockaddr __user * uservaddr, int addrlen) 
-{
-    struct sockaddr_storage servaddr;
-    int err;
-     
-    err = connp_move_addr_to_kernel(uservaddr, addrlen, (struct sockaddr *)&servaddr);
-    if (err < 0)
-        return err;
-    
-    if ((err = fetch_conn_from_connp(fd, (struct sockaddr *)&servaddr))) {
-        if (err == CONN_BLOCK)
-            return 0;
-        else if (err == CONN_NONBLOCK)
-            return -EINPROGRESS;
-    }
-   
-    return 1; 
-}
-
-asmlinkage long connp_sys_connect(int fd, 
-        struct sockaddr __user * uservaddr, int addrlen)
-{
-    int err;
-    SYS_CALL_START();
-    err = socketcall_sys_connect(fd, uservaddr, addrlen);
-    if (err <= 0) {
-        SYS_CALL_END();
-        return err;
-    }
-        
-    return jmp_orig_sys_call(orig_sys_connect, ASM_INSTRUCTION);
-}
-
-inline long socketcall_sys_shutdown(int fd, int way)
-{
-    if (connp_fd_allowed(fd))
-        return 0;
-
-    return 1;
-}
-
-asmlinkage long connp_sys_shutdown(int fd, int way)
-{
-    int err;
-    SYS_CALL_START();
-    err = socketcall_sys_shutdown(fd, way);
-    if (!err) {
-        SYS_CALL_END();
-        return 0;
-    }
-    
-    return jmp_orig_sys_call(orig_sys_shutdown, ASM_INSTRUCTION);
-}
-
-asmlinkage ssize_t connp_sys_write(int fd, const char __user *buf, size_t count)
-{
-    SYS_CALL_START();
-    
-    if (check_if_ignore_primitives(fd, buf, count)) {
-        SYS_CALL_END();
-        return count;
-    }
-
-    {
-        long cnt = check_if_ignore_auth_procedure(fd, buf, count, 'w');
-        if (cnt) {
-            SYS_CALL_END();
-            return cnt;
-        }
-    }
-
-    return jmp_orig_sys_call(orig_sys_write, ASM_INSTRUCTION);
-}
-
-asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count)
-{
-    long cnt;
-    SYS_CALL_START();
-    cnt = check_if_ignore_auth_procedure(fd, buf, count, 'r');
-    if (cnt) {
-        SYS_CALL_END();
-        return cnt;
-    }
-
-    return jmp_orig_sys_call(orig_sys_read, ASM_INSTRUCTION);
-}
-
-#ifdef __NR_socketcall
 asmlinkage long socketcall_sys_send(int sockfd, const void __user *buf, size_t len, int flags)
 {
     if (check_if_ignore_primitives(sockfd, buf, len))
@@ -214,9 +111,102 @@ asmlinkage long socketcall_sys_recv(int sockfd, const void __user *buf, size_t l
 
     return 0;
 }
+
+#else /*b4bits*/
+
+asmlinkage long connp_sys_connect(int fd, 
+        struct sockaddr __user * uservaddr, int addrlen)
+{
+    int err;
+    err = socketcall_sys_connect(fd, uservaddr, addrlen);
+    if (err <= 0) 
+        return err;
+        
+    return orig_sys_connect(fd, uservaddr, addrlen);
+}
+
+asmlinkage long connp_sys_shutdown(int fd, int way)
+{
+    int err;
+    err = socketcall_sys_shutdown(fd, way);
+    if (!err)
+        return 0;
+    
+    return orig_sys_shutdown(fd, way);
+}
+
+asmlinkage long connp_sys_sendto(int sockfd, const void __user *buf, size_t len, 
+                int flags, const struct sockaddr __user *dest_addr, int addrlen)
+{
+    int err;
+    err = socketcall_sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
+    if (err)
+        return err;
+
+    return orig_sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
+}
+
+asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
+                int flags, const struct sockaddr __user *src_addr, int addrlen)
+{
+    int err;
+    SYS_CALL_START();
+    err = socketcall_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+    if (err) {
+        SYS_CALL_END();
+        return err;
+    }
+
+    return orig_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+}
 #endif
 
-inline long socketcall_sys_sendto(int sockfd, const void __user *buf, size_t len, 
+int socketcall_move_addr_to_kernel(void __user *uaddr, int ulen, 
+        struct sockaddr *kaddr)
+{
+    if (ulen < 0 || ulen > sizeof(struct sockaddr_storage))
+        return -EINVAL;
+
+    if (ulen == 0)
+        return 1;
+
+    if (copy_from_user(kaddr, uaddr, ulen)){
+        printk(KERN_ERR "move to kernel copy data EFAULT;\n");
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
+long socketcall_sys_connect(int fd, 
+        struct sockaddr __user * uservaddr, int addrlen) 
+{
+    struct sockaddr_storage servaddr;
+    int err;
+     
+    err = socketcall_move_addr_to_kernel(uservaddr, addrlen, (struct sockaddr *)&servaddr);
+    if (err < 0)
+        return err;
+    
+    if ((err = fetch_conn_from_connp(fd, (struct sockaddr *)&servaddr))) {
+        if (err == CONN_BLOCK)
+            return 0;
+        else if (err == CONN_NONBLOCK)
+            return -EINPROGRESS;
+    }
+   
+    return 1; 
+}
+
+long socketcall_sys_shutdown(int fd, int way)
+{
+    if (connp_fd_allowed(fd))
+        return 0;
+
+    return 1;
+}
+
+long socketcall_sys_sendto(int sockfd, const void __user *buf, size_t len, 
                 int flags, const struct sockaddr __user *dest_addr, int addrlen)
 {
     if (check_if_ignore_primitives(sockfd, buf, len))
@@ -231,22 +221,7 @@ inline long socketcall_sys_sendto(int sockfd, const void __user *buf, size_t len
     return 0;
 }
 
-
-asmlinkage long connp_sys_sendto(int sockfd, const void __user *buf, size_t len, 
-                int flags, const struct sockaddr __user *dest_addr, int addrlen)
-{
-    int err;
-    SYS_CALL_START();
-    err = socketcall_sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
-    if (err) {
-        SYS_CALL_END();
-        return err;
-    }
-
-    return jmp_orig_sys_call(orig_sys_sendto, ASM_INSTRUCTION);
-}
-
-inline ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
+ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
                 int flags, const struct sockaddr __user *src_addr, int addrlen)
 {
     long cnt = check_if_ignore_auth_procedure(sockfd, buf, len, 'r');
@@ -256,45 +231,25 @@ inline ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf, size_
     return 0;
 }
 
-
-asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
-                int flags, const struct sockaddr __user *src_addr, int addrlen)
+asmlinkage ssize_t connp_sys_write(int fd, const char __user *buf, size_t count)
 {
-    int err;
-    SYS_CALL_START();
-    err = socketcall_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
-    if (err) {
-        SYS_CALL_END();
-        return err;
+    if (check_if_ignore_primitives(fd, buf, count))
+        return count;
+    {
+        long cnt = check_if_ignore_auth_procedure(fd, buf, count, 'w');
+        if (cnt)
+            return cnt;
     }
 
-    return jmp_orig_sys_call(orig_sys_recvfrom, ASM_INSTRUCTION);
+    return orig_sys_write(fd, buf, count);
 }
 
-asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
-                            long timeout_msecs)
+asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count)
 {
-    SYS_CALL_START();
-    if (nfds == 1) {
-        struct pollfd pfd;
-        u32 retcnt;
-        if (copy_from_user(&pfd, ufds, sizeof(struct pollfd)))
-            goto orig_poll;
+    long cnt;
+    cnt = check_if_ignore_auth_procedure(fd, buf, count, 'r');
+    if (cnt) 
+        return cnt;
 
-        if (!(pfd.events & POLLIN)) 
-            goto orig_poll;
-
-        retcnt = check_if_ignore_auth_procedure(pfd.fd, NULL, 0, 'i'); //POLLIN
-        if (retcnt) {
-            pfd.revents |= POLLIN;
-            if (__put_user(pfd, ufds))
-                goto orig_poll;
-
-            SYS_CALL_END();
-            return 1;
-        }
-    }
-
-orig_poll:
-    return jmp_orig_sys_call(orig_sys_poll, ASM_INSTRUCTION);
+    return orig_sys_read(fd, buf, count);
 }

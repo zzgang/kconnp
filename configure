@@ -112,8 +112,7 @@ sed -e "s/%%SYS_RECV_EA%%/0x${sys_recv_ea}/" |
 sed -e "s/%%SYS_RECVFROM_EA%%/0x${sys_recvfrom_ea}/" |
 sed -e "s/%%SYS_POLL_EA%%/0x${sys_poll_ea}/" > sys_call_table_ea.h;
 
-NO_OMIT_FRAME_POINTER=""
-TRA_CFLAGS=""
+EXTRA_CFLAGS=""
 
 machine_type=`uname -m | sed -e 's/^i[0-9]86$/x86_32/'`
 
@@ -131,16 +130,18 @@ esac
 
 echo "Check machine type... $machine_type yes";
 
-NO_OMIT_FRAME_POINTER="export CONFIG_FRAME_POINTER=ON"
 
-if [ "$machine_type" = "x86_64" ]
+if [ "$machine_type" = "x86_32" ]
 then
-    EXTRA_CFLAGS="EXTRA_CFLAGS += -ffixed-r15"
+    EXTRA_CFLAGS="EXTRA_CFLAGS += -fno-omit-frame-pointer"
+    ASM_OBJ_FILE="sys_socketcalls_32.o"
+else
+    ASM_OBJ_FILE="sys_socketcalls_64.o"
 fi
 
 cat > Makefile <<MF
 obj-m = kconnp.o
-kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o preconnect.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o auth.o hash.o cfg.o lkm_util.o
+kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o preconnect.o connpd.o sys_socketcalls.o $ASM_OBJ_FILE sys_close.o sys_exit.o sys_exit_group.o auth.o hash.o cfg.o lkm_util.o
 
 $NO_OMIT_FRAME_POINTER
 $EXTRA_CFLAGS
