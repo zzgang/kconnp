@@ -5,6 +5,8 @@
 
 .type connp_sys_poll, @function
 
+.type connp_sys_poll, @function
+
 connp_sys_poll:
 	push   %ebp
 	mov    %esp,%ebp
