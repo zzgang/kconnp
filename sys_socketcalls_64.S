@@ -33,7 +33,6 @@ connp_sys_poll:
 	pop    %rbp
 	pop    %r12
 	retq   
-	nopl   0x0(%rax)
    connp_poll:
 	mov    %rdi,%rsi
 	mov    $0x8,%edx
@@ -53,9 +52,7 @@ connp_sys_poll:
 	orw    $0x1,0x6(%rsp)
 	xor    %eax,%eax
 	mov    (%rsp),%rdx
-	xchg   %ax,%ax
 	mov    %rdx,0x0(%rbp)
-	xchg   %ax,%ax
 	test   %eax,%eax
 	jne    orig_sys_call
 	mov    $0x1,%eax
