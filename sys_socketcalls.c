@@ -150,12 +150,9 @@ asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t
                 int flags, const struct sockaddr __user *src_addr, int addrlen)
 {
     int err;
-    SYS_CALL_START();
     err = socketcall_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
-    if (err) {
-        SYS_CALL_END();
+    if (err) 
         return err;
-    }
 
     return orig_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
 }
