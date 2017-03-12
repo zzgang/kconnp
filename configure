@@ -130,6 +130,20 @@ esac
 
 echo "Check machine type... $machine_type yes";
 
+gcc_ver=`gcc -v 2>&1 | grep -o -P  "gcc version .*" | grep -o -P "\d\.\d" | head -n 1`
+gcc_ver_pri=`echo $gcc_ver | awk -F '.' '{print $1;}'`
+gcc_ver_sec=`echo $gcc_ver | awk -F '.' '{print $2;}'`
+gcc_ver_curr=$((gcc_ver_pri*100 + gcc_ver_sec));
+gcc_ver_min=$((4*100 + 4));
+if [ $gcc_ver_curr -ge $gcc_ver_min ]
+then
+    gcc_ver_valid="yes" 
+else
+    gcc_ver_valid="no"
+fi
+
+echo "Check gcc version... $gcc_ver >= 4.4 $gcc_ver_valid"
+test $gcc_ver_valid = "no" && exit
 
 if [ "$machine_type" = "x86_32" ]
 then

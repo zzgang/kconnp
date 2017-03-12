@@ -1,6 +1,6 @@
 /*for 32bits asm*/
 .section .text 
-
+.align 2
 .globl connp_sys_poll
 
 .type connp_sys_poll, @function
