@@ -36,7 +36,7 @@ typedef asmlinkage ssize_t (*sys_write_func_ptr_t)(int fd, const char __user *bu
 typedef asmlinkage ssize_t (*sys_sendto_func_ptr_t)(int sockfd, const void __user *buf, size_t len, int flags, const struct sockaddr __user *addr, int addrlen);
 
 typedef asmlinkage ssize_t (*sys_read_func_ptr_t)(int fd, const char __user *buf, size_t count);
-typedef asmlinkage ssize_t (*sys_recvfrom_func_ptr_t)(int sockfd, const void __user *buf, size_t len, int flags, const struct sockaddr __user *addr, int addrlen);
+typedef asmlinkage ssize_t (*sys_recvfrom_func_ptr_t)(int sockfd, const void __user *buf, size_t len, int flags, const struct sockaddr __user *addr, int *addrlen);
 typedef asmlinkage long (*sys_poll_func_ptr_t)(struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs);
 
 extern sys_connect_func_ptr_t orig_sys_connect;
@@ -67,7 +67,7 @@ extern asmlinkage long connp_sys_exit_group(int error_code);
 extern asmlinkage ssize_t connp_sys_write(int fd, const char __user * buf, size_t count);
 extern asmlinkage long connp_sys_sendto(int sockfd, const void __user * buf, size_t len, int flags, const struct sockaddr __user * dest_addr, int addrlen);
 extern asmlinkage ssize_t connp_sys_read(int fd, const char __user *buf, size_t count);
-extern asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t len, int flags, const struct sockaddr __user *addr, int addrlen);
+extern asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t len, int flags, const struct sockaddr __user *addr, int *addrlen);
 extern asmlinkage long connp_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
                     long timeout_msecs);
 
@@ -79,7 +79,7 @@ extern asmlinkage long socketcall_sys_recv(int sockfd, const void __user * buf, 
 
 extern long socketcall_sys_connect(int fd, struct sockaddr __user *, int addrlen);
 extern long socketcall_sys_sendto(int sockfd, const void __user * buf, size_t len, int flags, const struct sockaddr __user * dest_addr, int addrlen);
-extern ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf, size_t len, int flags, const struct sockaddr __user *addr, int addrlen);
+extern ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf, size_t len, int flags, const struct sockaddr __user *addr, int *addrlen);
 extern long socketcall_sys_shutdown(int fd, int way);
 extern int socketcall_move_addr_to_kernel(void __user *uaddr, int ulen, 
                 struct sockaddr *kaddr);

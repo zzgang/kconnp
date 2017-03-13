@@ -147,7 +147,7 @@ asmlinkage long connp_sys_sendto(int sockfd, const void __user *buf, size_t len,
 }
 
 asmlinkage ssize_t connp_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
-                int flags, const struct sockaddr __user *src_addr, int addrlen)
+                int flags, const struct sockaddr __user *src_addr, int *addrlen)
 {
     int err;
     err = socketcall_sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
@@ -219,12 +219,11 @@ long socketcall_sys_sendto(int sockfd, const void __user *buf, size_t len,
 }
 
 ssize_t socketcall_sys_recvfrom(int sockfd, const void __user *buf, size_t len, 
-                int flags, const struct sockaddr __user *src_addr, int addrlen)
+                int flags, const struct sockaddr __user *src_addr, int *addrlen)
 {
     long cnt = check_if_ignore_auth_procedure(sockfd, buf, len, 'r');
-    if (cnt) 
+    if (cnt)
         return cnt;
-
     return 0;
 }
 
