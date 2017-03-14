@@ -14,6 +14,6 @@ cat "$PWD/scripts/kconnp" | sed -e "s/%%VER%%/$VER/g" > $BIN_INS_DIR/kconnp && c
 mkdir -p $CFG_INS_DIR
 for f in $CFG_FILES
 do
-[ -e $CFG_INS_DIR/$f ] && mv $CFG_INS_DIR/$f $CFG_INS_DIR/${f}.bak
+[ -e $CFG_INS_DIR/$f ] && mv $CFG_INS_DIR/$f $CFG_INS_DIR/${f}.bak.`date '+%F_%T'`
 cp "$PWD/cfg-files/$f" $CFG_INS_DIR
 done
