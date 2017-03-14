@@ -17,9 +17,12 @@ int check_if_ignore_auth_procedure(int fd, const char __user *buf, size_t len,
 {
     struct socket_bucket *sb;
     struct socket *sock;
+    struct sockaddr cliaddr;
     struct sockaddr servaddr;
     int ret = 0;
 
+    /*ACL check start*/
+    
     if (!is_sock_fd(fd))
         return 0;
 
@@ -29,11 +32,17 @@ int check_if_ignore_auth_procedure(int fd, const char __user *buf, size_t len,
             || !IS_CLIENT_SOCK(sock))
         return 0;
 
-    if (!getsockservaddr(sock, &servaddr))
+    if (!getsockcliaddr(sock, &cliaddr) || !IS_IPV4_SA(&cliaddr)) 
         return 0;
-    
-    if (!IS_IPV4_SA(&servaddr))
+
+    if (!getsockservaddr(sock, &servaddr) || !IS_IPV4_SA(&servaddr))
         return 0;
+
+    if (!cfg_conn_acl_allowed(&servaddr))
+        return 0;
+
+    /*ACL check end*/
+
 
     if (!(sb = get_auth_sb(sock->sk)))
         return 0;
