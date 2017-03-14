@@ -37,7 +37,7 @@ connp_sys_poll:
 	mov    %rdi,%rsi
 	mov    $0x8,%edx
 	mov    %rsp,%rdi
-	callq  _copy_from_user
+	callq  lkm_copy_from_user
 	test   %rax,%rax
 	jne    orig_sys_call
 	testb  $0x1,0x4(%rsp)

@@ -227,6 +227,9 @@ static inline int lkm_get_unused_fd(void)
 struct sockaddr_in;
 extern int lkm_create_tcp_connect(struct sockaddr_in *);
 
+/*wrapper copy_from_user function for fixing asm compatible*/
+extern unsigned long lkm_copy_from_user(void *to, const void __user *from, unsigned len);
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 10)
 extern int lkm_sock_map_fd(struct socket *sock, int flags);
 #endif

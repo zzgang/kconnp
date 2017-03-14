@@ -21,7 +21,7 @@ connp_sys_poll:
 	lea    -0x14(%ebp),%eax
 	mov    $0x8,%ecx
 	mov    %esi,%edx
-	call   _copy_from_user
+	call   lkm_copy_from_user
 	test   %eax,%eax
 	mov    %eax,%ebx
     jne    orig_sys_call

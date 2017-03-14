@@ -71,7 +71,7 @@ asmlinkage long connp_sys_socketcall(int call, unsigned long __user *args)
                 return -EFAULT;
             }
             err = socketcall_sys_recvfrom(a[0], (void __user *)a[1], a[2], a[3],
-                            (struct sockaddr __user *)a[4], a[5]);
+                            (struct sockaddr __user *)a[4], (int *)a[5]);
             if (!err)
                 goto orig_sys_socketcall;
             break;

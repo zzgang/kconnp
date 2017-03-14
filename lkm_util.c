@@ -5,6 +5,11 @@
 #include "array.h"
 #include "lkm_util.h"
 
+unsigned long lkm_copy_from_user(void *to, const void __user *from, unsigned len)
+{
+    return copy_from_user(to, from, len);
+}
+
 /* Poll funcs start */
 struct poll_table_entry_alias {
     struct file *filp;
