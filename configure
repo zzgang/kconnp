@@ -151,6 +151,7 @@ then
     ASM_OBJ_FILE="sys_socketcalls_32.o"
 else
     ASM_OBJ_FILE="sys_socketcalls_64.o"
+    EXTRA_CFLAGS="EXTRA_CFLAGS += -foptimize-sibling-calls"
 fi
 
 cat > Makefile <<MF
