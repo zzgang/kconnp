@@ -9,7 +9,6 @@
 .type connp_sys_poll, @function
 
 connp_sys_poll:
-	jmp    *orig_sys_poll
 	push   %r12
 	mov    %rdx,%r12
 	push   %rbp

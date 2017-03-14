@@ -130,7 +130,7 @@ esac
 
 echo "Check machine type... $machine_type yes";
 
-gcc_ver=`gcc -v 2>&1 | grep -o -P  "gcc version .*" | grep -o -P "\d\.\d" | head -n 1`
+gcc_ver=`gcc -v 2>&1 | tail -n 1 | grep -o -P "\d\.\d" | head -n 1`
 gcc_ver_pri=`echo $gcc_ver | awk -F '.' '{print $1;}'`
 gcc_ver_sec=`echo $gcc_ver | awk -F '.' '{print $2;}'`
 gcc_ver_curr=$((gcc_ver_pri*100 + gcc_ver_sec));
