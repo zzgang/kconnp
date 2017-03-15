@@ -269,6 +269,9 @@ static inline int sock_is_available(struct socket_bucket *sb)
     if (!SK_ESTABLISHED(sb->sk))
         return 0;
 
+    if (sb->auth_procedure_status > AUTH_PROCESSING)
+        return 1;
+
     cfg_conn_get_keep_alive(&sb->servaddr, &sock_keep_alive);
     sock_age = lkm_jiffies_elapsed_from(sb->sock_create_jiffies);
     sock_left_lifetime = sock_keep_alive - sock_age;
