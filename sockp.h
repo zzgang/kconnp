@@ -31,6 +31,9 @@
 #define shutdown_all_sock_list() shutdown_sock_list(SHUTDOWN_ALL)
 #define shutdown_timeout_sock_list() shutdown_sock_list(SHUTDOWN_IDLE)
 
+#define CONNECTED_BY_NORMAL 1
+#define CONNECTED_BY_KCONNPD 2
+
 typedef enum {
     SOCK_NEW,
     SOCK_AUTH,

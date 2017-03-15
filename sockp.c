@@ -679,9 +679,13 @@ int insert_sock_to_sockp(struct sockaddr *cliaddr,
 
     if (pre_insert_auth_sock) {
         sb->auth_procedure_status = AUTH_PROCESSING;
-        sb->sock_in_use = 1; //set in use flag to authentication.
+        if (pre_insert_auth_sock == CONNECTED_BY_NORMAL)
+            sb->sock_in_use = 1; //set in-use flag if sock was connected by normal process.
+        else //connected by kconnpd.
+            goto insert_hlist; //prepare for apply.
     } else 
-        INSERT_INTO_HLIST(HASH(&sb->cliaddr, &sb->servaddr), sb);
+        insert_hlist:
+            INSERT_INTO_HLIST(HASH(&sb->cliaddr, &sb->servaddr), sb);
     
     INSERT_INTO_SHLIST(SHASH(sb->sk), sb);
     INSERT_INTO_TLIST(sb);

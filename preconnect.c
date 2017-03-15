@@ -64,13 +64,14 @@ static void do_create_connects(struct sockaddr_in *servaddr, int nums)
     struct socket *sock;
     struct sockaddr cliaddr;
     struct conn_node_t *conn_node;
-    int i, pre_insert_auth_sock;
+    int i, pre_insert_auth_sock = 0;
 
     conn_node = cfg_conn_get_node((struct sockaddr *)servaddr);
     if (!conn_node)
        return;      
 
-    pre_insert_auth_sock = conn_node->auth_node && conn_node->auth_node->data;
+    if (conn_node->auth_node && conn_node->auth_node->data)
+        pre_insert_auth_sock = CONNECTED_BY_KCONNPD;
 
     for (i = 0; i < nums; i++) {
 
