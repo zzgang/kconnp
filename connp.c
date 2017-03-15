@@ -224,7 +224,7 @@ int insert_into_connp_if_permitted(int fd)
 
     refcnt = file_refcnt_read(sock->file);
 
-    if (refcnt == 2) { //Check if auth sock connected by normal process.
+    if (refcnt == 2) { //Check if auth sock was connected by normal process.
         struct socket_bucket *sb;
         sb = get_just_preinsert_auth_sb(sock->sk);
         if (!sb)
