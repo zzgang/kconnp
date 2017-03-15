@@ -202,10 +202,11 @@ int connp_fd_allowed(int fd)
 
 int insert_into_connp_if_permitted(int fd)
 {
+    int err;
+    int refcnt;
     struct socket *sock;
     struct sockaddr cliaddr;
     struct sockaddr servaddr;
-    int err;
 
     connp_rlock();
 
@@ -221,11 +222,11 @@ int insert_into_connp_if_permitted(int fd)
             || !IS_CLIENT_SOCK(sock))
         goto ret_fail;
 
-    if (file_refcnt_read(sock->file) == 2) {
-        struct socket_bucket *sb = get_just_preinsert_auth_sb(sock->sk);
-        if (!sb) 
-            goto ret_fail;
-    } else if (file_refcnt_read(sock->file) != 1)
+    refcnt = file_refcnt_read(sock->file);
+
+    if (refcnt == 2 && !get_just_preinsert_auth_sb(sock->sk))
+        goto ret_fail;
+    else if (refcnt != 1)
         goto ret_fail;
 
     if (!getsockcliaddr(sock, &cliaddr) || !IS_IPV4_SA(&cliaddr)) 
