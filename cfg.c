@@ -2442,6 +2442,10 @@ int cfg_conn_op(struct sockaddr *addr, int op_type, void *val)
             break;
 
         case PASSIVE_SET:
+            /*The connection passive flag is not set if the auth procedure desc is set!.*/
+            if (conn_node->auth_node) 
+                break;
+
             conn_node->conn_close_way = CLOSE_PASSIVE;
             if (conn_node->conn_close_way_last_set_jiffies != ULLONG_MAX)
                 conn_node->conn_close_way_last_set_jiffies = lkm_jiffies;
