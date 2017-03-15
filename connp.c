@@ -224,9 +224,12 @@ int insert_into_connp_if_permitted(int fd)
 
     refcnt = file_refcnt_read(sock->file);
 
-    if (refcnt == 2 && !get_just_preinsert_auth_sb(sock->sk))
-        goto ret_fail;
-    else if (refcnt != 1)
+    if (refcnt == 2) { //Check if auth sock connected by normal process.
+        struct socket_bucket *sb;
+        sb = get_just_preinsert_auth_sb(sock->sk);
+        if (!sb)
+            goto ret_fail;
+    } else if (refcnt != 1)
         goto ret_fail;
 
     if (!getsockcliaddr(sock, &cliaddr) || !IS_IPV4_SA(&cliaddr)) 
