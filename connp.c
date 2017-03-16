@@ -316,7 +316,7 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
         conn_inc_connected_hit_count(servaddr); 
     } else {
         if(cfg_conn_get_auth_procedure(servaddr))
-            insert_socket_to_connp(&cliaddr, servaddr, sock, 1); //pre-insert
+            insert_socket_to_connp(&cliaddr, servaddr, sock, CONNECTED_BY_NORMAL); //pre-insert
         
         conn_inc_connected_miss_count(servaddr);
     }
