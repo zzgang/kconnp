@@ -129,7 +129,17 @@ do {        \
         (sb)->auth_procedure_head = NULL;                   \
     }       \
 } while (0);
-
+#define REMOVE_FROM_SOCKP(sb) \
+    do {                                \
+        AUTH_PROCEDURE_DESTROY(sb);          \
+                                                            \
+        if (IN_HLIST(HASH(&(sb)->cliaddr, &(sb)->servaddr), sb))   \
+            REMOVE_FROM_HLIST(HASH(&(sb)->cliaddr, &(sb)->servaddr), sb);  \
+        REMOVE_FROM_SHLIST(SHASH((sb)->sk), sb);    \
+        REMOVE_FROM_TLIST(sb);   \
+                                    \
+        PUT_SB(sb);                 \
+    } while (0)
 #define INIT_SB(sb, s, fd, way)   \
     do {    \
         (sb)->sb_in_use = 1;  \
@@ -312,7 +322,8 @@ struct socket_bucket *apply_sk_from_sockp(struct sockaddr *cliaddr, struct socka
         if (KEY_MATCH(cliaddr, &p->cliaddr, servaddr, &p->servaddr)) {
             //printk(KERN_ERR "apply find start! sock_in_use: %d, sock_close_now: %d, sock-sk: %d, avaialbe: %d, passive: %d", p->sock_in_use, p->sock_close_now, !p->sock->sk, sock_is_not_available(p), SOCK_IS_RECLAIM_PASSIVE(p));
 
-            if (p->sock_in_use 
+            if (p->connpd_fd < 0 
+                    || p->sock_in_use 
                     || p->sock_close_now
                     || !p->sock->sk
                     || sock_is_not_available(p) 
@@ -372,13 +383,13 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
             goto shutdown;
 
         if (p->sock_close_now) {
-           if (!p->uc) { //get keep alive timeout at begin time.
-               u64 keep_alive;
-               keep_alive = lkm_jiffies_elapsed_from(p->sock_create_jiffies);
-               cfg_conn_set_keep_alive(&p->servaddr, &keep_alive);
-           }
-           cfg_conn_set_passive(&p->servaddr); //may be passive socket 
-           goto shutdown;
+            if (!p->uc) { //get keep alive timeout at begin time.
+                u64 keep_alive;
+                keep_alive = lkm_jiffies_elapsed_from(p->sock_create_jiffies);
+                cfg_conn_set_keep_alive(&p->servaddr, &keep_alive);
+            }
+            cfg_conn_set_passive(&p->servaddr); //may be passive socket 
+            goto shutdown;
         }
 
         if (!SK_ESTABLISHING(p->sk) && sock_is_not_available(p))
@@ -397,6 +408,9 @@ void shutdown_sock_list(shutdown_way_t shutdown_way)
         if (conn_spec_check_close_flag(&p->servaddr))
             goto shutdown;
 
+        if (p->connpd_fd < 0)
+            continue;
+
         if (!p->sock_in_use)
             conn_inc_idle_count(&p->servaddr);
 
@@ -413,21 +427,17 @@ shutdown:
 
             LOOP_COUNT_RESET();
 
+            if (p->connpd_fd < 0) 
+                goto remove_from_sockp;
+
             if (connpd_close_pending_fds_in(p->connpd_fd) < 0) {
                 printk(KERN_ERR "Close pending fds buffer overflow!");
                 break;
             }
 
-            //check if authentication sock.
-            AUTH_PROCEDURE_DESTROY(p);
-
-            if (IN_HLIST(HASH(&p->cliaddr, &p->servaddr), p))
-                REMOVE_FROM_HLIST(HASH(&p->cliaddr, &p->servaddr), p);
-            REMOVE_FROM_SHLIST(SHASH(p->sk), p);
-            REMOVE_FROM_TLIST(p);
-
-            PUT_SB(p);
-
+remove_from_sockp:
+            REMOVE_FROM_SOCKP(p);
+            
             LOOP_COUNT_RESTORE(local_loop_count);
         } while (0);
     }
@@ -480,7 +490,7 @@ struct socket_bucket *get_sock_sb(struct sock *sk, int sock_type)
  */
 int free_sk_to_sockp(struct sock *sk, struct socket_bucket **sbpp)
 {
-    int ret = 0;
+    int ret = KCP_ERROR;
     struct socket_bucket *p, *sb = NULL;
 
     SOCKP_LOCK();
@@ -498,9 +508,11 @@ int free_sk_to_sockp(struct sock *sk, struct socket_bucket **sbpp)
                 break;
             }
 
-            if ((p->auth_procedure_status >= AUTH_PROCESSING) && (p->auth_procedure_status != AUTH_SUCCESS)) {
+            if ((p->auth_procedure_status >= AUTH_PROCESSING) 
+                    && (p->auth_procedure_status != AUTH_SUCCESS)) {
                 p->sock_close_now = 1;
                 notify(CONNP_DAEMON_TSKP); //collection at once.
+                break;
             }
             
             p->auth_procedure_stage = p->auth_procedure_head;//reset
@@ -511,7 +523,7 @@ int free_sk_to_sockp(struct sock *sk, struct socket_bucket **sbpp)
             INSERT_INTO_HLIST(HASH(&p->cliaddr, &p->servaddr), p);
 
             sb = p;
-            ret = 1;
+            ret = KCP_OK;
 
             break;
         }
@@ -682,7 +694,7 @@ int insert_sock_to_sockp(struct sockaddr *cliaddr,
 
     if (pre_insert_auth_sock) {
         sb->auth_procedure_status = AUTH_PROCESSING;
-        if (pre_insert_auth_sock == CONNECTED_BY_NORMAL)
+        if (create_way != SOCK_PRECONNECT)
             sb->sock_in_use = 1; //set in-use flag if sock was connected by normal process.
         else //connected by kconnpd.
             goto insert_hlist; //prepare for apply.

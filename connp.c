@@ -130,13 +130,30 @@ static inline int insert_into_connp(struct sockaddr *cliaddr, struct sockaddr *s
 {
     int ret = 0;
     struct sock *sk = sock->sk;
+    struct socket_bucket *sb = NULL;
 
     //To free
-    ret = free_sk_to_sockp(sk, NULL);
+    ret = free_sk_to_sockp(sk, &sb);
     if (ret) {
-        if (ret == KCP_OK) //free success
-            if (file_refcnt_read(sock->file) == 1) 
-                sock->sk = NULL; //Remove reference to avoid destroying the sk.
+        if (ret == KCP_OK) {//free success
+            if (sb) {
+                if (sb->connpd_fd >= 0)
+                    sock->sk = NULL; //Remove reference to avoid destroying the sk.
+                else {
+                    int fd;
+                    fd = connpd_get_unused_fd();
+                    if (fd < 0) {
+                        sb->sock_close_now = 1;
+                        goto out_ret;
+                    }
+
+                    task_fd_install(CONNP_DAEMON_TSKP, fd, sock->file);
+                    file_refcnt_inc(sock->file); //add file reference count.
+                    smp_mb();
+                    sb->connpd_fd = fd;
+                }
+            }
+        }
         goto out_ret;
     }
 
@@ -224,12 +241,7 @@ int insert_into_connp_if_permitted(int fd)
 
     refcnt = file_refcnt_read(sock->file);
 
-    if (refcnt == 2) { //Check if auth sock was connected by normal process.
-        struct socket_bucket *sb;
-        sb = get_just_preinsert_auth_sb(sock->sk);
-        if (!sb)
-            goto ret_fail;
-    } else if (refcnt != 1)
+    if (refcnt != 1)
         goto ret_fail;
 
     if (!getsockcliaddr(sock, &cliaddr) || !IS_IPV4_SA(&cliaddr)) 
@@ -316,7 +328,8 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
         conn_inc_connected_hit_count(servaddr); 
     } else {
         if(cfg_conn_get_auth_procedure(servaddr))
-            insert_socket_to_connp(&cliaddr, servaddr, sock, CONNECTED_BY_NORMAL); //pre-insert
+            //insert_socket_to_connp(&cliaddr, servaddr, sock, 1); //pre-insert
+            insert_sock_to_sockp(&cliaddr, servaddr, sock, -1, SOCK_RECLAIM, NULL, 1);
         
         conn_inc_connected_miss_count(servaddr);
     }

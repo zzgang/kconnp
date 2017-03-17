@@ -70,8 +70,7 @@ static void do_create_connects(struct sockaddr_in *servaddr, int nums)
     if (!conn_node)
        return;      
 
-    if (conn_node->auth_node && conn_node->auth_node->data)
-        pre_insert_auth_sock = CONNECTED_BY_KCONNPD;
+    pre_insert_auth_sock = conn_node->auth_node && conn_node->auth_node->data;
 
     for (i = 0; i < nums; i++) {
 
