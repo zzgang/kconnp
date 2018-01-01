@@ -94,6 +94,7 @@ static void hash_table_rehash(struct hash_table_t *ht)
            idx = h & ht->hash_mask;
            hlist_head = &ht->buckets[idx];
            INSERT_INTO_HLIST(p, hlist_head);
+           INSERT_INTO_TLIST(p, ht);
     }
 }
 
