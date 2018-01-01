@@ -1,4 +1,4 @@
-# /etc/iports.deny: list of ip-ports that are _not_ allowed to access the kconnp.
+# /etc/kconnp/iports.deny: list of ip-ports that are _not_ allowed to access the kconnp.
 #
 # Per service:ip:port per line.
 #

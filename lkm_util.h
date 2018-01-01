@@ -3,8 +3,8 @@
  * 
  */
 
-#ifndef _LKM_UTIL_H
-#define _LKM_UTIL_H
+#ifndef LKM_UTIL_H
+#define LKM_UTIL_H
 
 #include <linux/version.h>
 #include <linux/file.h>
@@ -112,7 +112,7 @@ typedef atomic_t lkm_atomic_t;
 #define lkm_atomic_sub(v, a) lkm_atomic32_sub(v, a)
 #define lkm_atomic_set(v, a) lkm_atomic32_set(v, a)
 
-#elif BITS_PER_LONG == 64 //64bits
+#elif BITS_PER_LONG == 64 //64 bits
 
 typedef atomic64_t lkm_atomic_t;
 #define lkm_atomic_read(v) lkm_atomic64_read(v)
@@ -226,6 +226,9 @@ static inline int lkm_get_unused_fd(void)
 
 struct sockaddr_in;
 extern int lkm_create_tcp_connect(struct sockaddr_in *);
+
+/*wrapper copy_from_user function for fixing asm compatible*/
+extern unsigned long lkm_copy_from_user(void *to, const void __user *from, unsigned len);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 10)
 extern int lkm_sock_map_fd(struct socket *sock, int flags);

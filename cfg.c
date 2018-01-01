@@ -10,6 +10,7 @@
 #define CFG_ALLOWED_IPORTS_FILE     		   "iports.allow"
 #define CFG_DENIED_IPORTS_FILE                 "iports.deny"
 #define CFG_COMMUNICATION_PRIMITIVES_FILE      "primitives.deny"
+#define CFG_AUTH_PROCEDURE_DESC_FILE           "auth.conf"
 #define CFG_CONN_STATS_INFO_FILE               "stats.info"
 
 #define DUMP_INTERVAL 5 //seconds
@@ -188,14 +189,16 @@
             (iport_pos)->flags_end - (iport_pos)->flags_start + 1,  \
             line)
 
+typedef int (* item_char_check_func_t)(char c);
+typedef int (* item_value_parse_func_t)(kconnp_str_t *item_value);
 
 /*Global cfg funcs*/
 static int item_line_scan(struct cfg_entry *, int *pos, int *line, 
-        struct item_pos_t *);
-static int item_line_parse(struct item_str_t *, struct cfg_entry *);
+        struct item_pos_t *, item_char_check_func_t item_char_check_func);
+static int item_line_parse(struct item_str_t *, struct cfg_entry *, item_value_parse_func_t);
 static void items_str_list_free(struct items_str_list_t *);
-static int cfg_items_data_scan(struct items_str_list_t *, struct cfg_entry *);
-static int cfg_items_data_parse(struct items_str_list_t *, struct cfg_entry *);
+static int cfg_items_data_scan(struct items_str_list_t *, struct cfg_entry *, item_char_check_func_t);
+static int cfg_items_data_parse(struct items_str_list_t *, struct cfg_entry *, item_value_parse_func_t);
 
 /*iports list cfg funcs*/
 static int ip_aton(const char *, struct in_addr *); //For IPV4
@@ -249,10 +252,11 @@ static int cfg_prims_entity_init(struct cfg_entry *);
 static void cfg_items_entity_destroy(struct cfg_entry *); 
 static int cfg_items_entity_reload(struct cfg_entry *); 
 static int cfg_global_entity_init(struct cfg_entry *); 
+static int cfg_auth_entity_init(struct cfg_entry *);
 
 static int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str);
 static int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str);
-
+static int cfg_item_set_auth_node(struct item_node_t *node, kconnp_str_t *str);
 
 static inline void *iport_in_list_check_or_call(unsigned int ip, unsigned short int port,  struct cfg_entry *, void (*call_func)(void *data));
 
@@ -318,6 +322,22 @@ static struct cfg_dir cfg_dentry = { //initial the cfg directory.
         .proc_file_destroy = cfg_proc_file_destroy,
 
         .entity_init = cfg_prims_entity_init,
+        .entity_destroy = cfg_items_entity_destroy,
+        .entity_reload = cfg_items_entity_reload
+    },
+    .auth = { //authentication procedure for stateful connection.
+        .f_name = CFG_AUTH_PROCEDURE_DESC_FILE,
+        
+        .proc_read = cfg_proc_read,
+        .proc_write = cfg_proc_write,
+        
+        .init = cfg_entry_init,
+        .destroy = cfg_entry_destroy,
+        
+        .proc_file_init = cfg_proc_file_init,
+        .proc_file_destroy = cfg_proc_file_destroy,
+
+        .entity_init = cfg_auth_entity_init,
         .entity_destroy = cfg_items_entity_destroy,
         .entity_reload = cfg_items_entity_reload
     },
@@ -450,7 +470,7 @@ static int cfg_proc_write(struct file *file, const char *buffer, unsigned long c
     
     if (count > PAGE_SIZE) {
         printk(KERN_ERR 
-                "Error: The cfg iports file /etc/%s exceeds the max size %lu bytes!",
+                "Error: The cfg iports file /etc/kconn/%s exceeds the max size %lu bytes!",
                 ce->f_name, PAGE_SIZE);
         return -EINVAL;
     }
@@ -525,7 +545,7 @@ static ssize_t cfg_proc_write(struct file *file, const char __user *buffer, size
 
     if (count > PAGE_SIZE) {
         printk(KERN_ERR 
-                "Error: The cfg iports file /etc/%s exceeds the max size %lu bytes!",
+                "Error: The cfg iports file /etc/kconnp/%s exceeds the max size %lu bytes!",
                 ce->f_name, PAGE_SIZE);
         return -EINVAL;
     }
@@ -641,7 +661,7 @@ static int cfg_proc_file_init(struct cfg_entry *ce)
 
     if (!ce->cfg_proc_file) {
         printk(KERN_ERR
-                "Error: Could not initialize /etc/%s",
+                "Error: Could not initialize /etc/kconnp/%s",
                 ce->f_name);
         return 0;
     }
@@ -649,7 +669,9 @@ static int cfg_proc_file_init(struct cfg_entry *ce)
     ce->raw_len = 0;
     ce->raw_ptr = NULL;
     ce->cfg_ptr = NULL;
+
     ce->mtime = 0;
+    ce->generation = 0;
 
     rwlock_init(&ce->cfg_rwlock);
 
@@ -691,6 +713,7 @@ static inline void item_str_node_dtor_func(void *data)
 
     if (!data) 
         return;
+
     item = (struct item_node_t *)data;
     if (item->cfg_item_set_node == cfg_item_set_str_node) {
         if (item->v_str)
@@ -706,12 +729,24 @@ static inline void item_dtor_func(void *data)
     }
 }
 
+static inline int item_char_check(char c) 
+{
+    return  ((c >= '0' && c <= '9') 
+                || (c >= 'a' && c <= 'z') 
+                || (c >= 'A' && c <= 'Z') 
+                || c == '_' || c == ',' || c == '"' || c == '.' || c == '\\'
+                || c == ' ' || c == '\t'); 
+}
+
 static int item_line_scan(struct cfg_entry *ce, int *pos, int *line,
-        struct item_pos_t *item_pos) 
+        struct item_pos_t *item_pos, item_char_check_func_t item_char_check_func) 
 {
     char c;
     int delimeter_found = 0;
     int comment_line_start = 0;
+
+    if (!item_char_check_func)
+        item_char_check_func = item_char_check;
 
     (*line)++;
 
@@ -740,11 +775,7 @@ static int item_line_scan(struct cfg_entry *ce, int *pos, int *line,
                 continue;
         }
 
-        if ((c >= '0' && c <= '9') 
-                || (c >= 'a' && c <= 'z') 
-                || (c >= 'A' && c <= 'Z') 
-                || c == '_' || c == ',' || c == '"' || c == '.' || c == '\\'
-                || c == ' ' || c == '\t') {
+        if (item_char_check_func(c)) {
 
             if (item_pos->name_start < 0) 
                 item_pos->name_start = *pos - 1;
@@ -776,7 +807,7 @@ out_ret:
 
 out_err:
     printk(KERN_ERR 
-            "Error: Scan cfg items error on line %d in file /etc/%s", 
+            "Error: Scan cfg items error on line %d in file /etc/kconnp/%s", 
             *line, ce->f_name);
     return -1; //Scan error!
 }
@@ -787,8 +818,8 @@ out_err:
  *Returns:
  * -1: error, 0: no cfg entries, >0: success.
  */
-static int cfg_items_data_scan(struct items_str_list_t *items_str_list, 
-        struct cfg_entry *ce)
+static int cfg_items_data_scan(struct items_str_list_t *items_str_list,
+        struct cfg_entry *ce, item_char_check_func_t item_char_check_func)
 {
     int pos = 0;
     int line = 0;
@@ -796,11 +827,14 @@ static int cfg_items_data_scan(struct items_str_list_t *items_str_list,
     struct item_str_t *item_str;
     struct item_pos_t item_pos;
 
+    if (!item_char_check_func)
+        item_char_check_func = item_char_check;
+
     while (pos < ce->raw_len) {
 
         INIT_ITEM_POS(&item_pos); 
 
-        res = item_line_scan(ce, &pos, &line, &item_pos);
+        res = item_line_scan(ce, &pos, &line, &item_pos, item_char_check_func);
         if (res < 0) //Scan error.
             return -1;
         if (!res) //Line scan done but needn't.
@@ -821,7 +855,8 @@ static int cfg_items_data_scan(struct items_str_list_t *items_str_list,
  *0: node parse error, 1: node parse success.
  *
  */
-static int item_line_parse(struct item_str_t *item_str, struct cfg_entry *ce)
+static int item_line_parse(struct item_str_t *item_str, struct cfg_entry *ce, 
+        item_value_parse_func_t item_value_parse_option_func)
 {
     int i, escape_character_count, quotations_not_matches;
     char c;
@@ -865,11 +900,15 @@ static int item_line_parse(struct item_str_t *item_str, struct cfg_entry *ce)
     if (escape_character_count % 2 != 0) 
         goto out_err;
 
+    if (item_value_parse_option_func) 
+        if (!item_value_parse_option_func(&item_str->value)) 
+            goto out_err;
+
     return 1; 
 
 out_err:
     printk(KERN_ERR
-            "Error: Parse cfg items error on line %d in file /etc/%s", 
+            "Error: Parse cfg items error on line %d in file /etc/kconnp/%s", 
             item_str->line, ce->f_name);
     return 0;
 }
@@ -881,7 +920,7 @@ out_err:
  * -1: error, 0: no cfg entries, >0: success.
  */
 static int cfg_items_data_parse(struct items_str_list_t *items_str_list, 
-        struct cfg_entry *ce)
+        struct cfg_entry *ce, item_value_parse_func_t item_value_parse_option_func)
 {
     struct item_str_t *p;
 
@@ -889,7 +928,7 @@ static int cfg_items_data_parse(struct items_str_list_t *items_str_list,
 
     for (; p; p = p->next) {
         int res;
-        res = item_line_parse(p, ce);
+        res = item_line_parse(p, ce, item_value_parse_option_func);
         if (!res)
             return -1;
     }
@@ -959,6 +998,22 @@ static int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
                     dest[len++] = '\t';
                     break;
                 default:
+                    {
+                        int i = 0;
+                        char octal[4] = {0, };
+                        while (*n >= '0' && *n <= '9') {
+                            octal[i++] = *n;
+                            if (i == 3) /*max 3 octal nums*/
+                                break;
+                            n++;
+                        }
+                        if (i > 0) {
+                            int num = simple_strtol(octal, NULL, 8);
+                            dest[len++] = num;
+                            c += i;
+                            continue;
+                        }
+                    }
                     dest[len++] = *n;
                     break;
             }
@@ -972,6 +1027,129 @@ static int cfg_item_set_str_node(struct item_node_t *node, kconnp_str_t *str)
     lkmfree(src);
 
     return 1;
+}
+
+static int cfg_item_set_auth_node(struct item_node_t *node, kconnp_str_t *str)
+{
+    kconnp_str_link_t *auth_str_head = NULL, *auth_str_tail = NULL;
+    struct auth_stage *auth_stage = NULL, *auth_stage_tail = NULL;
+    int i=0, ret=0, strlen = str->len;
+        
+    //strip the quotations   
+    if (str->data[0] == '"') {
+        i++;
+        --strlen;
+    }
+
+    //Extract the procedure part.
+    {
+        kconnp_str_link_t *auth_str;
+
+        for(; i < strlen; i++) {
+            char c = str->data[i];
+            int j = 0;
+            auth_str = lkmalloc(sizeof(kconnp_str_link_t));
+            if (!auth_str) {
+                printk(KERN_ERR "No more memory!");
+                goto out_extract;
+            }
+            auth_str->str.data = lkmalloc(MAX_AUTH_PROCEDURE_PART_LEN + 1);
+            if (!auth_str->str.data) {
+                printk(KERN_ERR "No more memory!");
+                lkmfree(auth_str);
+                goto out_extract;
+            }
+            auth_str->str.len = 0;
+            while(c != ',' && i < strlen) {
+                if (++auth_str->str.len > MAX_AUTH_PROCEDURE_PART_LEN) {
+                    printk(KERN_ERR "Authentication str part is too long!");
+                    lkmfree(auth_str->str.data);
+                    lkmfree(auth_str);
+                    goto out_extract;
+                }
+                auth_str->str.data[j++] = c;
+                c = str->data[++i];
+            }
+            if (!auth_str_head) 
+                auth_str_head = auth_str;
+
+            if (auth_str_tail) 
+                auth_str_tail->next = auth_str;
+            
+            auth_str_tail = auth_str;
+        }
+        
+    }
+
+    //set node.
+    {
+        kconnp_str_link_t *p = auth_str_head;
+        
+        for (; p; p = p->next) {
+            char *cp = p->str.data;
+            char conss[MAX_AUTH_PROCEDURE_PART_LEN] = {0, };
+            struct item_node_t node_tmp;
+            kconnp_str_t auth_part_str = {.data = conss, .len = 0};
+
+            auth_stage = lkmalloc(sizeof(struct auth_stage));
+            if (!auth_stage) {
+                printk(KERN_ERR "No more memory!");
+                goto out_set_auth;
+            }
+            
+            for(; *cp; cp++) {
+                if (*cp == 'r' || *cp == 'w')  {
+                    auth_stage->type = *cp;
+                } else {
+                    if (*cp == '(' || *cp == ')')
+                        continue;
+                    else
+                        auth_part_str.data[auth_part_str.len++] = *cp;
+                }
+            }
+
+            if (auth_part_str.len) {
+                if (cfg_item_set_str_node(&node_tmp, &auth_part_str)) {
+                    auth_stage->info.data = node_tmp.v_str;
+                    auth_stage->info.len = node_tmp.v_strlen; 
+                } else {
+                    lkmfree(auth_stage);
+                    goto out_set_auth;
+                }
+            }
+
+            if (!node->data)
+                node->data = auth_stage;
+
+            if (auth_stage_tail) 
+                auth_stage_tail->next = auth_stage;
+
+            auth_stage_tail = auth_stage;
+        }
+
+        ret = 1;
+    }
+
+out_extract:
+    {
+        kconnp_str_link_t *q, *p = auth_str_head; 
+
+        while(p) {
+            if (p->str.data)  
+                lkmfree(p->str.data);
+            q = p->next;
+            lkmfree(p);
+            p = q;
+        }
+
+        return ret;
+    }
+
+out_set_auth:
+
+    auth_procedure_destroy((struct auth_stage *)node->data);
+
+    goto out_extract;
 }
 
 static int cfg_item_set_int_node(struct item_node_t *node, kconnp_str_t *str)
@@ -1003,13 +1181,13 @@ static int cfg_global_entity_init(struct cfg_entry *ce)
     struct item_str_t *q;
     int res, ret = 1;
 
-    if ((res = cfg_items_data_scan(&items_str_list, ce)) <= 0) {
+    if ((res = cfg_items_data_scan(&items_str_list, ce, NULL)) <= 0) {
         if (res < 0)  //error
             ret = 0;
         goto out_free;
     }
 
-    if ((res = cfg_items_data_parse(&items_str_list, ce)) <= 0) {
+    if ((res = cfg_items_data_parse(&items_str_list, ce, NULL)) <= 0) {
         if (res < 0) //error
             ret = 0;
         goto out_free;
@@ -1038,14 +1216,14 @@ static int cfg_global_entity_init(struct cfg_entry *ce)
                     (void **)&item_node)) {
             if (!item_node->cfg_item_set_node(item_node, &q->value)) {
                 printk(KERN_ERR 
-                        "Error: Invalid cfg item value on line %d in file /etc/%s", 
+                        "Error: Invalid cfg item value on line %d in file /etc/kconnp/%s", 
                         q->line, ce->f_name);
                 ret = 0;
                 goto out_hash;
             }
         } else {
             printk(KERN_ERR 
-                    "Error: Unrecognized cfg item on line %d in file /etc/%s", 
+                    "Error: Unrecognized cfg item on line %d in file /etc/kconnp/%s", 
                     q->line, ce->f_name);
             ret = 0;
             goto out_hash;
@@ -1074,13 +1252,13 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
     if (!wl->cfg_ptr) //check white list
         return 1;
 
-    if ((res = cfg_items_data_scan(&items_str_list, ce)) <= 0) {
+    if ((res = cfg_items_data_scan(&items_str_list, ce, NULL)) <= 0) {
         if (res < 0)  //error
             ret = 0;
         goto out_free;
     }
 
-    if ((res = cfg_items_data_parse(&items_str_list, ce)) <= 0) {
+    if ((res = cfg_items_data_parse(&items_str_list, ce, NULL)) <= 0) {
         if (res < 0) //error
             ret = 0;
         goto out_free;
@@ -1115,7 +1293,7 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
                 if (q->value.len > MAX_PRIMITIVE_LEN || 
                         !prim_node->cfg_item_set_node(prim_node, &q->value)) {
                     printk(KERN_ERR 
-                            "Error: Invalid primitives on line %d in file /etc/%s", 
+                            "Error: Invalid primitives on line %d in file /etc/kconnp/%s", 
                             q->line, ce->f_name);
                     lkmfree(prim_node);
                     ret = 0;
@@ -1135,7 +1313,7 @@ static int cfg_prims_entity_init(struct cfg_entry *ce)
 
         if (!found) {
             printk(KERN_ERR 
-                    "Error: Unrecognized service name on line %d in file /etc/%s", 
+                    "Error: Unrecognized service name on line %d in file /etc/kconnp/%s", 
                     q->line, ce->f_name);
             ret = 0;
             goto out_hash;
@@ -1165,6 +1343,173 @@ out_hash:
     goto out_free;
 }
 
+static int auth_char_check(char c) 
+{
+    return item_char_check(c) || (c == '(' || c == ')');
+}
+
+static int auth_procedure_parse(kconnp_str_t *auth_procedure) 
+{
+    //w,r(...)
+    int i = 0, strlen = auth_procedure->len;
+    if (auth_procedure->data[0] == '"') {
+       i = 1; 
+       --strlen;
+    }
+    for(; i < strlen; i++) {
+        char c = auth_procedure->data[i];
+        if (!(c == 'w' || c == 'r'))
+            return 0;
+        else {
+           int cc = 0; //io type.
+           int lc = 0;
+           int parentheses_wrapper = 0;
+           while (c != ',' && i < strlen) {
+               if (c == '(') {
+                   if (cc != 1) 
+                       return 0;
+                   ++parentheses_wrapper;
+               }
+               if (lc) 
+                   return 0;
+               if (c == ')') { //last char
+                   lc = cc;
+                   --parentheses_wrapper;
+               }
+
+               c = auth_procedure->data[++i]; 
+               cc++;
+           } 
+
+           if (parentheses_wrapper)
+               return 0;
+        }
+    }
+    
+    return 1;
+}
+
+static void auth_procedure_dtor_func(void *data)
+{
+    struct item_node_t *auth_node = (struct item_node_t *)data;
+
+    if (auth_node) {
+        auth_procedure_destroy((struct auth_stage *)auth_node->data);
+        lkmfree(auth_node);
+    }
+}
+
+static int cfg_auth_entity_init(struct cfg_entry *ce)
+{
+    struct items_str_list_t items_str_list = {NULL, 0};
+    struct item_str_t *q;
+    struct hash_bucket_t *pos;
+    struct conn_node_t *conn_node;
+    struct item_node_t *auth_node;
+    int res, ret = 1;
+
+
+    if (!wl->cfg_ptr) //check white list
+        return 1;
+
+    if ((res = cfg_items_data_scan(&items_str_list, ce, auth_char_check)) <= 0) {
+        if (res < 0)  //error
+            ret = 0;
+        goto out_free;
+    }
+
+    if ((res = cfg_items_data_parse(&items_str_list, ce, auth_procedure_parse)) <= 0) {
+        if (res < 0) //error
+            ret = 0;
+        goto out_free;
+    }
+
+    if (!_hash_init((struct hash_table_t **)&ce->cfg_ptr, 0, 
+            hash_func_times33, auth_procedure_dtor_func)) {
+        ret = 0;
+        goto out_free;
+    }
+
+    q = items_str_list.list;
+    for (; q; q = q->next) {
+        int found = 0;
+        
+        hash_for_each(wl->cfg_ptr, pos) {
+
+            conn_node = (struct conn_node_t *)hash_value(pos);
+
+            if ((q->name.len == conn_node->conn_sn.len) 
+                    && !memcmp(q->name.data, conn_node->conn_sn.data, q->name.len)) {
+
+                auth_node = lkmalloc(sizeof(struct item_node_t)); 
+                if (!auth_node) {
+                    printk(KERN_ERR "No more memory!");
+                    ret = 0;
+                    goto out_hash;
+                }
+
+                auth_node->cfg_item_set_node = cfg_item_set_auth_node;
+
+                if (q->value.len > MAX_AUTH_PROCEDURE_LEN || 
+                        !auth_node->cfg_item_set_node(auth_node, &q->value)) {
+                    printk(KERN_ERR 
+                            "Error: Invalid auth procedure on line %d in file /etc/kconnp/%s", 
+                            q->line, ce->f_name);
+                    lkmfree(auth_node);
+                    ret = 0;
+                    goto out_hash;
+                }
+
+                if (!hash_set((struct hash_table_t *)ce->cfg_ptr, 
+                            (const char *)q->name.data, q->name.len,
+                            (void *)auth_node, 0)) {
+                    ret = 0;
+                    goto out_hash;
+                }
+
+                found = 1;
+            } 
+        }
+
+        if (!found) {
+            printk(KERN_ERR 
+                    "Error: Unrecognized service name on line %d in file /etc/kconnp/%s", 
+                    q->line, ce->f_name);
+            ret = 0;
+            goto out_hash;
+        }
+    }
+    
+    //init the auth_node ptr of iport white list to improve performance.
+    hash_for_each(wl->cfg_ptr, pos) {
+        
+        conn_node = (struct conn_node_t *)hash_value(pos);
+
+        if(hash_find((struct hash_table_t *)ce->cfg_ptr, 
+                    (const char *)conn_node->conn_sn.data, conn_node->conn_sn.len, 
+                    (void **)&auth_node)) {
+
+            conn_node->auth_node = auth_node;
+            
+            //reset stateful connection config when authentication procedure is supplied!
+            if (conn_node->conn_flags & CONN_STATEFUL) {                 
+                conn_node->conn_close_way = CLOSE_POSITIVE; 
+                conn_node->conn_close_way_last_set_jiffies = 0;
+            }
+        }
+    }
+    
+out_free:
+    items_str_list_free(&items_str_list);
+    return ret;
+
+out_hash:
+    ret = 0;
+    hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
+    goto out_free;
+}
+
+
 void cfg_items_entity_destroy(struct cfg_entry *ce)
 {
     if (ce->raw_ptr) {
@@ -1186,6 +1531,10 @@ int cfg_items_entity_reload(struct cfg_entry *ce)
         hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
 
     ret = ce->entity_init(ce);
+    if (ret) {
+        ce->mtime = NOW_SECS;
+        ++ce->generation;
+    }
 
     write_unlock(&ce->cfg_rwlock);
 
@@ -1386,7 +1735,7 @@ static int iport_line_scan(struct cfg_entry *ce,
 
 out_err: 
     printk(KERN_ERR 
-            "Error: Scan iports cfg error on line %d in file /etc/%s", 
+            "Error: Scan iports cfg error on line %d in file /etc/kconnp/%s", 
             *line, ce->f_name);
     return -1; //Scan error!
 }
@@ -1715,7 +2064,7 @@ out_free:
 
         if (!res){
             printk(KERN_ERR
-                    "Error: Parse iports cfg error on line %d in file /etc/%s", 
+                    "Error: Parse iports cfg error on line %d in file /etc/kconnp/%s", 
                     p->line, ce->f_name);
             return -1;
         }else
@@ -1793,7 +2142,7 @@ static int cfg_iports_entity_init(struct cfg_entry *ce)
         else {
             if (!ip_aton(p->ip_str, &iaddr)) {
                 printk(KERN_ERR 
-                        "Error: Convert iport str error on line %d in file /etc/%s",
+                        "Error: Convert iport str error on line %d in file /etc/kconnp/%s",
                         p->line, ce->f_name);
                 if (ce->cfg_ptr) 
                     hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
@@ -1855,6 +2204,10 @@ static int cfg_iports_entity_reload(struct cfg_entry *ce)
         hash_destroy((struct hash_table_t **)&ce->cfg_ptr);
 
     ret = ce->entity_init(ce);
+    if (ret) {
+        ce->mtime = NOW_SECS;
+        ++ce->generation;
+    }
 
     write_unlock(&ce->cfg_rwlock);
 
@@ -1994,6 +2347,10 @@ static int cfg_white_list_entity_reload(struct cfg_entry *ce)
 
     ce->entity_destroy(ce);
     ret = ce->entity_init(ce); 
+    if (ret) {
+        ce->mtime = NOW_SECS;
+        ++ce->generation;
+    }
 
     write_unlock(&ce->cfg_rwlock);
 
@@ -2085,6 +2442,10 @@ int cfg_conn_op(struct sockaddr *addr, int op_type, void *val)
             break;
 
         case PASSIVE_SET:
+            /*The connection passive flag is not set if the auth procedure desc is set!.*/
+            if (conn_node->auth_node) 
+                break;
+
             conn_node->conn_close_way = CLOSE_PASSIVE;
             if (conn_node->conn_close_way_last_set_jiffies != ULLONG_MAX)
                 conn_node->conn_close_way_last_set_jiffies = lkm_jiffies;
@@ -2126,6 +2487,19 @@ int cfg_conn_op(struct sockaddr *addr, int op_type, void *val)
                     }
                 }
             }
+            break;
+
+        case AUTH_PROCEDURE_GET:
+            if (conn_node->auth_node) {
+                *(void **)val = conn_node->auth_node;
+                ret = 1;
+            } else 
+                ret = 0;
+            break;
+
+        case CONN_NODE_GET:
+            *(void **)val = conn_node;
+            ret = 1;
             break;
 
         default:
@@ -2179,7 +2553,7 @@ void conn_stats_info_dump(void)
     struct hash_bucket_t *pos;
     int offset = 0;
 
-    if (NOW_SECS - wl->mtime < DUMP_INTERVAL)
+    if (cfg->st_len && (NOW_SECS - wl->mtime < DUMP_INTERVAL))
         return;
 
     write_lock(&cfg->st_rwlock);

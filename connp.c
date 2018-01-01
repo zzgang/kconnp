@@ -9,6 +9,7 @@
 #include "sockp.h"
 #include "connp.h"
 #include "connpd.h"
+#include "auth.h"
 
 rwlock_t connp_rwlock; //global connp r/w lock;
 
@@ -18,7 +19,7 @@ static void do_conn_inc_idle_count(void *data);
 static void do_conn_inc_connected_miss_count(void *data);
 static void do_conn_inc_connected_hit_count(void *data);
 
-static inline int insert_socket_to_connp(struct sockaddr *, struct sockaddr *, struct socket *);
+static inline int insert_socket_to_connp(struct sockaddr *, struct sockaddr *, struct socket *, int pre_insert_auth_sock);
 static inline int insert_into_connp(struct sockaddr *, struct sockaddr *, struct socket *);
 
 static inline void deferred_destroy(void);
@@ -102,7 +103,8 @@ int conn_inc_count(struct sockaddr *addr, int count_type)
 
 static inline int insert_socket_to_connp(struct sockaddr *cliaddr, 
         struct sockaddr *servaddr, 
-        struct socket *sock)
+        struct socket *sock, 
+        int pre_insert_auth_sock)
 {
     int ret;
     int connpd_fd;
@@ -114,7 +116,7 @@ static inline int insert_socket_to_connp(struct sockaddr *cliaddr,
     task_fd_install(CONNP_DAEMON_TSKP, connpd_fd, sock->file);
     file_refcnt_inc(sock->file); //add file reference count.
 
-    ret = insert_sock_to_sockp(cliaddr, servaddr, sock, connpd_fd, SOCK_RECLAIM, NULL);
+    ret = insert_sock_to_sockp(cliaddr, servaddr, sock, connpd_fd, SOCK_RECLAIM, NULL, pre_insert_auth_sock);
     if (ret != KCP_OK) {
         connpd_close_pending_fds_in(connpd_fd);
         return ret;
@@ -128,23 +130,41 @@ static inline int insert_into_connp(struct sockaddr *cliaddr, struct sockaddr *s
 {
     int ret = 0;
     struct sock *sk = sock->sk;
+    struct socket_bucket *sb = NULL;
 
     //To free
-    ret = free_sk_to_sockp(sk, NULL);
+    ret = free_sk_to_sockp(sk, &sb);
     if (ret) {
-        if (ret == KCP_OK) //free success
-            sock->sk = NULL; //Remove reference to avoid destroying the sk.
+        if (ret == KCP_OK) {//free success
+            if (sb) {
+                if (sb->connpd_fd >= 0)
+                    sock->sk = NULL; //Remove reference to avoid destroying the sk.
+                else {
+                    int fd;
+                    fd = connpd_get_unused_fd();
+                    if (fd < 0) {
+                        sb->sock_close_now = 1;
+                        goto out_ret;
+                    }
+
+                    task_fd_install(CONNP_DAEMON_TSKP, fd, sock->file);
+                    file_refcnt_inc(sock->file); //add file reference count.
+                    smp_mb();
+                    sb->connpd_fd = fd;
+                }
+            }
+        }
         goto out_ret;
     }
 
     //To insert
-    ret = insert_socket_to_connp(cliaddr, servaddr, sock);
+    ret = insert_socket_to_connp(cliaddr, servaddr, sock, 0);
 
 out_ret:
     return ret;
 }
 
-int check_if_ignore_primitives(int fd, const char __user * buf, size_t len)
+int check_if_ignore_primitives(int fd, const char __user *buf, size_t len)
 {
     struct socket *sock;
     struct sockaddr servaddr;
@@ -168,6 +188,7 @@ int check_if_ignore_primitives(int fd, const char __user * buf, size_t len)
     return cfg_conn_check_primitive(&servaddr, (void *)&b);
 
 }
+
 
 int connp_fd_allowed(int fd)
 {
@@ -198,10 +219,11 @@ int connp_fd_allowed(int fd)
 
 int insert_into_connp_if_permitted(int fd)
 {
+    int err;
+    int refcnt;
     struct socket *sock;
     struct sockaddr cliaddr;
     struct sockaddr servaddr;
-    int err;
 
     connp_rlock();
 
@@ -217,7 +239,9 @@ int insert_into_connp_if_permitted(int fd)
             || !IS_CLIENT_SOCK(sock))
         goto ret_fail;
 
-    if (file_refcnt_read(sock->file) != 1)
+    refcnt = file_refcnt_read(sock->file);
+
+    if (refcnt != 1)
         goto ret_fail;
 
     if (!getsockcliaddr(sock, &cliaddr) || !IS_IPV4_SA(&cliaddr)) 
@@ -277,10 +301,8 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
         goto ret_unlock;
 
     //check the client sock local address
-    if (!getsockcliaddr(sock, &cliaddr)) {
-        ret = 0;
+    if (!getsockcliaddr(sock, &cliaddr))
         goto ret_unlock;
-    }
 
     if (SOCKADDR_IP(&cliaddr) == htonl(INADDR_ANY)) { // address not bind before connect
         //get local sock client addr
@@ -304,8 +326,13 @@ int fetch_conn_from_connp(int fd, struct sockaddr *servaddr)
             ret = CONN_BLOCK;
         
         conn_inc_connected_hit_count(servaddr); 
-    } else
+    } else {
+        if(cfg_conn_get_auth_procedure(servaddr))
+            //insert_socket_to_connp(&cliaddr, servaddr, sock, 1); //pre-insert
+            insert_sock_to_sockp(&cliaddr, servaddr, sock, -1, SOCK_RECLAIM, NULL, 1);
+        
         conn_inc_connected_miss_count(servaddr);
+    }
 
     SET_CLIENT_FLAG(sock);
 

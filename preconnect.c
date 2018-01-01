@@ -63,7 +63,14 @@ static void do_create_connects(struct sockaddr_in *servaddr, int nums)
     int fd;
     struct socket *sock;
     struct sockaddr cliaddr;
-    int i;
+    struct conn_node_t *conn_node;
+    int i, pre_insert_auth_sock = 0;
+
+    conn_node = cfg_conn_get_node((struct sockaddr *)servaddr);
+    if (!conn_node)
+       return;      
+
+    pre_insert_auth_sock = conn_node->auth_node && conn_node->auth_node->data;
 
     for (i = 0; i < nums; i++) {
 
@@ -77,12 +84,13 @@ static void do_create_connects(struct sockaddr_in *servaddr, int nums)
             
         if (!getsockcliaddr(sock, &cliaddr))
             break;
-        
+
         if (insert_sock_to_sockp(&cliaddr, 
                     (struct sockaddr *)servaddr,
                     sock, fd, 
                     SOCK_PRECONNECT, 
-                    NULL) != KCP_OK) {
+                    NULL,
+                    pre_insert_auth_sock) != KCP_OK) {
             orig_sys_close(fd);
             break;
         } 

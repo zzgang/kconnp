@@ -7,5 +7,5 @@ asmlinkage long connp_sys_exit(int error_code)
     if (INVOKED_BY_TGROUP_LEADER())   //Must be thread group leader!
         connp_sys_exit_prepare();
     
-    return orig_sys_exit(error_code); 
+    return orig_sys_exit(error_code);
 }

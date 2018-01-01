@@ -1,6 +1,6 @@
 //Get EA from symbol.map file.
-#ifndef _SYS_CALL_TABLE_EA_H
-#define _SYS_CALL_TABLE_EA_H
+#ifndef SYS_CALL_TABLE_EA_H
+#define SYS_CALL_TABLE_EA_H
 
 #define SYS_CALL_TABLE_EA %%SYS_CALL_TABLE_EA%%
 #define SYS_SOCKETCALL_EA %%SYS_SOCKETCALL_EA%%
@@ -12,5 +12,10 @@
 #define SYS_WRITE_EA %%SYS_WRITE_EA%%
 #define SYS_SEND_EA %%SYS_SEND_EA%%
 #define SYS_SENDTO_EA %%SYS_SENDTO_EA%%
+#define SYS_READ_EA %%SYS_READ_EA%%
+#define SYS_RECV_EA %%SYS_RECV_EA%%
+#define SYS_RECVFROM_EA %%SYS_RECVFROM_EA%%
+
+#define SYS_POLL_EA %%SYS_POLL_EA%%
 
 #endif

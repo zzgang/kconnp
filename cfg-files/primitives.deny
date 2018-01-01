@@ -1,4 +1,4 @@
-# /etc/primitives.deny: list of service primitive pairs that are not allowed to be sended to the server peer.
+# /etc/kconnp/primitives.deny: list of service primitive pairs that are not allowed to be sended to the server peer.
 #
 # Per service primitive per line.
 #
@@ -10,3 +10,4 @@
 
 memcache "quit\r\n" #Memcache communication primitive
 redis "QUIT\r\n"
+mysql "\1\0\0\0\1"

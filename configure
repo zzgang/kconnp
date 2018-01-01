@@ -91,6 +91,10 @@ sys_exit_ea=`grep '\bsys_exit\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x
 sys_write_ea=`grep '\bsys_write\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
 sys_send_ea=`grep '\bsys_send\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
 sys_sendto_ea=`grep '\bsys_sendto\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_read_ea=`grep '\bsys_read\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_recv_ea=`grep '\bsys_recv\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_recvfrom_ea=`grep '\bsys_recvfrom\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
+sys_poll_ea=`grep '\bsys_poll\b' $sysmap_file | awk '{print $1;}' | sed -e 's/0x//'`;
 
 cat sys_call_table_ea.h.in |
 sed -e "s/%%SYS_CALL_TABLE_EA%%/0x${sys_call_table_ea}/" |
@@ -102,9 +106,13 @@ sed -e "s/%%SYS_EXIT_GROUP_EA%%/0x${sys_exit_group_ea}/" |
 sed -e "s/%%SYS_EXIT_EA%%/0x${sys_exit_ea}/"  | 
 sed -e "s/%%SYS_WRITE_EA%%/0x${sys_write_ea}/" | 
 sed -e "s/%%SYS_SEND_EA%%/0x${sys_send_ea}/" | 
-sed -e "s/%%SYS_SENDTO_EA%%/0x${sys_sendto_ea}/" > sys_call_table_ea.h;
+sed -e "s/%%SYS_SENDTO_EA%%/0x${sys_sendto_ea}/" |
+sed -e "s/%%SYS_READ_EA%%/0x${sys_read_ea}/" | 
+sed -e "s/%%SYS_RECV_EA%%/0x${sys_recv_ea}/" | 
+sed -e "s/%%SYS_RECVFROM_EA%%/0x${sys_recvfrom_ea}/" |
+sed -e "s/%%SYS_POLL_EA%%/0x${sys_poll_ea}/" > sys_call_table_ea.h;
 
-NO_OMIT_FRAME_POINTER=""
+EXTRA_CFLAGS=""
 
 machine_type=`uname -m | sed -e 's/^i[0-9]86$/x86_32/'`
 
@@ -122,18 +130,36 @@ esac
 
 echo "Check machine type... $machine_type yes";
 
-if [ "$machine_type" = 'x86_32' ] #32 bits machine
+gcc_ver=`gcc -v 2>&1 | tail -n 1 | grep -o -P "\d\.\d" | head -n 1`
+gcc_ver_pri=`echo $gcc_ver | awk -F '.' '{print $1;}'`
+gcc_ver_sec=`echo $gcc_ver | awk -F '.' '{print $2;}'`
+gcc_ver_curr=$((gcc_ver_pri*100 + gcc_ver_sec));
+gcc_ver_min=$((4*100 + 4));
+if [ $gcc_ver_curr -ge $gcc_ver_min ]
 then
-    NO_OMIT_FRAME_POINTER="export CONFIG_FRAME_POINTER=ON"
+    gcc_ver_valid="yes" 
+else
+    gcc_ver_valid="no"
 fi
 
-$NO_OMIT_FRAME_POINTER
+echo "Check gcc version... $gcc_ver >= 4.4 $gcc_ver_valid"
+test $gcc_ver_valid = "no" && exit
+
+if [ "$machine_type" = "x86_32" ]
+then
+    EXTRA_CFLAGS="EXTRA_CFLAGS += -fno-omit-frame-pointer"
+    ASM_OBJ_FILE="sys_socketcalls_32.o"
+else
+    ASM_OBJ_FILE="sys_socketcalls_64.o"
+    EXTRA_CFLAGS="EXTRA_CFLAGS += -foptimize-sibling-calls"
+fi
 
 cat > Makefile <<MF
 obj-m = kconnp.o
-kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o preconnect.o connpd.o sys_socketcalls.o sys_close.o sys_exit.o sys_exit_group.o sys_sendcalls.o hash.o cfg.o lkm_util.o
+kconnp-objs := connp_entry.o sys_call.o sockp.o connp.o preconnect.o connpd.o sys_socketcalls.o $ASM_OBJ_FILE sys_close.o sys_exit.o sys_exit_group.o auth.o hash.o cfg.o lkm_util.o
 
 $NO_OMIT_FRAME_POINTER
+$EXTRA_CFLAGS
 
 all:
 	make -C $kmbd SUBDIRS=\$(PWD) modules

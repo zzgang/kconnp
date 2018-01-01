@@ -65,14 +65,17 @@ static void hash_table_rehash(struct hash_table_t *);
 static int hash_table_resize(struct hash_table_t *ht)
 {
     struct hash_bucket_t **tmp;
+    unsigned int htable_new_size = ht->table_size << 1;
 
-    if ((ht->table_size << 1) != 0) { //Prevent overflow.
-        tmp = lkmalloc((ht->table_size << 1) * sizeof(struct hash_bucket_t *)); 
-        if (!tmp)
+    if (htable_new_size != 0) { //Prevent overflow.
+        tmp = lkmalloc(htable_new_size * sizeof(struct hash_bucket_t *)); 
+        if (!tmp) {
+            printk(KERN_ERR "No more memory in %s", __FUNCTION__);
             return 0;
+        }
         lkmfree(ht->buckets);
         ht->buckets = tmp;
-        ht->table_size <<= 1;
+        ht->table_size = htable_new_size;
         ht->hash_mask = ht->table_size - 1;
         hash_table_rehash(ht); 
     }
